@@ -177,7 +177,7 @@ func setupTestConfigWithOrigin(t *testing.T) string {
 roles: {
 	"golang/assistant": {
 		description: "Go assistant"
-		origin:      "github.com/grantcarthew/start-assets/roles/golang@v0.1.0"
+		origin:      "github.com/start-cli/library/roles/golang@v1.0.0"
 		prompt:      "You are a Go assistant."
 	}
 }
@@ -714,7 +714,7 @@ func TestVerboseDumpOriginCache(t *testing.T) {
 	output := buf.String()
 
 	// Origin should be displayed
-	if !strings.Contains(output, "github.com/grantcarthew/start-assets/roles/golang@v0.1.0") {
+	if !strings.Contains(output, "github.com/start-cli/library/roles/golang@v1.0.0") {
 		t.Errorf("output missing origin\ngot:\n%s", output)
 	}
 
@@ -1154,20 +1154,20 @@ func TestResolveShowFile(t *testing.T) {
 // TestDeriveCacheDir verifies cache directory derivation from origin.
 func TestDeriveCacheDir(t *testing.T) {
 	t.Run("origin with version", func(t *testing.T) {
-		result := deriveCacheDir("github.com/grantcarthew/start-assets/roles/golang@v0.1.0")
+		result := deriveCacheDir("github.com/start-cli/library/roles/golang@v1.0.0")
 		if result == "" {
 			t.Error("expected non-empty cache dir")
 		}
 		if !strings.Contains(result, "mod/extract") {
 			t.Errorf("cache dir missing mod/extract: %s", result)
 		}
-		if !strings.Contains(result, "golang@v0.1.0") {
+		if !strings.Contains(result, "golang@v1.0.0") {
 			t.Errorf("cache dir missing versioned module name: %s", result)
 		}
 	})
 
 	t.Run("origin without version", func(t *testing.T) {
-		result := deriveCacheDir("github.com/grantcarthew/start-assets/roles/golang")
+		result := deriveCacheDir("github.com/start-cli/library/roles/golang")
 		if result != "" {
 			t.Errorf("expected empty cache dir for unversioned origin, got %q", result)
 		}

@@ -12,11 +12,11 @@ import (
 
 // IndexModulePath is the CUE module path for the start assets index.
 // Uses major version; resolved to latest canonical version at runtime.
-const IndexModulePath = "github.com/grantcarthew/start-assets/index@v0"
+const IndexModulePath = "github.com/start-cli/library/index@v1"
 
 // SchemaModulePath is the CUE module path for the start asset schemas.
 // Used by doctor to validate configs against schema constraints.
-const SchemaModulePath = "github.com/grantcarthew/start-assets/schemas@v1"
+const SchemaModulePath = "github.com/start-cli/library/schemas@v1"
 
 // IndexEntry represents an entry in the asset index.
 type IndexEntry struct {

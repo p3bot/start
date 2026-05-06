@@ -707,8 +707,8 @@ func TestConfigSettingsList_NoConfig(t *testing.T) {
 		t.Errorf("expected config paths header, got: %s", output)
 	}
 	// Should show all settings with defaults or not set
-	if !strings.Contains(output, "assets_index:") {
-		t.Errorf("expected assets_index in output, got: %s", output)
+	if !strings.Contains(output, "library_index:") {
+		t.Errorf("expected library_index in output, got: %s", output)
 	}
 	if !strings.Contains(output, "default_agent:") {
 		t.Errorf("expected default_agent in output, got: %s", output)
@@ -754,7 +754,7 @@ func TestConfigSettingsList_NoCUEFiles(t *testing.T) {
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, "assets_index:") {
+	if !strings.Contains(output, "library_index:") {
 		t.Errorf("expected settings list even with no CUE files, got: %s", output)
 	}
 	if !strings.Contains(output, "(default)") {
@@ -801,8 +801,8 @@ func TestConfigSettingsList_WithSettings(t *testing.T) {
 		t.Errorf("expected 'timeout: 120 (global)', got: %s", output)
 	}
 	// Unconfigured settings show defaults
-	if !strings.Contains(output, "assets_index:") {
-		t.Errorf("expected assets_index in output, got: %s", output)
+	if !strings.Contains(output, "library_index:") {
+		t.Errorf("expected library_index in output, got: %s", output)
 	}
 }
 
@@ -984,7 +984,7 @@ func TestConfigSettingsSet_AssetsIndex(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "settings", "assets_index", "github.com/example/custom/index@v0"})
+	cmd.SetArgs([]string{"config", "settings", "library_index", "github.com/example/custom/index@v0"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -997,8 +997,8 @@ func TestConfigSettingsSet_AssetsIndex(t *testing.T) {
 		t.Fatalf("failed to read settings file: %v", err)
 	}
 
-	if !strings.Contains(string(content), `assets_index: "github.com/example/custom/index@v0"`) {
-		t.Errorf("settings file missing quoted assets_index, content: %s", content)
+	if !strings.Contains(string(content), `library_index: "github.com/example/custom/index@v0"`) {
+		t.Errorf("settings file missing quoted library_index, content: %s", content)
 	}
 }
 
@@ -1013,7 +1013,7 @@ func TestResolveAssetsIndexPath(t *testing.T) {
 		cmd := NewRootCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "settings", "assets_index", "github.com/example/custom/index@v0"})
+		cmd.SetArgs([]string{"config", "settings", "library_index", "github.com/example/custom/index@v0"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("set failed: %v", err)
 		}
@@ -2502,7 +2502,7 @@ func TestConfigSettingsJSON_List(t *testing.T) {
 	}
 
 	// All 4 valid setting keys should be present
-	for _, key := range []string{"assets_index", "default_agent", "shell", "timeout"} {
+	for _, key := range []string{"library_index", "default_agent", "shell", "timeout"} {
 		if _, ok := entries[key]; !ok {
 			t.Errorf("missing setting key %q in JSON output", key)
 		}

@@ -26,13 +26,13 @@ func TestValidateDeriveRepoURL(t *testing.T) {
 	}{
 		{
 			name:  "default index path",
-			input: "github.com/grantcarthew/start-assets/index@v0",
-			want:  "https://github.com/grantcarthew/start-assets",
+			input: "github.com/start-cli/library/index@v1",
+			want:  "https://github.com/start-cli/library",
 		},
 		{
 			name:  "canonical version",
-			input: "github.com/grantcarthew/start-assets/index@v0.1.8",
-			want:  "https://github.com/grantcarthew/start-assets",
+			input: "github.com/start-cli/library/index@v1.0.1",
+			want:  "https://github.com/start-cli/library",
 		},
 		{
 			name:  "custom org",
@@ -72,7 +72,7 @@ func TestValidateCacheDirName(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"https://github.com/grantcarthew/start-assets", "grantcarthew-start-assets"},
+		{"https://github.com/start-cli/library", "start-cli-library"},
 		{"https://github.com/example/custom-assets", "example-custom-assets"},
 		{"https://github.com/myorg/my-assets", "myorg-my-assets"},
 	}
@@ -197,9 +197,9 @@ func TestIndexVersionFromPath(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"github.com/grantcarthew/start-assets/index@v0.1.8", "v0.1.8"},
-		{"github.com/grantcarthew/start-assets/index@v0", ""}, // major only — not canonical
-		{"github.com/grantcarthew/start-assets/index@v0.0.1", "v0.0.1"},
+		{"github.com/start-cli/library/index@v1.0.1", "v1.0.1"},
+		{"github.com/start-cli/library/index@v1", ""}, // major only — not canonical
+		{"github.com/start-cli/library/index@v1.0.0", "v1.0.0"},
 		{"no-version-here", ""},
 	}
 	for _, tt := range tests {
@@ -548,9 +548,9 @@ func TestValidateCheckIndexVersionExistsNoop(t *testing.T) {
 	}
 	ctx := context.Background()
 	paths := []string{
-		"github.com/grantcarthew/start-assets/index@v0",
-		"github.com/grantcarthew/start-assets/index@v1",
-		"github.com/grantcarthew/start-assets/index", // no @ at all
+		"github.com/start-cli/library/index@v1",
+		"github.com/start-cli/library/index@v2",
+		"github.com/start-cli/library/index", // no @ at all
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {

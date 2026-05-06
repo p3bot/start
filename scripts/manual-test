@@ -506,8 +506,8 @@ cmd "config settings" "settings default_agent (show)" \
 cmd "config settings" "settings default_agent --json" \
     "./start config settings default_agent --json"
 
-cmd "config settings" "settings assets_index (show)" \
-    "./start config settings assets_index"
+cmd "config settings" "settings library_index (show)" \
+    "./start config settings library_index"
 
 cmd "config settings" "settings shell (show)" \
     "./start config settings shell"

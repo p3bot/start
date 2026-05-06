@@ -12,7 +12,7 @@ import (
 )
 
 // testSchemaSet creates a SchemaSet from inline CUE for testing.
-// Matches the production schemas in start-assets/schemas/.
+// Matches the production schemas in library/schemas/.
 func testSchemaSet(t *testing.T) SchemaSet {
 	t.Helper()
 	cctx := cuecontext.New()
@@ -64,7 +64,7 @@ func testSchemaSet(t *testing.T) SchemaSet {
 	default_agent?: string & !=""
 	shell?: string & !=""
 	timeout?: int & >0
-	assets_index?: string & !=""
+	library_index?: string & !=""
 }
 `
 

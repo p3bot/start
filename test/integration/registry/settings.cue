@@ -1,7 +1,7 @@
 // Test configuration using P-002 schema from CUE Central Registry
 package config
 
-import "github.com/grantcarthew/start-assets/schemas@v0"
+import "github.com/start-cli/library/schemas@v1"
 
 // Agents - mirrors P-002 claude agent
 agents: {

@@ -33,25 +33,25 @@ agents: {
 	claude: {
 		bin: "claude"
 		command: "{{.bin}} --model {{.model}}"
-		origin: "github.com/grantcarthew/start-assets/agents/ai/claude@v0.2.0"
+		origin: "github.com/start-cli/library/agents/ai/claude@v1.0.0"
 	}
 }
 
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
-		origin: "github.com/grantcarthew/start-assets/roles/assistant@v0.1.0"
+		origin: "github.com/start-cli/library/roles/assistant@v1.0.0"
 	}
 	reviewer: {
 		prompt: "You are a code reviewer."
-		origin: "github.com/grantcarthew/start-assets/roles/reviewer@v0.3.1"
+		origin: "github.com/start-cli/library/roles/reviewer@v1.0.0"
 	}
 }
 
 tasks: {
 	review: {
 		prompt: "Review this code."
-		origin: "github.com/grantcarthew/start-assets/tasks/review@v0.1.0"
+		origin: "github.com/start-cli/library/tasks/review@v1.0.0"
 	}
 }
 `
@@ -117,13 +117,13 @@ agents: {
 	claude: {
 		bin: "claude"
 		command: "{{.bin}}"
-		origin: "github.com/grantcarthew/start-assets/agents/ai/claude@v0.2.0"
+		origin: "github.com/start-cli/library/agents/ai/claude@v1.0.0"
 	}
 }
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
-		origin: "github.com/grantcarthew/start-assets/roles/assistant@v0.1.0"
+		origin: "github.com/start-cli/library/roles/assistant@v1.0.0"
 	}
 }
 `
@@ -222,14 +222,14 @@ agents: {
 	claude: {
 		bin: "claude"
 		command: "{{.bin}}"
-		origin: "github.com/grantcarthew/start-assets/agents/ai/claude@v0.2.0"
+		origin: "github.com/start-cli/library/agents/ai/claude@v1.0.0"
 	}
 }
 
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
-		origin: "github.com/grantcarthew/start-assets/roles/assistant@v0.1.0"
+		origin: "github.com/start-cli/library/roles/assistant@v1.0.0"
 	}
 }
 `

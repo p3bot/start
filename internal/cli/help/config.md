@@ -6,7 +6,7 @@
 
 Files: agents.cue, roles.cue, contexts.cue, tasks.cue, settings.cue
 
-Settings: `default_agent` `shell` `timeout` `assets_index`
+Settings: `default_agent` `shell` `timeout` `library_index`
 
 Context inclusion: `--required` always included; `--default` included when no -c flag; `start prompt` excludes defaults unless `-c default`
 
@@ -23,7 +23,7 @@ start config settings
 start config settings default_agent claude
 start config settings shell /bin/bash
 start config settings timeout 120
-start config settings assets_index --unset
+start config settings library_index --unset
 ```
 
 ## Interactive Commands

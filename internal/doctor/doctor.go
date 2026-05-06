@@ -142,7 +142,7 @@ type BuildInfo struct {
 	GoVersion    string
 	Platform     string
 	IndexVersion string // Registry index version (empty if unavailable)
-	IndexPath    string // Configured assets_index path (empty if using built-in default)
+	IndexPath    string // Configured library_index path (empty if using built-in default)
 }
 
 // DefaultBuildInfo returns build info with runtime defaults.
@@ -165,7 +165,7 @@ type Options struct {
 }
 
 // RepoURL is the repository URL for the project.
-const RepoURL = "https://github.com/grantcarthew/start"
+const RepoURL = "https://github.com/start-cli/start"
 
 // IssuesURL is the issues URL for the project.
 const IssuesURL = "https://github.com/start-cli/start/issues"

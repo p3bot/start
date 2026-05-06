@@ -29,7 +29,7 @@ var (
 	cliVersion = "dev"
 	commit     = "unknown"
 	buildDate  = "unknown"
-	repoURL    = "https://github.com/grantcarthew/start"
+	repoURL    = "https://github.com/start-cli/start"
 )
 
 var versionTemplate = fmt.Sprintf(`start version %s

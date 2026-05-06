@@ -713,7 +713,7 @@ func (r *resolver) ensureIndex() (*registry.Index, *registry.Client, error) {
 	return index, client, nil
 }
 
-// resolveAssetsIndexPath returns the configured assets_index setting value,
+// resolveAssetsIndexPath returns the configured library_index setting value,
 // or empty string if not set or on any error. Callers should pass the result
 // to registry.EffectiveIndexPath to get the final module path.
 func resolveAssetsIndexPath() string {
@@ -721,7 +721,7 @@ func resolveAssetsIndexPath() string {
 	if err != nil {
 		return ""
 	}
-	return settings["assets_index"]
+	return settings["library_index"]
 }
 
 // reloadConfig reloads the merged config after installs.

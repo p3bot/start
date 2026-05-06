@@ -3,7 +3,7 @@ language: {
 	version: "v0.15.1"
 }
 deps: {
-	"github.com/grantcarthew/start-assets/schemas@v0": {
-		v: "v0.0.2"
+	"github.com/start-cli/library/schemas@v1": {
+		v: "v1.0.0"
 	}
 }

@@ -7,7 +7,7 @@ import (
 // Asset repository constants
 const (
 	// DefaultAssetRepoURL is the default GitHub repository for browsing assets.
-	DefaultAssetRepoURL = "https://github.com/grantcarthew/start-assets"
+	DefaultAssetRepoURL = "https://github.com/start-cli/library"
 )
 
 // addAssetsCommand adds the assets command group and its subcommands to the parent.

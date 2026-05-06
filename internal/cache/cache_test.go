@@ -36,7 +36,7 @@ func TestWriteIndex_and_ReadIndex(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", tmp)
 
-	version := "github.com/grantcarthew/start-assets/index@v0.3.46"
+	version := "github.com/start-cli/library/index@v1.0.0"
 
 	if err := WriteIndex(version); err != nil {
 		t.Fatalf("WriteIndex() error: %v", err)

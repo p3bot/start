@@ -150,7 +150,7 @@ func runAssetsValidate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("git not found in PATH: install git and retry")
 	}
 
-	// Prerequisite 2: read assets_index setting
+	// Prerequisite 2: read library_index setting
 	indexPath := registry.EffectiveIndexPath(resolveAssetsIndexPath())
 
 	// Prerequisite 3: derive git repo URL
@@ -265,7 +265,7 @@ func runAssetsValidate(cmd *cobra.Command, args []string) error {
 }
 
 // validateDeriveRepoURL converts an index module path to a GitHub HTTPS repo URL.
-// e.g. "github.com/grantcarthew/start-assets/index@v0" → "https://github.com/grantcarthew/start-assets"
+// e.g. "github.com/start-cli/library/index@v1" → "https://github.com/start-cli/library"
 // Returns an error if the path does not end with the "/index" subpath convention.
 func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	path := indexModulePath
@@ -309,7 +309,7 @@ func validateCacheDir(repoURL string) (string, error) {
 }
 
 // validateCacheDirName derives a filesystem-safe cache directory name from a repo URL.
-// e.g. "https://github.com/grantcarthew/start-assets" → "grantcarthew-start-assets"
+// e.g. "https://github.com/start-cli/library" → "start-cli-library"
 func validateCacheDirName(repoURL string) string {
 	// Strip scheme
 	path := strings.TrimPrefix(repoURL, "https://")
@@ -575,8 +575,8 @@ func validateCheckIndexVersionExists(ctx context.Context, client *registry.Clien
 }
 
 // indexVersionFromPath extracts the canonical version string from a resolved module path.
-// Returns "" for major-only versions (e.g. "@v0") or invalid inputs.
-// e.g. "github.com/grantcarthew/start-assets/index@v0.1.8" → "v0.1.8"
+// Returns "" for major-only versions (e.g. "@v1") or invalid inputs.
+// e.g. "github.com/start-cli/library/index@v1.0.1" → "v1.0.1"
 func indexVersionFromPath(resolvedPath string) string {
 	if idx := strings.LastIndex(resolvedPath, "@"); idx != -1 {
 		v := resolvedPath[idx+1:]

@@ -850,16 +850,16 @@ func TestCheckSettings_ShowsAllSettings(t *testing.T) {
 		t.Error("missing default_agent result")
 	}
 
-	// assets_index should have a default
-	if r, ok := findResult(section, "assets_index"); ok {
+	// library_index should have a default
+	if r, ok := findResult(section, "library_index"); ok {
 		if r.Status != StatusPass {
-			t.Errorf("assets_index status = %v, want StatusPass", r.Status)
+			t.Errorf("library_index status = %v, want StatusPass", r.Status)
 		}
 		if !strings.Contains(r.Message, "default") {
-			t.Errorf("assets_index message = %q, want containing 'default'", r.Message)
+			t.Errorf("library_index message = %q, want containing 'default'", r.Message)
 		}
 	} else {
-		t.Error("missing assets_index result")
+		t.Error("missing library_index result")
 	}
 }
 

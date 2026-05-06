@@ -26,7 +26,7 @@ type SettingEntry struct {
 
 // SettingsRegistry defines all valid settings keys and their types.
 var SettingsRegistry = map[string]SettingInfo{
-	"assets_index":  {Type: "string"},
+	"library_index": {Type: "string"},
 	"default_agent": {Type: "string"},
 	"shell":         {Type: "string"},
 	"timeout":       {Type: "int"},
@@ -46,7 +46,7 @@ func ValidSettingsKeysString() string {
 // Returns empty string if the key has no default.
 func SettingDefault(key string) string {
 	switch key {
-	case "assets_index":
+	case "library_index":
 		return registry.IndexModulePath
 	case "shell":
 		if detected, err := shell.DetectShell(); err == nil {

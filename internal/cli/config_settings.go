@@ -26,7 +26,7 @@ func addConfigSettingsCommand(parent *cobra.Command) {
 		Long: `Manage settings for start.
 
 Available settings:
-  assets_index   CUE module path for the assets index (default: built-in)
+  library_index  CUE module path for the assets index (default: built-in)
   default_agent  Agent to use when --agent not specified
   shell          Shell for command execution (default: auto-detect)
   timeout        Command timeout in seconds`,
@@ -36,9 +36,9 @@ Available settings:
   start config settings <key> --unset                                 Remove a setting value
   start config settings edit                                          Open settings.cue in $EDITOR
 
-  start config settings assets_index                                  Show current index path
-  start config settings assets_index "github.com/grantcarthew/start-assets/index@v0"
-  start config settings assets_index --unset                          Restore default index
+  start config settings library_index                                 Show current index path
+  start config settings library_index "github.com/start-cli/library/index@v1"
+  start config settings library_index --unset                         Restore default index
   start config settings default_agent claude
   start config settings shell /bin/bash
   start config settings timeout 120`,

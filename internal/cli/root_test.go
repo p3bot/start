@@ -51,7 +51,7 @@ func TestExecute_Version(t *testing.T) {
 	}
 
 	// Should contain repository URL
-	if !strings.Contains(output, "https://github.com/grantcarthew/start") {
+	if !strings.Contains(output, "https://github.com/start-cli/start") {
 		t.Errorf("Expected repository URL in output, got: %s", output)
 	}
 

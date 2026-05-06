@@ -20,7 +20,7 @@ func TestSettingDefault(t *testing.T) {
 		want    string
 		nonzero bool // true = just check it's non-empty (for env-dependent values)
 	}{
-		{"assets_index", "assets_index", registry.IndexModulePath, false},
+		{"library_index", "library_index", registry.IndexModulePath, false},
 		{"shell", "shell", "", true},
 		{"timeout", "timeout", strconv.Itoa(shell.DefaultTimeout), false},
 		{"default_agent has no default", "default_agent", "", false},
@@ -83,9 +83,9 @@ func TestResolveAllSettings_DefaultsOnly(t *testing.T) {
 		t.Errorf("got %d entries, want %d", len(entries), len(SettingsRegistry))
 	}
 
-	// assets_index should have a default
-	if e := entries["assets_index"]; e.Source != "default" {
-		t.Errorf("assets_index source = %q, want %q", e.Source, "default")
+	// library_index should have a default
+	if e := entries["library_index"]; e.Source != "default" {
+		t.Errorf("library_index source = %q, want %q", e.Source, "default")
 	}
 
 	// default_agent should be not set
