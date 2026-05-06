@@ -122,8 +122,8 @@ func TestConfigInfo_Agent(t *testing.T) {
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, "agents/claude") {
-		t.Errorf("expected 'agents/claude', got: %s", output)
+	if !strings.Contains(output, "agents:claude") {
+		t.Errorf("expected 'agents:claude', got: %s", output)
 	}
 	if !strings.Contains(output, "Bin:") {
 		t.Errorf("expected 'Bin:', got: %s", output)

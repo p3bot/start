@@ -32,15 +32,31 @@ import (
 // established reload-after-install pattern. show is exempt because
 // showVerboseItem loads config independently via prepareShow.
 func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
-	// Step 1: Exact match in installed config across all categories.
+	addr, err := parseAddress(query)
+	if err != nil {
+		return AssetMatch{}, err
+	}
+
+	// When the address carries a category prefix, every per-category loop
+	// below scopes to that single category and the bare name is used for
+	// matching. With no prefix, all four categories are searched.
+	cats := showCategories
+	if addr.HasPrefix {
+		if c := showCategoryFor(addr.Category); c != nil {
+			cats = []showCategory{*c}
+		}
+	}
+	name := addr.Name
+
+	// Step 1: Exact match in installed config across the scoped categories.
 	var exactMatches []AssetMatch
 	var ambiguousMatches []AssetMatch
-	for _, cat := range showCategories {
-		resolved, err := findExactInstalledName(r.cfg.Value, cat.key, query)
+	for _, cat := range cats {
+		resolved, err := findExactInstalledName(r.cfg.Value, cat.key, name)
 		if err != nil {
 			// Ambiguous short name within one category — collect all matches
 			// for interactive selection instead of erroring out.
-			matches, searchErr := searchInstalled(r.cfg.Value, cat.key, cat.category, query)
+			matches, searchErr := searchInstalled(r.cfg.Value, cat.key, cat.category, name)
 			if searchErr != nil {
 				return AssetMatch{}, searchErr
 			}
@@ -88,8 +104,8 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 	// also appears here as a self-substring — len(installedMatches) <= 1
 	// therefore means "no neighbours alongside the exact match".
 	var installedMatches []AssetMatch
-	for _, cat := range showCategories {
-		matches, err := searchInstalled(r.cfg.Value, cat.key, cat.category, query)
+	for _, cat := range cats {
+		matches, err := searchInstalled(r.cfg.Value, cat.key, cat.category, name)
 		if err != nil {
 			continue
 		}
@@ -115,12 +131,12 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 
 	// Exact registry match (only when no installed matches).
 	if len(installedMatches) == 0 && index != nil {
-		for _, cat := range showCategories {
+		for _, cat := range cats {
 			entries := registryEntries(index, cat.category)
 			if entries == nil {
 				continue
 			}
-			result, err := findExactInRegistry(entries, cat.category, query)
+			result, err := findExactInRegistry(entries, cat.category, name)
 			if err != nil {
 				return AssetMatch{}, err
 			}
@@ -143,12 +159,12 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 	// Combined search across installed + registry.
 	var registryMatches []AssetMatch
 	if index != nil {
-		for _, cat := range showCategories {
+		for _, cat := range cats {
 			entries := registryEntries(index, cat.category)
 			if entries == nil {
 				continue
 			}
-			regMatches, err := searchRegistryCategory(entries, cat.category, query)
+			regMatches, err := searchRegistryCategory(entries, cat.category, name)
 			if err != nil {
 				continue
 			}
@@ -194,10 +210,12 @@ func (r *resolver) installIfRegistry(match AssetMatch) error {
 
 // promptCrossCategorySelection asks the user to pick from multiple
 // cross-category matches and returns the chosen match. In non-TTY mode it
-// returns an ambiguity error listing all matches as "category/name".
+// returns an ambiguity error listing all matches as "category:name". Each
+// candidate string round-trips: pasting it back as the command argument
+// resolves to that exact match.
 func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query string) (AssetMatch, error) {
 	sort.SliceStable(matches, func(i, j int) bool {
-		return matches[i].Category+"/"+matches[i].Name < matches[j].Category+"/"+matches[j].Name
+		return formatAddress(matches[i].Category, matches[i].Name) < formatAddress(matches[j].Category, matches[j].Name)
 	})
 
 	w := r.stdout
@@ -214,7 +232,7 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 		var b strings.Builder
 		fmt.Fprintf(&b, "ambiguous name %q matches:", query)
 		for _, m := range shown {
-			fmt.Fprintf(&b, "\n  %s/%s", m.Category, m.Name)
+			fmt.Fprintf(&b, "\n  %s", formatAddress(m.Category, m.Name))
 		}
 		if truncated {
 			fmt.Fprintf(&b, "\n(showing %d of %d; refine search for more specific results)", len(shown), len(matches))
@@ -232,7 +250,7 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 
 	maxDisplayLen := 0
 	for i := 0; i < displayCount; i++ {
-		display := matches[i].Category + "/" + matches[i].Name
+		display := formatAddress(matches[i].Category, matches[i].Name)
 		if len(display) > maxDisplayLen {
 			maxDisplayLen = len(display)
 		}
@@ -240,7 +258,7 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 
 	for i := 0; i < displayCount; i++ {
 		m := matches[i]
-		display := m.Category + "/" + m.Name
+		display := formatAddress(m.Category, m.Name)
 		padding := strings.Repeat(" ", maxDisplayLen-len(display)+2)
 		var sourceLabel string
 		if m.Source == AssetSourceInstalled {

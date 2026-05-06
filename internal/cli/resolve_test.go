@@ -933,3 +933,97 @@ func TestContextScoreThreshold_LowScoreExcluded(t *testing.T) {
 		t.Errorf("resolved[0] = %q, want %q", resolved[0], "golang-env")
 	}
 }
+
+// TestResolveAgent_PrefixMatching verifies that agents:<name> strips the
+// matching category prefix and resolves the bare name as usual.
+func TestResolveAgent_PrefixMatching(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		agents: {
+			claude: {
+				bin: "claude"
+				command: "{{.bin}}"
+			}
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+	got, err := r.resolveAgent("agents:claude")
+	if err != nil {
+		t.Fatalf("resolveAgent(agents:claude) error: %v", err)
+	}
+	if got != "claude" {
+		t.Errorf("resolveAgent = %q, want %q", got, "claude")
+	}
+}
+
+// TestResolveAgent_PrefixMismatchError verifies that a mismatched prefix
+// (e.g. roles:foo passed via --agent) returns an error naming the mismatch.
+func TestResolveAgent_PrefixMismatchError(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{}`))
+	_, err := r.resolveAgent("roles:assistant")
+	if err == nil {
+		t.Fatal("expected mismatch error from --agent receiving a roles: address")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "agents") || !strings.Contains(msg, "roles") {
+		t.Errorf("error should name both expected and given category, got: %v", err)
+	}
+}
+
+// TestResolveAgent_UnknownPrefixError verifies an unknown category prefix
+// returns the unknown-category error.
+func TestResolveAgent_UnknownPrefixError(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{}`))
+	_, err := r.resolveAgent("foo:bar")
+	if err == nil {
+		t.Fatal("expected unknown-category error")
+	}
+	if !strings.Contains(err.Error(), "unknown category") {
+		t.Errorf("error should mention 'unknown category', got: %v", err)
+	}
+}
+
+// TestResolveContexts_PrefixMatching verifies a contexts: prefix on a context
+// term is stripped and resolution proceeds normally.
+func TestResolveContexts_PrefixMatching(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		contexts: {
+			"golang-env": {
+				prompt: "Go environment"
+				tags: ["env"]
+			}
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+	resolved, err := r.resolveContexts([]string{"contexts:golang-env"})
+	if err != nil {
+		t.Fatalf("resolveContexts(contexts:golang-env) error: %v", err)
+	}
+	if len(resolved) != 1 || resolved[0] != "golang-env" {
+		t.Errorf("resolved = %v, want [golang-env]", resolved)
+	}
+}
+
+// TestResolveContexts_PrefixMismatchError verifies a non-contexts prefix on a
+// context term returns a mismatch error.
+func TestResolveContexts_PrefixMismatchError(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{}`))
+	_, err := r.resolveContexts([]string{"agents:claude"})
+	if err == nil {
+		t.Fatal("expected mismatch error from -c receiving an agents: address")
+	}
+	if !strings.Contains(err.Error(), "contexts") {
+		t.Errorf("error should name the expected category 'contexts', got: %v", err)
+	}
+}

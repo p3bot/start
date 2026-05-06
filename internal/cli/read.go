@@ -21,12 +21,15 @@ func addReadCommand(parent *cobra.Command) {
 		Long: `Output the resolved content of an asset to stdout for piping or preview.
 
 Searches across all categories (agents, roles, contexts, tasks) and writes the
-asset's content to stdout. UTD assets (roles, contexts, tasks) are template-
-resolved: file contents are read, prompts are rendered, and commands are
-executed. Agent assets emit the command template with static placeholders
-({{.bin}}, {{.model}}) substituted while runtime placeholders ({{.prompt}},
-{{.role}}, {{.role_file}}, {{.datetime}}) are left intact. The --model flag,
-when set, overrides the agent's default_model in the {{.model}} substitution.
+asset's content to stdout. Names may be bare (e.g. "agents-md") or fully
+qualified as "category:name" (e.g. "contexts:cwd/agents-md"); the category
+prefix scopes the search to a single category. UTD assets (roles, contexts,
+tasks) are template-resolved: file contents are read, prompts are rendered,
+and commands are executed. Agent assets emit the command template with static
+placeholders ({{.bin}}, {{.model}}) substituted while runtime placeholders
+({{.prompt}}, {{.role}}, {{.role_file}}, {{.datetime}}) are left intact. The
+--model flag, when set, overrides the agent's default_model in the
+{{.model}} substitution.
 
 Source priority for UTD assets is file > prompt > command. When a UTD asset
 defines both file and prompt, read outputs the file. During role/task/context

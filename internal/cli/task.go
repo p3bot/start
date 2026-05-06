@@ -49,7 +49,8 @@ func addTaskCommand(parent *cobra.Command) {
 Without arguments, lists all tasks from global and local configuration.
 With a name, searches for and runs the matching task.
 
-The name can be a config task name or a file path (starting with ./, /, or ~).
+The name can be a config task name, a "tasks:name" fully-qualified address
+(the prefix must be "tasks"), or a file path (starting with ./, /, or ~).
 Tasks are reusable workflows defined in configuration.
 Instructions are passed to the task template via the {{.instructions}} placeholder.`,
 		Args: cobra.RangeArgs(0, 2),
@@ -166,6 +167,16 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		taskResult.FileRead = true
 		resolvedName = taskName // Display file path as task name
 	} else {
+		// Strip the category prefix when present, or error on a mismatch.
+		addr, err := parseAddress(taskName)
+		if err != nil {
+			return err
+		}
+		if addr.HasPrefix && addr.Category != "tasks" {
+			return fmt.Errorf("task expects category %q, got %q in %q", "tasks", addr.Category, taskName)
+		}
+		taskName = addr.Name
+
 		// Unified task resolution - two-phase approach.
 
 		// Phase 1: Full exact name in installed config - unambiguous, no registry needed.

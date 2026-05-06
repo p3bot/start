@@ -153,7 +153,7 @@ func printAgentInfo(w io.Writer, local bool, name string) error {
 
 	_, _ = fmt.Fprintln(w)
 	_, _ = tui.ColorAgents.Fprint(w, "agents")
-	_, _ = fmt.Fprintf(w, "/%s\n", resolvedName)
+	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
 	_, _ = tui.ColorDim.Fprint(w, "Source:")
@@ -214,7 +214,7 @@ func printRoleInfo(w io.Writer, local bool, name string) error {
 
 	_, _ = fmt.Fprintln(w)
 	_, _ = tui.ColorRoles.Fprint(w, "roles")
-	_, _ = fmt.Fprintf(w, "/%s\n", resolvedName)
+	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
 	_, _ = tui.ColorDim.Fprint(w, "Source:")
@@ -266,7 +266,7 @@ func printContextInfo(w io.Writer, local bool, name string) error {
 
 	_, _ = fmt.Fprintln(w)
 	_, _ = tui.ColorContexts.Fprint(w, "contexts")
-	_, _ = fmt.Fprintf(w, "/%s\n", resolvedName)
+	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
 	_, _ = tui.ColorDim.Fprint(w, "Source:")
@@ -318,7 +318,7 @@ func printTaskInfo(w io.Writer, local bool, name string) error {
 
 	_, _ = fmt.Fprintln(w)
 	_, _ = tui.ColorTasks.Fprint(w, "tasks")
-	_, _ = fmt.Fprintf(w, "/%s\n", resolvedName)
+	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
 	_, _ = tui.ColorDim.Fprint(w, "Source:")

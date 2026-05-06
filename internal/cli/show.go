@@ -58,6 +58,50 @@ func showCategoryFor(category string) *showCategory {
 	return nil
 }
 
+// parsedAddress represents a user-facing module address. When the input
+// contained an explicit category:name prefix, Category is set and HasPrefix
+// is true. Otherwise Name holds the entire input and Category is empty.
+type parsedAddress struct {
+	Category  string
+	Name      string
+	HasPrefix bool
+}
+
+// parseAddress splits a user-facing address on the first colon. When a colon
+// is present, the left segment must be one of the four known categories
+// (agents, roles, contexts, tasks) — an unknown prefix returns an error
+// listing the valid set. When no colon is present, the entire input is
+// returned as the bare name with HasPrefix=false.
+func parseAddress(input string) (parsedAddress, error) {
+	idx := strings.Index(input, ":")
+	if idx < 0 {
+		return parsedAddress{Name: input}, nil
+	}
+	cat := input[:idx]
+	name := input[idx+1:]
+	if showCategoryFor(cat) == nil {
+		return parsedAddress{}, fmt.Errorf("unknown category %q (valid: %s)", cat, knownCategoriesList())
+	}
+	return parsedAddress{Category: cat, Name: name, HasPrefix: true}, nil
+}
+
+// knownCategoriesList returns the four valid categories as a comma-separated
+// string for use in error messages.
+func knownCategoriesList() string {
+	names := make([]string, len(showCategories))
+	for i, c := range showCategories {
+		names[i] = c.category
+	}
+	return strings.Join(names, ", ")
+}
+
+// formatAddress returns the canonical user-facing address for a category and
+// name pair: "category:name". Used at every display site that emits a
+// fully-qualified module address.
+func formatAddress(category, name string) string {
+	return category + ":" + name
+}
+
 // addShowCommand adds the show command and its subcommands to the parent command.
 func addShowCommand(parent *cobra.Command) {
 	showCmd := &cobra.Command{
@@ -69,6 +113,10 @@ func addShowCommand(parent *cobra.Command) {
 
 Without arguments, lists all configured items with descriptions.
 With an argument, searches across all categories and displays a verbose dump.
+
+Names may be bare (e.g. "claude") or fully qualified as "category:name"
+(e.g. "agents:claude/interactive"). The category prefix scopes the search
+to a single category; bare names continue to search across all four.
 
 Use --global to restrict output to the global config (~/.config/start/) or
 --local to restrict to the local config (./.start/). These flags are mutually

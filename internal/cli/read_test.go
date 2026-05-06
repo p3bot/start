@@ -386,7 +386,7 @@ tasks: {
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("error should mention ambiguity, got: %v", err)
 	}
-	for _, want := range []string{"roles/helper", "tasks/helper"} {
+	for _, want := range []string{"roles:helper", "tasks:helper"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should list candidate %q, got: %v", want, err)
 		}

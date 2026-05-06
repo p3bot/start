@@ -213,10 +213,10 @@ func TestResolveCrossCategory_AmbiguousAcrossCategories(t *testing.T) {
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
 	}
-	if !strings.Contains(err.Error(), "tasks/") {
+	if !strings.Contains(err.Error(), "tasks:") {
 		t.Errorf("error should list tasks entries: %v", err)
 	}
-	if !strings.Contains(err.Error(), "roles/") {
+	if !strings.Contains(err.Error(), "roles:") {
 		t.Errorf("error should list roles entries: %v", err)
 	}
 }
@@ -393,10 +393,10 @@ func TestResolveCrossCategory_MultipleExactAcrossCategoriesNonTTY(t *testing.T) 
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
 	}
-	if !strings.Contains(err.Error(), "agents/foo") {
+	if !strings.Contains(err.Error(), "agents:foo") {
 		t.Errorf("error should list agents entry: %v", err)
 	}
-	if !strings.Contains(err.Error(), "roles/foo") {
+	if !strings.Contains(err.Error(), "roles:foo") {
 		t.Errorf("error should list roles entry: %v", err)
 	}
 	if r.didInstall {
@@ -430,15 +430,177 @@ func TestResolveCrossCategory_ExactPlusCrossCategorySubstring(t *testing.T) {
 	r := newTestResolver(cfg)
 	_, err := resolveCrossCategory("claude", r)
 	if err == nil {
-		t.Fatal("expected ambiguity error: exact agents/claude alongside roles/claude-expert should not silently pick the exact match")
+		t.Fatal("expected ambiguity error: exact agents:claude alongside roles:claude-expert should not silently pick the exact match")
 	}
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
 	}
-	if !strings.Contains(err.Error(), "agents/claude") {
+	if !strings.Contains(err.Error(), "agents:claude") {
 		t.Errorf("error should list the exact match entry: %v", err)
 	}
-	if !strings.Contains(err.Error(), "roles/claude-expert") {
+	if !strings.Contains(err.Error(), "roles:claude-expert") {
 		t.Errorf("error should list the substring neighbour: %v", err)
+	}
+}
+
+// TestResolveCrossCategory_PrefixMatching verifies a matching category prefix
+// scopes the search to that category and resolves to one match without
+// prompting, even when the bare name exists in another category.
+func TestResolveCrossCategory_PrefixMatching(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		agents: {
+			foo: {
+				bin: "foo"
+				command: "{{.bin}}"
+			}
+		}
+		roles: {
+			foo: {
+				prompt: "Foo role"
+			}
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+	match, err := resolveCrossCategory("agents:foo", r)
+	if err != nil {
+		t.Fatalf("unexpected error with matching prefix: %v", err)
+	}
+	if match.Category != "agents" {
+		t.Errorf("match.Category = %q, want %q", match.Category, "agents")
+	}
+	if match.Name != "foo" {
+		t.Errorf("match.Name = %q, want %q", match.Name, "foo")
+	}
+}
+
+// TestResolveCrossCategory_PrefixScopesAbsence verifies a category prefix with
+// a bare name that exists only in a *different* category returns a
+// "no matches" error rather than silently falling back.
+func TestResolveCrossCategory_PrefixScopesAbsence(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		roles: {
+			"golang/assistant": {
+				prompt: "Go assistant"
+			}
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+	_, err := resolveCrossCategory("contexts:golang/assistant", r)
+	if err == nil {
+		t.Fatal("expected 'no matches' error when the prefix scopes away the only candidate")
+	}
+	if !strings.Contains(err.Error(), "no matches found") {
+		t.Errorf("error = %q, want 'no matches found' (no fallback to roles)", err.Error())
+	}
+}
+
+// TestResolveCrossCategory_UnknownPrefix verifies an unknown category prefix
+// returns an error naming the unknown category and listing the four valid ones.
+func TestResolveCrossCategory_UnknownPrefix(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{}`))
+	_, err := resolveCrossCategory("foo:bar", r)
+	if err == nil {
+		t.Fatal("expected unknown-category error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "unknown category") || !strings.Contains(msg, `"foo"`) {
+		t.Errorf("error should name the unknown category, got: %v", err)
+	}
+	for _, want := range []string{"agents", "roles", "contexts", "tasks"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should list valid category %q, got: %v", want, err)
+		}
+	}
+}
+
+// TestResolveCrossCategory_AmbiguityRoundTrip verifies that a non-TTY
+// ambiguity-error candidate, fed back as the resolver input, resolves to one
+// match — the round-trip property required by address-scheme.md.
+func TestResolveCrossCategory_AmbiguityRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		agents: {
+			foo: {
+				bin: "foo"
+				command: "{{.bin}}"
+			}
+		}
+		roles: {
+			foo: {
+				prompt: "Foo role"
+			}
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+	_, err := resolveCrossCategory("foo", r)
+	if err == nil {
+		t.Fatal("expected ambiguity error for cross-category exact matches")
+	}
+	// The non-TTY error lists candidates as "agents:foo" and "roles:foo".
+	for _, candidate := range []string{"agents:foo", "roles:foo"} {
+		r2 := newTestResolver(cfg)
+		match, err := resolveCrossCategory(candidate, r2)
+		if err != nil {
+			t.Fatalf("round-trip resolve(%q) error: %v", candidate, err)
+		}
+		if got := formatAddress(match.Category, match.Name); got != candidate {
+			t.Errorf("round-trip resolve(%q) returned %q", candidate, got)
+		}
+	}
+}
+
+// TestParseAddress verifies the colon-prefix parser at the unit level.
+func TestParseAddress(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input        string
+		wantCategory string
+		wantName     string
+		wantPrefix   bool
+		wantErr      bool
+	}{
+		{"claude", "", "claude", false, false},
+		{"claude/interactive", "", "claude/interactive", false, false},
+		{"agents:claude", "agents", "claude", true, false},
+		{"agents:claude/interactive", "agents", "claude/interactive", true, false},
+		{"contexts:cwd/agents-md", "contexts", "cwd/agents-md", true, false},
+		{"foo:bar", "", "", false, true},
+		{"agent:claude", "", "", false, true}, // singular typo, not in valid set
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			addr, err := parseAddress(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseAddress(%q) expected error, got %+v", tt.input, addr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseAddress(%q) unexpected error: %v", tt.input, err)
+			}
+			if addr.Category != tt.wantCategory {
+				t.Errorf("Category = %q, want %q", addr.Category, tt.wantCategory)
+			}
+			if addr.Name != tt.wantName {
+				t.Errorf("Name = %q, want %q", addr.Name, tt.wantName)
+			}
+			if addr.HasPrefix != tt.wantPrefix {
+				t.Errorf("HasPrefix = %v, want %v", addr.HasPrefix, tt.wantPrefix)
+			}
+		})
 	}
 }

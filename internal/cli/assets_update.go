@@ -161,7 +161,7 @@ func runAssetsUpdate(cmd *cobra.Command, args []string) error {
 	total := len(installed)
 	var results []UpdateResult
 	for i, asset := range installed {
-		prog.Update("Updating %d/%d %s/%s...", i+1, total, asset.Category, asset.Name)
+		prog.Update("Updating %d/%d %s...", i+1, total, formatAddress(asset.Category, asset.Name))
 		result := checkAndUpdate(ctx, client, paths, index, asset, dryRun, force)
 		results = append(results, result)
 	}
@@ -285,7 +285,7 @@ func printUpdateResults(w io.Writer, results []UpdateResult, dryRun bool) {
 	var updated, current, failed int
 
 	for _, r := range results {
-		name := r.Asset.Category + "/" + r.Asset.Name
+		name := formatAddress(r.Asset.Category, r.Asset.Name)
 		_, _ = fmt.Fprintf(w, "  %s ", name)
 
 		if r.Error != nil {

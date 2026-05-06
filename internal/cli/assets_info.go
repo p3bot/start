@@ -232,7 +232,7 @@ func checkIfInstalled(asset assets.SearchResult) (bool, string) {
 func printAssetInfo(w io.Writer, asset assets.SearchResult, installed bool, scope string, verbose bool) {
 	_, _ = fmt.Fprintln(w)
 	_, _ = tui.CategoryColor(asset.Category).Fprint(w, asset.Category)
-	_, _ = fmt.Fprintf(w, "/%s\n", asset.Name)
+	_, _ = fmt.Fprintf(w, ":%s\n", asset.Name)
 	printSeparator(w)
 
 	_, _ = tui.ColorDim.Fprint(w, "Type:")
@@ -267,7 +267,7 @@ func printAssetInfo(w io.Writer, asset assets.SearchResult, installed bool, scop
 	printSeparator(w)
 
 	if !installed {
-		_, _ = fmt.Fprintf(w, "\nUse 'start assets add %s' to install.\n", asset.Name)
+		_, _ = fmt.Fprintf(w, "\nUse 'start assets add %s' to install.\n", formatAddress(asset.Category, asset.Name))
 	}
 }
 
@@ -279,7 +279,7 @@ func promptAssetInfoSelection(w io.Writer, r io.Reader, results []assets.SearchR
 	for i, res := range results {
 		_, _ = fmt.Fprintf(w, "  %2d. ", i+1)
 		_, _ = tui.CategoryColor(res.Category).Fprint(w, res.Category)
-		_, _ = fmt.Fprintf(w, "/%s ", res.Name)
+		_, _ = fmt.Fprintf(w, ":%s ", res.Name)
 		_, _ = tui.ColorDim.Fprintf(w, "- %s", res.Entry.Description)
 		_, _ = fmt.Fprintln(w)
 	}

@@ -85,6 +85,12 @@ func (r *resolver) resolveRole(name string) (string, error) {
 // Phase 2: Collect all candidates from installed config and registry, merge, select.
 // displayType is the capitalised display name (e.g., "Agent", "Role").
 // When allowFilePath is true, file paths bypass resolution.
+//
+// The name argument may be a bare short name or a fully-qualified
+// "category:name" address. When a category prefix is present and matches the
+// resolver's expected category, the prefix is stripped and the bare name is
+// resolved as usual. When the prefix names a different category, an error is
+// returned identifying the mismatch.
 func (r *resolver) resolveAsset(name, cueKey, category, displayType string, allowFilePath bool) (string, error) {
 	if name == "" {
 		return "", nil
@@ -94,6 +100,15 @@ func (r *resolver) resolveAsset(name, cueKey, category, displayType string, allo
 		debugf(r.stderr, r.flags, dbgResolve, "%s %q: file path bypass", displayType, name)
 		return name, nil
 	}
+
+	addr, err := parseAddress(name)
+	if err != nil {
+		return "", err
+	}
+	if addr.HasPrefix && addr.Category != category {
+		return "", fmt.Errorf("%s expects category %q, got %q in %q", displayType, category, addr.Category, name)
+	}
+	name = addr.Name
 
 	searchType := strings.ToLower(displayType)
 
@@ -247,6 +262,16 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 			resolved = append(resolved, term)
 			continue
 		}
+
+		// Strip the category prefix when present, or error on a mismatch.
+		addr, err := parseAddress(term)
+		if err != nil {
+			return nil, err
+		}
+		if addr.HasPrefix && addr.Category != "contexts" {
+			return nil, fmt.Errorf("Context expects category %q, got %q in %q", "contexts", addr.Category, term)
+		}
+		term = addr.Name
 
 		// Exact or short name match in installed config
 		if resolvedCtx, err := findExactInstalledName(r.cfg.Value, internalcue.KeyContexts, term); err != nil {
@@ -612,7 +637,7 @@ func (r *resolver) autoInstall(client *registry.Client, result assets.SearchResu
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	debugf(r.stderr, r.flags, dbgResolve, "Auto-installing %s/%s from registry", result.Category, result.Name)
+	debugf(r.stderr, r.flags, dbgResolve, "Auto-installing %s from registry", formatAddress(result.Category, result.Name))
 
 	if !r.flags.Quiet {
 		_, _ = fmt.Fprintf(r.stdout, "Installing %s from registry...\n", result.Name)
@@ -631,7 +656,7 @@ func (r *resolver) autoInstall(client *registry.Client, result assets.SearchResu
 		}
 	}
 
-	debugf(r.stderr, r.flags, dbgResolve, "Auto-installed %s/%s", result.Category, result.Name)
+	debugf(r.stderr, r.flags, dbgResolve, "Auto-installed %s", formatAddress(result.Category, result.Name))
 	r.didInstall = true
 	return nil
 }

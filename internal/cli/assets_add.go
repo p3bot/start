@@ -188,8 +188,8 @@ func installAsset(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, c
 	var errs []error
 	for _, selected := range selections {
 		if err := installSingleAsset(ctx, w, prog, client, index, selected, configDir, scopeName, flags, cfg); err != nil {
-			errs = append(errs, fmt.Errorf("%s/%s: %w", selected.Category, selected.Name, err))
-			_, _ = fmt.Fprintf(w, "Error installing %s/%s: %v\n", selected.Category, selected.Name, err)
+			errs = append(errs, fmt.Errorf("%s: %w", formatAddress(selected.Category, selected.Name), err))
+			_, _ = fmt.Fprintf(w, "Error installing %s: %v\n", formatAddress(selected.Category, selected.Name), err)
 		}
 	}
 
@@ -205,8 +205,8 @@ func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, cl
 		// Manually-added asset (no origin) — warn and proceed with install
 		if origin == "" {
 			if !flags.Quiet {
-				printWarning(w, "replacing manually-added %s/%s with registry version",
-					selected.Category, selected.Name)
+				printWarning(w, "replacing manually-added %s with registry version",
+					formatAddress(selected.Category, selected.Name))
 			}
 		} else {
 			if !flags.Quiet {
@@ -221,7 +221,7 @@ func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, cl
 				}
 				_, _ = tui.ColorDim.Fprint(w, "Already installed: ")
 				_, _ = tui.CategoryColor(selected.Category).Fprint(w, selected.Category)
-				_, _ = fmt.Fprintf(w, "/%s ", selected.Name)
+				_, _ = fmt.Fprintf(w, ":%s ", selected.Name)
 				_, _ = tui.ColorCyan.Fprint(w, "(")
 				if installedVer != "" {
 					_, _ = tui.ColorDim.Fprint(w, installedVer)
@@ -262,9 +262,9 @@ func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, cl
 			configFile = "settings.cue"
 		}
 		if version != "" {
-			_, _ = fmt.Fprintf(w, "\nInstalled %s/%s@%s to %s config\n", selected.Category, selected.Name, version, scopeName)
+			_, _ = fmt.Fprintf(w, "\nInstalled %s@%s to %s config\n", formatAddress(selected.Category, selected.Name), version, scopeName)
 		} else {
-			_, _ = fmt.Fprintf(w, "\nInstalled %s/%s to %s config\n", selected.Category, selected.Name, scopeName)
+			_, _ = fmt.Fprintf(w, "\nInstalled %s to %s config\n", formatAddress(selected.Category, selected.Name), scopeName)
 		}
 		_, _ = fmt.Fprintf(w, "Config: %s/%s\n", configDir, configFile)
 	}
@@ -282,7 +282,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 	if !isTTY {
 		var names []string
 		for _, res := range results {
-			names = append(names, fmt.Sprintf("%s/%s", res.Category, res.Name))
+			names = append(names, formatAddress(res.Category, res.Name))
 		}
 		return nil, fmt.Errorf(
 			"multiple assets found: %s\nSpecify exact path or run interactively",
@@ -299,7 +299,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 		}
 		_, _ = fmt.Fprintf(w, "  %s%d. ", marker, i+1)
 		_, _ = tui.CategoryColor(res.Category).Fprint(w, res.Category)
-		_, _ = fmt.Fprintf(w, "/%s ", res.Name)
+		_, _ = fmt.Fprintf(w, ":%s ", res.Name)
 		_, _ = tui.ColorDim.Fprintf(w, "- %s", res.Entry.Description)
 		_, _ = fmt.Fprintln(w)
 	}
@@ -328,7 +328,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 	// Try matching by name (single result)
 	inputLower := strings.ToLower(input)
 	for _, res := range results {
-		fullPath := fmt.Sprintf("%s/%s", res.Category, res.Name)
+		fullPath := formatAddress(res.Category, res.Name)
 		if strings.ToLower(res.Name) == inputLower || strings.ToLower(fullPath) == inputLower {
 			return []assets.SearchResult{res}, nil
 		}
