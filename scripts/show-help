@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# show-help - Display --help output for every command and subcommand.
+# Useful for verifying help formatting, command grouping, and flag layout.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." || exit 1; pwd)"
+
+# Build fresh binary
+BIN="${PROJECT_DIR}/start"
+echo "Building binary..."
+if ! go build -o "${BIN}" "${PROJECT_DIR}/cmd/start/"; then
+  echo "ERROR: Failed to build binary"
+  exit 1
+fi
+echo ""
+
+# Separator between help outputs
+sep() {
+  printf '\033[35m%s\033[0m\n' "────────────────────────────────────────────────────────────────────────────────"
+}
+
+# Print help for a command
+show() {
+  local cmd="$1"
+  sep
+  printf '\033[32m$ %s --help\033[0m\n' "${cmd}"
+  sep
+  eval "${cmd} --help" 2>&1 || true
+  echo ""
+}
+
+# Root
+show "${BIN}"
+
+# Top-level commands
+show "${BIN} show"
+show "${BIN} show role"
+show "${BIN} show context"
+show "${BIN} show agent"
+show "${BIN} show task"
+
+show "${BIN} prompt"
+
+show "${BIN} task"
+
+show "${BIN} search"
+
+show "${BIN} assets"
+show "${BIN} assets list"
+show "${BIN} assets search"
+show "${BIN} assets add"
+show "${BIN} assets browse"
+show "${BIN} assets index"
+show "${BIN} assets info"
+show "${BIN} assets update"
+show "${BIN} assets validate"
+
+show "${BIN} config"
+show "${BIN} config agent"
+show "${BIN} config agent list"
+show "${BIN} config agent add"
+show "${BIN} config agent info"
+show "${BIN} config agent edit"
+show "${BIN} config agent remove"
+show "${BIN} config agent default"
+
+show "${BIN} config role"
+show "${BIN} config role list"
+show "${BIN} config role add"
+show "${BIN} config role info"
+show "${BIN} config role edit"
+show "${BIN} config role remove"
+show "${BIN} config role order"
+
+show "${BIN} config context"
+show "${BIN} config context list"
+show "${BIN} config context add"
+show "${BIN} config context info"
+show "${BIN} config context edit"
+show "${BIN} config context remove"
+show "${BIN} config context order"
+
+show "${BIN} config task"
+show "${BIN} config task list"
+show "${BIN} config task add"
+show "${BIN} config task info"
+show "${BIN} config task edit"
+show "${BIN} config task remove"
+
+show "${BIN} config settings"
+
+show "${BIN} config order"
+
+show "${BIN} config search"
+show "${BIN} config add"
+show "${BIN} config edit"
+show "${BIN} config remove"
+
+show "${BIN} doctor"
+
+show "${BIN} completion"
+show "${BIN} completion bash"
+show "${BIN} completion zsh"
+show "${BIN} completion fish"
+
+sep
+echo "Done. All help outputs displayed."

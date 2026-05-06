@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+
+# Environment setup
+# -----------------------------------------------------------------------------
+set -o pipefail
+[[ ${DEBUG-} ]] && set -o xtrace
+SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." || exit 1; pwd)"
+CONTEXT_DIR="${PROJECT_DIR}/context"
+
+function print_usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Clone or update context repositories and fetch documentation.
+
+Options:
+  -r, --repos-only    Only update git repositories (skip docs)
+  -d, --docs-only     Only update fetched documentation (skip repos)
+  -v, --verbose       Verbose output
+  -h, --help          Show this help message and exit
+
+Examples:
+  $(basename "$0")           Update everything
+  $(basename "$0") -r        Only clone/pull repositories
+  $(basename "$0") -d        Only fetch documentation
+EOF
+}
+
+function ctrlc_trap() {
+  echo
+  echo "Script interrupted. Exiting."
+  exit 130
+}
+trap ctrlc_trap SIGINT
+
+# Parse Arguments
+# -----------------------------------------------------------------------------
+repos_only=false
+docs_only=false
+verbose=false
+
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    -r|--repos-only)
+      repos_only=true
+      shift
+      ;;
+    -d|--docs-only)
+      docs_only=true
+      shift
+      ;;
+    -v|--verbose)
+      verbose=true
+      shift
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown option: ${1}"
+      print_usage
+      exit 1
+      ;;
+  esac
+done
+
+# Dependency Checks
+# -----------------------------------------------------------------------------
+if [[ "${docs_only}" != true ]]; then
+  if ! command -v git >/dev/null; then
+    echo "ERROR: Missing dependency - 'git'"
+    exit 1
+  fi
+fi
+
+if [[ "${repos_only}" != true ]]; then
+  if ! command -v snag >/dev/null; then
+    echo "ERROR: Missing dependency - 'snag'"
+    exit 1
+  fi
+fi
+
+# Repository Definitions
+# -----------------------------------------------------------------------------
+declare -A REPOS=(
+  ["aichat"]="https://github.com/sigoden/aichat.git"
+  ["cobra"]="https://github.com/spf13/cobra.git"
+  ["cue"]="https://github.com/cue-lang/cue.git"
+  ["cuelang-org"]="https://github.com/cue-lang/cuelang.org.git"
+  ["gemini-cli"]="https://github.com/google-gemini/gemini-cli.git"
+)
+
+# Documentation Definitions (output_file -> url)
+# -----------------------------------------------------------------------------
+declare -A DOCS=(
+  ["claude-code-cli-usage.md"]="https://docs.anthropic.com/en/docs/claude-code/cli-usage"
+)
+
+# Clone or Pull Repositories
+# -----------------------------------------------------------------------------
+function upsert_repos() {
+  echo "Updating repositories..."
+  echo
+
+  for name in "${!REPOS[@]}"; do
+    local url="${REPOS[$name]}"
+    local dir="${CONTEXT_DIR}/${name}"
+
+    if [[ -d "${dir}/.git" ]]; then
+      echo "Pulling ${name}..."
+      if [[ "${verbose}" == true ]]; then
+        git -C "${dir}" pull
+      else
+        git -C "${dir}" pull --quiet
+      fi
+    else
+      echo "Cloning ${name}..."
+      if [[ "${verbose}" == true ]]; then
+        git clone --depth 1 "${url}" "${dir}"
+      else
+        git clone --depth 1 --quiet "${url}" "${dir}"
+      fi
+    fi
+  done
+
+  echo
+  echo "Repositories updated."
+}
+
+# Fetch Documentation
+# -----------------------------------------------------------------------------
+function fetch_docs() {
+  echo "Fetching documentation..."
+  echo
+
+  local docs_dir="${CONTEXT_DIR}/docs"
+  mkdir -p "${docs_dir}"
+
+  for file in "${!DOCS[@]}"; do
+    local url="${DOCS[$file]}"
+    local output="${docs_dir}/${file}"
+
+    echo "Fetching ${file}..."
+    if snag -f md "${url}" -o "${output}"; then
+      [[ "${verbose}" == true ]] && echo "  Saved to ${output}"
+    else
+      echo "  WARNING: Failed to fetch ${url}"
+    fi
+  done
+
+  echo
+  echo "Documentation updated."
+}
+
+# Main
+# -----------------------------------------------------------------------------
+cd "${PROJECT_DIR}" || exit 1
+
+if [[ "${docs_only}" != true ]]; then
+  upsert_repos
+fi
+
+if [[ "${repos_only}" != true ]]; then
+  fetch_docs
+fi
+
+echo
+echo "Context update complete."

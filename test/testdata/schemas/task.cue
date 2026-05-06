@@ -1,0 +1,20 @@
+package schemas
+
+// #Task defines the schema for task workflows.
+// Tasks are reusable workflows that combine roles, agents, and dynamic content.
+//
+// Note: Tasks are identified by their map key (e.g., tasks["code-review"]).
+// There is no 'name' field - the key IS the name.
+#Task: {
+	// Embed UTD pattern (file, command, prompt, shell, timeout)
+	#UTD
+
+	// Metadata
+	description?: string
+	tags?: [...string]
+
+	// References (not inline definitions)
+	// role can be a string (runtime resolution) or #Role (CUE dependency)
+	role?:  string | #Role
+	agent?: string // Must exist in agents (validated at runtime)
+}

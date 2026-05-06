@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+# Environment setup
+# -----------------------------------------------------------------------------
+set -o pipefail
+[[ ${DEBUG-} ]] && set -o xtrace
+SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." || exit 1; pwd)"
+
+DEMO_DIR="${HOME}/tmp/demo"
+STARSHIP_CONFIG="${DEMO_DIR}/starship.toml"
+OUTPUT="${DEMO_DIR}/demo.cast"
+
+function print_usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Set up a clean demo environment and record an asciinema session.
+
+The demo directory is created at ${DEMO_DIR} with a minimal starship
+config that hides personal information (username, email, k8s context).
+
+Options:
+  -o, --output <file>  Output cast file (default: ${OUTPUT})
+  -h, --help           Show this help message and exit
+
+Examples:
+  $(basename "$0")                    Record to ${OUTPUT}
+  $(basename "$0") -o ~/demo.cast     Record to a custom location
+EOF
+}
+
+function ctrlc_trap() {
+  echo
+  echo "Script interrupted. Exiting."
+  exit 130
+}
+trap ctrlc_trap SIGINT
+
+# Parse Arguments
+# -----------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    -o|--output)
+      OUTPUT="${2}"
+      shift 2
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown option: ${1}"
+      print_usage
+      exit 1
+      ;;
+  esac
+done
+
+# Dependency Checks
+# -----------------------------------------------------------------------------
+if ! command -v asciinema >/dev/null; then
+  echo "ERROR: Missing dependency - 'asciinema'"
+  exit 1
+fi
+
+# Setup Demo Directory
+# -----------------------------------------------------------------------------
+mkdir -p "${DEMO_DIR}"
+
+cat > "${STARSHIP_CONFIG}" <<'EOF'
+[character]
+success_symbol = "[❯](green)"
+error_symbol = "[❯](red)"
+
+[gcloud]
+disabled = true
+
+[kubernetes]
+disabled = true
+EOF
+
+# Record
+# -----------------------------------------------------------------------------
+echo "Demo directory: ${DEMO_DIR}"
+echo "Starship config: ${STARSHIP_CONFIG}"
+echo "Output: ${OUTPUT}"
+echo
+
+cd "${DEMO_DIR}" || exit 1
+
+STARSHIP_CONFIG="${STARSHIP_CONFIG}" asciinema rec --overwrite "${OUTPUT}"

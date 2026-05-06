@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# show-colours - Display standard ANSI terminal colours for development reference.
+# See .ai/design/terminal-colour-standard.md for the project's terminal colour standard.
+
+set -euo pipefail
+
+sample="cwd/dotai/default         Project-specific default role"
+
+# Reset
+R='\033[0m'
+
+# Standard colours
+declare -A colours=(
+  [Red]='\033[31m'
+  [Green]='\033[32m'
+  [Yellow]='\033[33m'
+  [Blue]='\033[34m'
+  [Magenta]='\033[35m'
+  [Cyan]='\033[36m'
+  [White]='\033[37m'
+  [HiRed]='\033[91m'
+  [HiGreen]='\033[92m'
+  [HiYellow]='\033[93m'
+  [HiBlue]='\033[94m'
+  [HiMagenta]='\033[95m'
+  [HiCyan]='\033[96m'
+  [HiWhite]='\033[97m'
+  [Faint]='\033[2m'
+)
+
+# Ordered list (bash associative arrays don't preserve order)
+order=(Red Green Yellow Blue Magenta Cyan White HiRed HiGreen HiYellow HiBlue HiMagenta HiCyan HiWhite Faint)
+
+echo "ANSI Terminal Colours"
+echo "====================="
+echo ""
+
+for name in "${order[@]}"; do
+  code="${colours[$name]}"
+  printf "  ${code}%-14s %s${R}\n" "$name" "$sample"
+done
+
+echo ""
+echo "Project Colour Assignments"
+echo "=========================="
+echo ""
+echo "  Message types:"
+printf "  ${colours[Red]}%-14s${R} %s\n" "Red" "Errors"
+printf "  ${colours[Yellow]}%-14s${R} %s\n" "Yellow" "Warnings"
+printf "  ${colours[Green]}%-14s${R} %s\n" "Green" "Success markers, headers"
+printf "  ${colours[Magenta]}%-14s${R} %s\n" "Magenta" "Separators"
+printf "  ${colours[Faint]}%-14s${R} %s\n" "Faint" "Descriptions, metadata"
+echo ""
+echo "  Asset categories:"
+printf "  ${colours[Blue]}%-14s${R} %s\n" "Blue" "agents"
+printf "  ${colours[Green]}%-14s${R} %s\n" "Green" "roles"
+printf "  ${colours[Cyan]}%-14s${R} %s\n" "Cyan" "contexts"
+printf "  ${colours[HiYellow]}%-14s${R} %s\n" "HiYellow" "tasks"
+echo ""
+echo "  Markers:"
+printf "  ${colours[HiGreen]}%-14s${R} %s\n" "HiGreen" "Installed *"
+printf "  ${colours[Blue]}%-14s${R} %s\n" "Blue" "Version arrows ->"
+printf "  ${colours[Cyan]}%-14s${R} %s\n" "Cyan" "Parenthetical delimiters"

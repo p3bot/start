@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+
+# Environment setup
+# -----------------------------------------------------------------------------
+set -o pipefail
+[[ ${DEBUG-} ]] && set -o xtrace
+SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." || exit 1; pwd)"
+
+function print_usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Run tests for the start project.
+
+Options:
+  -i, --integration    Include integration tests
+  -e, --e2e            Include integration and e2e tests
+  -a, --all            Run all tests (unit + integration + e2e)
+  -r, --race           Enable race detector
+  -c, --coverage       Generate coverage report
+  -v, --verbose        Verbose test output
+  -s, --short          Skip long-running tests
+  -h, --help           Show this help message and exit
+
+Examples:
+  $(basename "$0")           Run unit tests only
+  $(basename "$0") -i        Run unit + integration tests
+  $(basename "$0") -a -c     Run all tests with coverage
+  $(basename "$0") -r        Run unit tests with race detection
+  $(basename "$0") -v -s     Verbose output, skip long tests
+EOF
+}
+
+function ctrlc_trap() {
+  echo
+  echo "Script interrupted. Exiting."
+  exit 130
+}
+trap ctrlc_trap SIGINT
+
+# Parse Arguments
+# -----------------------------------------------------------------------------
+include_integration=false
+include_e2e=false
+race=false
+coverage=false
+verbose=false
+short=false
+
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    -i|--integration)
+      include_integration=true
+      shift
+      ;;
+    -e|--e2e)
+      include_integration=true
+      include_e2e=true
+      shift
+      ;;
+    -a|--all)
+      include_integration=true
+      include_e2e=true
+      shift
+      ;;
+    -r|--race)
+      race=true
+      shift
+      ;;
+    -c|--coverage)
+      coverage=true
+      shift
+      ;;
+    -v|--verbose)
+      verbose=true
+      shift
+      ;;
+    -s|--short)
+      short=true
+      shift
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown option: ${1}"
+      print_usage
+      exit 1
+      ;;
+  esac
+done
+
+# Dependency Checks
+# -----------------------------------------------------------------------------
+if ! command -v go >/dev/null; then
+  echo "ERROR: Missing dependency - 'go'"
+  exit 1
+fi
+
+# Build Binary for E2E Tests
+# -----------------------------------------------------------------------------
+if [[ "${include_e2e}" == true ]]; then
+  echo "Building binary for e2e tests..."
+  mkdir -p "${PROJECT_DIR}/bin"
+  if ! go build -o "${PROJECT_DIR}/bin/start" "${PROJECT_DIR}/cmd/start/"; then
+    echo "ERROR: Failed to build binary"
+    exit 1
+  fi
+  echo "Binary built: ${PROJECT_DIR}/bin/start"
+  echo
+fi
+
+# Build Test Command
+# -----------------------------------------------------------------------------
+declare -a test_args=()
+
+# Build tags
+declare -a tags=()
+if [[ "${include_integration}" == true ]]; then
+  tags+=("integration")
+fi
+if [[ "${include_e2e}" == true ]]; then
+  tags+=("e2e")
+fi
+if [[ ${#tags[@]} -gt 0 ]]; then
+  test_args+=("-tags=$(IFS=,; echo "${tags[*]}")")
+fi
+
+# Race detector
+if [[ "${race}" == true ]]; then
+  test_args+=("-race")
+fi
+
+# Coverage
+if [[ "${coverage}" == true ]]; then
+  test_args+=("-coverprofile=${PROJECT_DIR}/coverage.out")
+fi
+
+# Verbose
+if [[ "${verbose}" == true ]]; then
+  test_args+=("-v")
+fi
+
+# Short
+if [[ "${short}" == true ]]; then
+  test_args+=("-short")
+fi
+
+# Always add the package path
+test_args+=("./...")
+
+# Run Tests
+# -----------------------------------------------------------------------------
+echo "Running tests..."
+echo "Command: go test ${test_args[*]}"
+echo
+
+cd "${PROJECT_DIR}" || exit 1
+
+if go test "${test_args[@]}"; then
+  echo
+  echo "Tests passed."
+else
+  echo
+  echo "Tests failed."
+  exit 1
+fi
+
+# Coverage Report
+# -----------------------------------------------------------------------------
+if [[ "${coverage}" == true && -f "${PROJECT_DIR}/coverage.out" ]]; then
+  echo
+  echo "Generating coverage report..."
+  go tool cover -html="${PROJECT_DIR}/coverage.out" -o "${PROJECT_DIR}/coverage.html"
+  echo "Coverage report: ${PROJECT_DIR}/coverage.html"
+fi
