@@ -5,11 +5,6 @@
 *.swo
 *~
 
-# AI and Documentation Files
-
-# Reference Directories
-library/
-
 # Go Binary Output
 /start
 *.exe
