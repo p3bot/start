@@ -95,10 +95,10 @@ tasks: {
 	if !strings.Contains(output, "assistant") {
 		t.Errorf("output should show assistant role, got: %s", output)
 	}
-	if !strings.Contains(output, "v0.2.0") {
+	if !strings.Contains(output, "v1.0.0") {
 		t.Errorf("output should show claude version, got: %s", output)
 	}
-	if !strings.Contains(output, "v0.1.0") {
+	if !strings.Contains(output, "v1.0.0") {
 		t.Errorf("output should show assistant version, got: %s", output)
 	}
 }
