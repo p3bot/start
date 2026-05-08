@@ -13,6 +13,21 @@ import (
 	"github.com/start-cli/start/internal/shell"
 )
 
+// loadedContexts returns only the contexts whose content was successfully
+// resolved (Status == "loaded"). The composer also appends excluded default
+// contexts with Status == "skipped" to the result list for UI visibility,
+// and may include "error" entries; tests counting how many contexts were
+// actually included in the prompt should look at "loaded" only.
+func loadedContexts(ctxs []orchestration.Context) []orchestration.Context {
+	out := make([]orchestration.Context, 0, len(ctxs))
+	for _, c := range ctxs {
+		if c.Status == "loaded" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // chdir changes to the given directory and registers a cleanup to restore the original.
 func chdir(t *testing.T, dir string) {
 	t.Helper()
@@ -127,11 +142,12 @@ func TestIntegration_CUELoaderWithComposer(t *testing.T) {
 	}
 
 	// Should have required context
-	if len(composeResult.Contexts) != 1 {
-		t.Errorf("expected 1 context, got %d", len(composeResult.Contexts))
+	loaded := loadedContexts(composeResult.Contexts)
+	if len(loaded) != 1 {
+		t.Errorf("expected 1 context, got %d", len(loaded))
 	}
-	if composeResult.Contexts[0].Name != "env" {
-		t.Errorf("expected 'env' context, got %q", composeResult.Contexts[0].Name)
+	if loaded[0].Name != "env" {
+		t.Errorf("expected 'env' context, got %q", loaded[0].Name)
 	}
 
 	// Prompt should contain context content
@@ -167,13 +183,14 @@ func TestIntegration_CUELoaderWithComposer_DefaultContexts(t *testing.T) {
 	}
 
 	// Should have both required and default contexts
-	if len(composeResult.Contexts) != 2 {
-		t.Errorf("expected 2 contexts, got %d", len(composeResult.Contexts))
+	loaded := loadedContexts(composeResult.Contexts)
+	if len(loaded) != 2 {
+		t.Errorf("expected 2 contexts, got %d", len(loaded))
 	}
 
 	// Check both contexts are present
 	var hasEnv, hasProject bool
-	for _, ctx := range composeResult.Contexts {
+	for _, ctx := range loaded {
 		if ctx.Name == "env" {
 			hasEnv = true
 		}
@@ -216,12 +233,13 @@ func TestIntegration_CUELoaderWithComposer_TaggedContexts(t *testing.T) {
 	}
 
 	// Should have required + debug tagged context
-	if len(composeResult.Contexts) != 2 {
-		t.Errorf("expected 2 contexts, got %d", len(composeResult.Contexts))
+	loaded := loadedContexts(composeResult.Contexts)
+	if len(loaded) != 2 {
+		t.Errorf("expected 2 contexts, got %d", len(loaded))
 	}
 
 	var hasDebug bool
-	for _, ctx := range composeResult.Contexts {
+	for _, ctx := range loaded {
 		if ctx.Name == "debug" {
 			hasDebug = true
 		}

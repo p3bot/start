@@ -143,6 +143,26 @@ func TestReport_HasIssues(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			// Missing files render as StatusNotFound (e.g. cwd/home-prefixed
+			// roles and contexts that legitimately may not exist) and must
+			// not cause a non-zero exit code.
+			name: "not found only",
+			sections: []SectionResult{
+				{Results: []CheckResult{{Status: StatusNotFound}}},
+			},
+			want: false,
+		},
+		{
+			name: "not found alongside fail",
+			sections: []SectionResult{
+				{Results: []CheckResult{
+					{Status: StatusNotFound},
+					{Status: StatusFail},
+				}},
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

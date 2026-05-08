@@ -214,14 +214,17 @@ settings: { default_agent: "nonexistent" }
 	}
 }
 
-func TestDoctor_MissingContextFile_ReportsIssue(t *testing.T) {
+func TestDoctor_MissingContextFile_ReportsNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with context referencing non-existent file
+	// Config with context referencing non-existent file.
+	// Missing files are reported as StatusNotFound regardless of `required`;
+	// `required` is a composition rule ("if it exists, it must be used"),
+	// not a doctor severity rule.
 	configContent := `
 contexts: {
 	missing: {
@@ -238,43 +241,37 @@ contexts: {
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Load config
 	loader := internalcue.NewLoader()
 	cfgValue, err := loader.LoadSingle(configDir)
 	if err != nil {
 		t.Fatalf("loading config: %v", err)
 	}
 
-	// Run context check
 	section := doctor.CheckContexts(cfgValue)
 
-	// Should have failures/warnings for missing files
-	var hasFail, hasWarn bool
+	statuses := make(map[string]doctor.Status)
 	for _, r := range section.Results {
-		if r.Status == doctor.StatusFail && r.Label == "missing" {
-			hasFail = true
-		}
-		if r.Status == doctor.StatusWarn && r.Label == "optional_missing" {
-			hasWarn = true
-		}
+		statuses[r.Label] = r.Status
 	}
 
-	if !hasFail {
-		t.Error("required missing context file should result in failure")
+	if statuses["missing"] != doctor.StatusNotFound {
+		t.Errorf("required missing context: status = %v, want StatusNotFound", statuses["missing"])
 	}
-	if !hasWarn {
-		t.Error("optional missing context file should result in warning")
+	if statuses["optional_missing"] != doctor.StatusNotFound {
+		t.Errorf("optional missing context: status = %v, want StatusNotFound", statuses["optional_missing"])
 	}
 }
 
-func TestDoctor_MissingRoleFile_ReportsError(t *testing.T) {
+func TestDoctor_MissingRoleFile_ReportsNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with role referencing non-existent file
+	// Roles with missing files are reported as StatusNotFound (informational,
+	// not an error). cwd/home-prefixed roles legitimately may not exist in
+	// every project; the composer's role selection handles fallback at runtime.
 	configContent := `
 roles: {
 	missing_role: {
@@ -286,26 +283,23 @@ roles: {
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Load config
 	loader := internalcue.NewLoader()
 	cfgValue, err := loader.LoadSingle(configDir)
 	if err != nil {
 		t.Fatalf("loading config: %v", err)
 	}
 
-	// Run role check
 	section := doctor.CheckRoles(cfgValue)
 
-	// Should have a failure for missing file
-	hasFail := false
+	hasNotFound := false
 	for _, r := range section.Results {
-		if r.Status == doctor.StatusFail && r.Label == "missing_role" {
-			hasFail = true
+		if r.Status == doctor.StatusNotFound && r.Label == "missing_role" {
+			hasNotFound = true
 		}
 	}
 
-	if !hasFail {
-		t.Error("missing role file should result in failure")
+	if !hasNotFound {
+		t.Error("missing role file should be StatusNotFound")
 	}
 }
 

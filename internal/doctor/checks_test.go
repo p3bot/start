@@ -571,33 +571,41 @@ func TestCheckContexts_FileExists(t *testing.T) {
 	}
 }
 
-func TestCheckContexts_FileMissingRequired(t *testing.T) {
+// Missing context files are reported as StatusNotFound regardless of the
+// `required` field. `required` is a composition rule used by the orchestrator
+// to decide which contexts to include, not a doctor severity rule.
+func TestCheckContexts_FileMissing(t *testing.T) {
 	t.Parallel()
-	cctx := cuecontext.New()
-	v := cctx.CompileString(`contexts: { reqctx: { file: "/nonexistent/path/file.md", required: true } }`)
 
-	section := CheckContexts(v)
-
-	if len(section.Results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(section.Results))
+	cases := []struct {
+		name   string
+		config string
+	}{
+		{
+			name:   "required",
+			config: `contexts: { reqctx: { file: "/nonexistent/path/file.md", required: true } }`,
+		},
+		{
+			name:   "optional",
+			config: `contexts: { optctx: { file: "/nonexistent/path/file.md", required: false } }`,
+		},
 	}
-	if section.Results[0].Status != StatusFail {
-		t.Errorf("status = %v, want StatusFail for required missing file", section.Results[0].Status)
-	}
-}
 
-func TestCheckContexts_FileMissingOptional(t *testing.T) {
-	t.Parallel()
-	cctx := cuecontext.New()
-	v := cctx.CompileString(`contexts: { optctx: { file: "/nonexistent/path/file.md", required: false } }`)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cctx := cuecontext.New()
+			v := cctx.CompileString(tc.config)
 
-	section := CheckContexts(v)
+			section := CheckContexts(v)
 
-	if len(section.Results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(section.Results))
-	}
-	if section.Results[0].Status != StatusNotFound {
-		t.Errorf("status = %v, want StatusNotFound for optional missing file", section.Results[0].Status)
+			if len(section.Results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(section.Results))
+			}
+			if section.Results[0].Status != StatusNotFound {
+				t.Errorf("status = %v, want StatusNotFound", section.Results[0].Status)
+			}
+		})
 	}
 }
 

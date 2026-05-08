@@ -40,6 +40,10 @@ func binaryPath(t *testing.T) string {
 // Returns a cleanup function that must be called to remove the temp directory.
 // We manage cleanup manually because CUE creates read-only cache files that
 // t.TempDir() cannot clean up.
+//
+// PATH contains exactly the directories in pathDirs — system directories like
+// /usr/bin and /bin are deliberately excluded so AI CLI tools installed in
+// system locations don't leak into "no agents" or "single agent" tests.
 func setupTestEnv(t *testing.T, pathDirs []string) (tmpDir string, env []string, cleanup func()) {
 	t.Helper()
 
@@ -55,9 +59,7 @@ func setupTestEnv(t *testing.T, pathDirs []string) (tmpDir string, env []string,
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 
-	// Build PATH from provided directories plus essential system paths
-	pathParts := append(pathDirs, "/usr/bin", "/bin")
-	path := strings.Join(pathParts, ":")
+	path := strings.Join(pathDirs, ":")
 
 	env = []string{
 		"HOME=" + tmpDir,
@@ -85,6 +87,30 @@ func setupTestEnv(t *testing.T, pathDirs []string) (tmpDir string, env []string,
 	return tmpDir, env, cleanup
 }
 
+// sterileBinDir creates a temp directory containing symlinks to the named
+// binaries (resolved via PATH) and returns the directory path. Tests that
+// need an exact set of executables on PATH should use this instead of the
+// binaries' real parent directory, which may contain unrelated tools.
+func sterileBinDir(t *testing.T, bins []string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "start-e2e-bin-*")
+	if err != nil {
+		t.Fatalf("failed to create sterile bin dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
+	for _, bin := range bins {
+		src, err := exec.LookPath(bin)
+		if err != nil {
+			t.Skipf("%s not installed - skipping test", bin)
+		}
+		if err := os.Symlink(src, filepath.Join(dir, bin)); err != nil {
+			t.Fatalf("failed to symlink %s: %v", bin, err)
+		}
+	}
+	return dir
+}
+
 func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e test in short mode")
@@ -92,14 +118,10 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 
 	binary := binaryPath(t)
 
-	// Find claude binary location
-	claudePath, err := exec.LookPath("claude")
-	if err != nil {
-		t.Skip("claude not installed - skipping single agent test")
-	}
-	claudeDir := filepath.Dir(claudePath)
+	// Sterile PATH: only claude is reachable.
+	binDir := sterileBinDir(t, []string{"claude"})
 
-	tmpDir, env, cleanup := setupTestEnv(t, []string{claudeDir})
+	tmpDir, env, cleanup := setupTestEnv(t, []string{binDir})
 	defer cleanup()
 
 	cmd := exec.Command(binary)
@@ -213,23 +235,22 @@ func TestE2E_AutoSetup_MultipleAgents_NonTTY(t *testing.T) {
 
 	binary := binaryPath(t)
 
-	// Find all available AI tools
-	var pathDirs []string
-	tools := []string{"claude", "gemini", "aichat"}
-	foundCount := 0
-
-	for _, tool := range tools {
-		if path, err := exec.LookPath(tool); err == nil {
-			pathDirs = append(pathDirs, filepath.Dir(path))
-			foundCount++
+	// Find which AI tools are installed; sterilise PATH to that exact set so
+	// unrelated tools in /usr/bin can't influence the detection result.
+	var availableTools []string
+	for _, tool := range []string{"claude", "gemini", "aichat"} {
+		if _, err := exec.LookPath(tool); err == nil {
+			availableTools = append(availableTools, tool)
 		}
 	}
 
-	if foundCount < 2 {
+	if len(availableTools) < 2 {
 		t.Skip("need at least 2 AI tools installed for multiple agents test")
 	}
 
-	tmpDir, env, cleanup := setupTestEnv(t, pathDirs)
+	binDir := sterileBinDir(t, availableTools)
+
+	tmpDir, env, cleanup := setupTestEnv(t, []string{binDir})
 	defer cleanup()
 
 	cmd := exec.Command(binary)

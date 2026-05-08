@@ -112,6 +112,12 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 		return nil, fmt.Errorf("loading agent: %w", err)
 	}
 
+	// Use the binary name as the agent's user-facing key so the generated
+	// config reads naturally (agents: { claude: {...} }, default_agent: "claude").
+	// The registry key ("claude/interactive") is an implementation detail.
+	// extractAgentFromValue guarantees agent.Bin is non-empty by this point.
+	agent.Name = agent.Bin
+
 	// Write config
 	configPath, err := a.writeConfig(agent)
 	if err != nil {

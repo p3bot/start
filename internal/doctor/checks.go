@@ -327,18 +327,6 @@ func CheckContexts(cfgValue cue.Value) SectionResult {
 
 		result := checkFileField(ctx, name)
 		if result != nil {
-			// Required contexts with missing files stay as errors
-			if result.Status == StatusNotFound {
-				required := false
-				if req := ctx.LookupPath(cue.ParsePath("required")); req.Exists() {
-					required, _ = req.Bool()
-				}
-				if required {
-					result.Status = StatusFail
-					result.Fix = "Create file or update path"
-				}
-			}
-
 			section.Results = append(section.Results, *result)
 		}
 	}
