@@ -116,51 +116,34 @@ func TestIsBinaryAvailable(t *testing.T) {
 	}
 }
 
-func TestDetectAgents_DedupesByBinaryPath(t *testing.T) {
+// TestDetectAgents_ReturnsAllVariants asserts that DetectAgents no longer
+// dedupes per-binary. Auto-setup is responsible for choosing among variants;
+// detection's job is to surface every index entry whose bin is in PATH.
+func TestDetectAgents_ReturnsAllVariants(t *testing.T) {
 	t.Parallel()
-	// Skip if bash isn't available; the test relies on a real binary so the
-	// dedup logic exercises a real BinaryPath rather than a synthetic value.
 	if !IsBinaryAvailable("bash") {
 		t.Skip("bash not available in PATH")
 	}
 
-	t.Run("alphabetical fallback when no /interactive variant", func(t *testing.T) {
-		t.Parallel()
-		index := &registry.Index{
-			Agents: map[string]registry.IndexEntry{
-				"test/bash/zeta":   {Module: "z@v0", Bin: "bash"},
-				"test/bash/alpha":  {Module: "a@v0", Bin: "bash"},
-				"test/bash/middle": {Module: "m@v0", Bin: "bash"},
-			},
-		}
+	index := &registry.Index{
+		Agents: map[string]registry.IndexEntry{
+			"test/bash/zeta":        {Module: "z@v0", Bin: "bash"},
+			"test/bash/alpha":       {Module: "a@v0", Bin: "bash"},
+			"test/bash/interactive": {Module: "i@v0", Bin: "bash"},
+		},
+	}
 
-		detected := DetectAgents(index)
-		if len(detected) != 1 {
-			t.Fatalf("expected 1 deduped result, got %d: %+v", len(detected), detected)
-		}
-		if detected[0].Key != "test/bash/alpha" {
-			t.Errorf("expected alphabetically-first key 'test/bash/alpha', got %q", detected[0].Key)
-		}
-	})
+	detected := DetectAgents(index)
+	if len(detected) != 3 {
+		t.Fatalf("expected 3 entries (no dedup), got %d: %+v", len(detected), detected)
+	}
 
-	t.Run("prefers /interactive variant over alphabetical winner", func(t *testing.T) {
-		t.Parallel()
-		index := &registry.Index{
-			Agents: map[string]registry.IndexEntry{
-				"test/bash/aaa-first":   {Module: "a@v0", Bin: "bash"},
-				"test/bash/interactive": {Module: "i@v0", Bin: "bash"},
-				"test/bash/zzz-last":    {Module: "z@v0", Bin: "bash"},
-			},
+	wantOrder := []string{"test/bash/alpha", "test/bash/interactive", "test/bash/zeta"}
+	for i, want := range wantOrder {
+		if detected[i].Key != want {
+			t.Errorf("position %d: expected key %q, got %q", i, want, detected[i].Key)
 		}
-
-		detected := DetectAgents(index)
-		if len(detected) != 1 {
-			t.Fatalf("expected 1 deduped result, got %d: %+v", len(detected), detected)
-		}
-		if detected[0].Key != "test/bash/interactive" {
-			t.Errorf("expected '/interactive' variant to win, got %q", detected[0].Key)
-		}
-	})
+	}
 }
 
 func TestDetectAgents_ParallelExecution(t *testing.T) {

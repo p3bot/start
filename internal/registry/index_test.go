@@ -487,6 +487,7 @@ func TestFetchIndex_ReturnsIndexAndVersion(t *testing.T) {
 	// Verify index is populated.
 	if idx == nil {
 		t.Fatal("FetchIndex() returned nil index")
+		return
 	}
 	if len(idx.Agents) != 1 {
 		t.Errorf("expected 1 agent, got %d", len(idx.Agents))

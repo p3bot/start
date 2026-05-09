@@ -9,11 +9,9 @@ import (
 
 func TestNewDryRunManager(t *testing.T) {
 	t.Parallel()
+	// NewDryRunManager is a value-constructor; a nil return is impossible.
 	m := NewDryRunManager()
 
-	if m == nil {
-		t.Fatal("NewDryRunManager() returned nil")
-	}
 	if m.BaseDir == "" {
 		t.Error("NewDryRunManager() BaseDir is empty")
 	}
@@ -24,11 +22,9 @@ func TestNewDryRunManager(t *testing.T) {
 
 func TestNewUTDManager(t *testing.T) {
 	t.Parallel()
+	// NewUTDManager is a value-constructor; a nil return is impossible.
 	m := NewUTDManager("/project")
 
-	if m == nil {
-		t.Fatal("NewUTDManager() returned nil")
-	}
 	want := filepath.Join("/project", ".start", "temp")
 	if m.BaseDir != want {
 		t.Errorf("NewUTDManager() BaseDir = %q, want %q", m.BaseDir, want)

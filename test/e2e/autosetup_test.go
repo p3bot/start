@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -137,8 +138,15 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 		t.Errorf("expected 'Fetching agent index' in output:\n%s", outputStr)
 	}
 
-	if !strings.Contains(outputStr, "Detected: claude") {
-		t.Errorf("expected 'Detected: claude' for single agent auto-selection:\n%s", outputStr)
+	// Auto-setup picks one variant of the claude bin. The exact key depends on
+	// the index, but it must be slash-form (e.g. "claude/interactive") so the
+	// label matches what 'start assets add' produces. The detection output may
+	// take either of two shapes depending on whether the index ships one or
+	// many variants for the bin:
+	//   single variant : "Detected: claude/interactive"
+	//   many variants  : "Detected claude with multiple variants; using claude/interactive. Override with default_agent in config."
+	if !strings.Contains(outputStr, "claude/") {
+		t.Errorf("expected slash-form claude variant in detection output:\n%s", outputStr)
 	}
 
 	if !strings.Contains(outputStr, "Configuration saved") {
@@ -156,27 +164,27 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 		t.Error("settings.cue was not created")
 	}
 
-	// Check agents.cue content
+	// Check agents.cue content: label must be the slash-form registry key.
 	agentsContent, err := os.ReadFile(agentsFile)
 	if err != nil {
 		t.Fatalf("failed to read agents.cue: %v", err)
 	}
 
-	if !strings.Contains(string(agentsContent), `"claude"`) {
-		t.Error("agents.cue should contain claude agent")
+	if !strings.Contains(string(agentsContent), `"claude/`) {
+		t.Errorf("agents.cue should use slash-form registry key as label:\n%s", string(agentsContent))
 	}
 	if !strings.Contains(string(agentsContent), `bin:`) {
 		t.Error("agents.cue should contain bin field")
 	}
 
-	// Check settings.cue content
+	// Check settings.cue content: default_agent must be the same slash-form key.
 	configContent, err := os.ReadFile(configFile)
 	if err != nil {
 		t.Fatalf("failed to read settings.cue: %v", err)
 	}
 
-	if !strings.Contains(string(configContent), `default_agent: "claude"`) {
-		t.Error("settings.cue should set default_agent to claude")
+	if !strings.Contains(string(configContent), `default_agent: "claude/`) {
+		t.Errorf("settings.cue should set default_agent to slash-form registry key:\n%s", string(configContent))
 	}
 }
 
@@ -258,23 +266,42 @@ func TestE2E_AutoSetup_MultipleAgents_NonTTY(t *testing.T) {
 	cmd.Dir = tmpDir
 	// Ensure non-TTY by not attaching stdin to terminal
 
-	output, err := cmd.CombinedOutput()
+	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
 
-	// Should exit with error in non-TTY mode
-	if err == nil {
-		t.Error("expected error for multiple agents in non-TTY mode")
+	// Non-TTY multi-bin no longer errors: auto-setup picks the lex-first bin
+	// and emits a feedback line naming all detected bins, the chosen one, and
+	// the override mechanism.
+	if !strings.Contains(outputStr, "Detected multiple AI CLI tools") {
+		t.Errorf("expected pick-first feedback line in output:\n%s", outputStr)
+	}
+	if !strings.Contains(outputStr, "default_agent") {
+		t.Errorf("feedback line should mention default_agent override:\n%s", outputStr)
+	}
+	for _, tool := range availableTools {
+		if !strings.Contains(outputStr, tool) {
+			t.Errorf("feedback line should name detected tool %q:\n%s", tool, outputStr)
+		}
+	}
+	if !strings.Contains(outputStr, "Configuration saved") {
+		t.Errorf("expected configuration to be saved in non-TTY multi-bin mode:\n%s", outputStr)
 	}
 
-	// Check for appropriate error message
-	if !strings.Contains(outputStr, "multiple AI CLI tools detected") {
-		t.Errorf("expected 'multiple AI CLI tools detected' in output:\n%s", outputStr)
-	}
-
-	// Config should NOT be created
+	// agents.cue should be created with a slash-form key for the lex-first bin.
 	agentsFile := filepath.Join(tmpDir, ".config", "start", "agents.cue")
-	if _, err := os.Stat(agentsFile); err == nil {
-		t.Error("agents.cue should not be created when multiple agents detected in non-TTY")
+	if _, err := os.Stat(agentsFile); os.IsNotExist(err) {
+		t.Fatal("agents.cue should be created in non-TTY multi-bin mode")
+	}
+	agentsContent, err := os.ReadFile(agentsFile)
+	if err != nil {
+		t.Fatalf("failed to read agents.cue: %v", err)
+	}
+	sortedTools := append([]string(nil), availableTools...)
+	sort.Strings(sortedTools)
+	chosenBin := sortedTools[0]
+	wantPrefix := `"` + chosenBin + `/`
+	if !strings.Contains(string(agentsContent), wantPrefix) {
+		t.Errorf("agents.cue should contain a %q label (lex-first bin), got:\n%s", wantPrefix, string(agentsContent))
 	}
 }
 

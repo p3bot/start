@@ -71,27 +71,15 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	}
 	_ = cache.WriteIndex(indexVersion)
 
-	// Detect installed agents
+	// Detect installed agents (every variant whose bin is in PATH).
 	detected := detection.DetectAgents(index)
 	if len(detected) == 0 {
 		return nil, a.noAgentsError(index)
 	}
 
-	// Sort for consistent ordering
-	sort.Slice(detected, func(i, j int) bool {
-		return detected[i].Key < detected[j].Key
-	})
-
-	// Select agent
-	var selected detection.DetectedAgent
-	if len(detected) == 1 {
-		selected = detected[0]
-		_, _ = fmt.Fprintf(a.stdout, "Detected: %s\n", selected.Entry.Bin)
-	} else {
-		selected, err = a.promptSelection(detected)
-		if err != nil {
-			return nil, err
-		}
+	selected, err := a.selectAgent(detected)
+	if err != nil {
+		return nil, err
 	}
 
 	// Resolve to canonical version and fetch agent module
@@ -106,17 +94,15 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 		return nil, fmt.Errorf("fetching agent module: %w", err)
 	}
 
-	// Load agent from fetched module
+	// loadAgentFromModule receives selected.Key as the agent name, which
+	// flows into agent.Name via extractAgentFields. The slash-form key
+	// (e.g. "claude/interactive") becomes both the agents.cue label and
+	// the settings.cue default_agent value, matching what 'start assets
+	// add' produces so the two writers cannot drift.
 	agent, err := loadAgentFromModule(agentResult.SourceDir, selected.Key, client.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("loading agent: %w", err)
 	}
-
-	// Use the binary name as the agent's user-facing key so the generated
-	// config reads naturally (agents: { claude: {...} }, default_agent: "claude").
-	// The registry key ("claude/interactive") is an implementation detail.
-	// extractAgentFromValue guarantees agent.Bin is non-empty by this point.
-	agent.Name = agent.Bin
 
 	// Write config
 	configPath, err := a.writeConfig(agent)
@@ -175,36 +161,140 @@ func (a *AutoSetup) noAgentsError(index *registry.Index) error {
 	return fmt.Errorf("%s", sb.String())
 }
 
-// promptSelection prompts the user to select an agent.
-func (a *AutoSetup) promptSelection(detected []detection.DetectedAgent) (detection.DetectedAgent, error) {
-	if !a.isTTY {
-		var names []string
-		for _, d := range detected {
-			names = append(names, d.Entry.Bin)
+// selectAgent resolves a single detected agent from the full slice returned by
+// detection. It handles four cases:
+//
+//   - one bin, one variant: use it without prompting
+//   - one bin, multiple variants: TTY variant prompt; non-TTY heuristic
+//   - multiple bins, single variants: TTY tool prompt; non-TTY pick-first bin with feedback
+//   - multiple bins, multi-variant somewhere: TTY tool prompt then variant prompt
+//     for the chosen bin if needed; non-TTY pick-first bin then heuristic
+func (a *AutoSetup) selectAgent(detected []detection.DetectedAgent) (detection.DetectedAgent, error) {
+	groups, binNames := groupAgentsByBin(detected)
+
+	if len(binNames) == 1 {
+		bin := binNames[0]
+		variants := groups[bin]
+		if len(variants) == 1 {
+			_, _ = fmt.Fprintf(a.stdout, "Detected: %s\n", variants[0].Key)
+			return variants[0], nil
 		}
-		return detection.DetectedAgent{}, fmt.Errorf(
-			"multiple AI CLI tools detected: %s\nRun interactively to select, or set default_agent in config",
-			strings.Join(names, ", "),
-		)
+		if a.isTTY {
+			return a.promptVariantSelection(bin, variants, bufio.NewReader(a.stdin))
+		}
+		chosen := pickVariant(variants)
+		_, _ = fmt.Fprintf(a.stdout,
+			"Detected %s with multiple variants; using %s. Override with default_agent in config.\n",
+			bin, chosen.Key)
+		return chosen, nil
 	}
 
+	// Multiple bins.
+	if a.isTTY {
+		reps := make([]detection.DetectedAgent, 0, len(binNames))
+		for _, bin := range binNames {
+			reps = append(reps, pickVariant(groups[bin]))
+		}
+		// Shared reader: bufio look-ahead would otherwise drop bytes between
+		// the tool prompt and the cascading variant prompt.
+		reader := bufio.NewReader(a.stdin)
+		chosen, err := a.promptSelection(reps, reader)
+		if err != nil {
+			return detection.DetectedAgent{}, err
+		}
+		variants := groups[chosen.Entry.Bin]
+		if len(variants) == 1 {
+			return variants[0], nil
+		}
+		return a.promptVariantSelection(chosen.Entry.Bin, variants, reader)
+	}
+
+	// Non-TTY multi-bin: deterministic pick-first with stdout feedback.
+	chosenBin := binNames[0]
+	chosen := pickVariant(groups[chosenBin])
+	_, _ = fmt.Fprintf(a.stdout,
+		"Detected multiple AI CLI tools (%s); using %s. Override with default_agent in config.\n",
+		strings.Join(binNames, ", "), chosen.Key)
+	return chosen, nil
+}
+
+// groupAgentsByBin groups detected agents by their bin name. The returned
+// binNames slice is sorted lexicographically and each group is sorted by Key
+// to keep auto-setup output deterministic regardless of map iteration order.
+func groupAgentsByBin(detected []detection.DetectedAgent) (map[string][]detection.DetectedAgent, []string) {
+	groups := make(map[string][]detection.DetectedAgent)
+	for _, d := range detected {
+		groups[d.Entry.Bin] = append(groups[d.Entry.Bin], d)
+	}
+	binNames := make([]string, 0, len(groups))
+	for bin := range groups {
+		binNames = append(binNames, bin)
+	}
+	sort.Strings(binNames)
+	for _, bin := range binNames {
+		variants := groups[bin]
+		sort.Slice(variants, func(i, j int) bool {
+			return variants[i].Key < variants[j].Key
+		})
+		groups[bin] = variants
+	}
+	return groups, binNames
+}
+
+// pickVariant chooses a single variant from a group sharing a bin. Priority:
+//  1. key ends with "/interactive"
+//  2. key has no slash (bare-name entry)
+//  3. lex-first key
+//
+// Callers must pass a non-empty slice. The function sorts a local copy so the
+// result is stable regardless of input order. groupAgentsByBin already sorts
+// each group, so the in-flow re-sort is a defensive no-op for production
+// callers — it exists so unit tests can pass unsorted slices and still get
+// deterministic output.
+func pickVariant(variants []detection.DetectedAgent) detection.DetectedAgent {
+	sorted := make([]detection.DetectedAgent, len(variants))
+	copy(sorted, variants)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Key < sorted[j].Key
+	})
+	for _, v := range sorted {
+		if strings.HasSuffix(v.Key, "/interactive") {
+			return v
+		}
+	}
+	for _, v := range sorted {
+		if !strings.Contains(v.Key, "/") {
+			return v
+		}
+	}
+	return sorted[0]
+}
+
+// promptSelection prompts the user to choose between detected bins. Each
+// element of reps is the heuristic representative for one bin; the bin name is
+// shown in the menu and the representative's description is reused for context.
+// Variant selection (if the chosen bin has multiple variants) is the caller's
+// responsibility — promptSelection only resolves the bin.
+//
+// reader is the shared bufio.Reader created by selectAgent so a follow-up
+// variant prompt sees the same buffered stream.
+func (a *AutoSetup) promptSelection(reps []detection.DetectedAgent, reader *bufio.Reader) (detection.DetectedAgent, error) {
 	_, _ = tui.ColorHeader.Fprintln(a.stdout, "Multiple AI CLI tools detected:")
 	_, _ = fmt.Fprintln(a.stdout)
 
-	// Calculate key column width for alignment
-	keyWidth := 0
-	for _, d := range detected {
-		if len(d.Key) > keyWidth {
-			keyWidth = len(d.Key)
+	binWidth := 0
+	for _, r := range reps {
+		if len(r.Entry.Bin) > binWidth {
+			binWidth = len(r.Entry.Bin)
 		}
 	}
 
-	for i, d := range detected {
+	for i, r := range reps {
 		_, _ = fmt.Fprintf(a.stdout, "  %d. ", i+1)
-		_, _ = tui.ColorAgents.Fprintf(a.stdout, "%-*s", keyWidth, d.Key)
-		if d.Entry.Description != "" {
+		_, _ = tui.ColorAgents.Fprintf(a.stdout, "%-*s", binWidth, r.Entry.Bin)
+		if r.Entry.Description != "" {
 			_, _ = fmt.Fprint(a.stdout, "  ")
-			_, _ = tui.ColorDim.Fprintln(a.stdout, d.Entry.Description)
+			_, _ = tui.ColorDim.Fprintln(a.stdout, r.Entry.Description)
 		} else {
 			_, _ = fmt.Fprintln(a.stdout)
 		}
@@ -213,31 +303,76 @@ func (a *AutoSetup) promptSelection(detected []detection.DetectedAgent) (detecti
 	_, _ = fmt.Fprintln(a.stdout)
 	_, _ = fmt.Fprint(a.stdout, "Select agent: ")
 
-	reader := bufio.NewReader(a.stdin)
-	input, err := reader.ReadString('\n')
+	input, err := readSelection(reader)
 	if err != nil {
-		return detection.DetectedAgent{}, fmt.Errorf("reading input: %w", err)
+		return detection.DetectedAgent{}, err
 	}
 
-	input = strings.TrimSpace(input)
-
-	// Try parsing as number first
-	if choice, err := strconv.Atoi(input); err == nil {
-		if choice >= 1 && choice <= len(detected) {
-			return detected[choice-1], nil
+	if choice, convErr := strconv.Atoi(input); convErr == nil {
+		if choice >= 1 && choice <= len(reps) {
+			return reps[choice-1], nil
 		}
-		return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, len(detected))
+		return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, len(reps))
 	}
 
-	// Try matching by name
 	inputLower := strings.ToLower(input)
-	for _, d := range detected {
-		if strings.ToLower(d.Entry.Bin) == inputLower || strings.ToLower(d.Key) == inputLower {
-			return d, nil
+	for _, r := range reps {
+		if strings.ToLower(r.Entry.Bin) == inputLower || strings.ToLower(r.Key) == inputLower {
+			return r, nil
 		}
 	}
 
 	return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s", input)
+}
+
+// promptVariantSelection prompts the user to pick one variant for a single bin.
+// Each row spans two lines: the slash-form key on the first line and an
+// indented description (when present) on the second. reader is shared with the
+// (optional) preceding tool prompt so bufio doesn't drop bytes between reads.
+func (a *AutoSetup) promptVariantSelection(bin string, variants []detection.DetectedAgent, reader *bufio.Reader) (detection.DetectedAgent, error) {
+	_, _ = tui.ColorHeader.Fprintf(a.stdout, "Multiple variants of %s detected:\n", bin)
+	_, _ = fmt.Fprintln(a.stdout)
+
+	for i, v := range variants {
+		_, _ = fmt.Fprintf(a.stdout, "  %d. ", i+1)
+		_, _ = tui.ColorAgents.Fprintln(a.stdout, v.Key)
+		if v.Entry.Description != "" {
+			_, _ = tui.ColorDim.Fprintf(a.stdout, "     %s\n", v.Entry.Description)
+		}
+		_, _ = fmt.Fprintln(a.stdout)
+	}
+
+	_, _ = fmt.Fprint(a.stdout, "Select agent: ")
+
+	input, err := readSelection(reader)
+	if err != nil {
+		return detection.DetectedAgent{}, err
+	}
+
+	if choice, convErr := strconv.Atoi(input); convErr == nil {
+		if choice >= 1 && choice <= len(variants) {
+			return variants[choice-1], nil
+		}
+		return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, len(variants))
+	}
+
+	inputLower := strings.ToLower(input)
+	for _, v := range variants {
+		if strings.ToLower(v.Key) == inputLower {
+			return v, nil
+		}
+	}
+
+	return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s", input)
+}
+
+// readSelection reads a single trimmed line from the shared bufio.Reader.
+func readSelection(reader *bufio.Reader) (string, error) {
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("reading input: %w", err)
+	}
+	return strings.TrimSpace(input), nil
 }
 
 // loadAgentFromModule loads an agent from a fetched module directory.

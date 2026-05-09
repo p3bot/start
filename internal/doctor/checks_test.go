@@ -123,6 +123,7 @@ func TestCheckVersion_WithCustomIndexPath(t *testing.T) {
 	}
 	if sourceResult == nil {
 		t.Fatal("CheckVersion() missing 'Index Source' result")
+		return
 	}
 	if sourceResult.Message != "github.com/example/custom-assets/index@v0" {
 		t.Errorf("Index Source message = %q, want %q", sourceResult.Message, "github.com/example/custom-assets/index@v0")

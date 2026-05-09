@@ -12,10 +12,11 @@ import (
 
 func TestNewLoader(t *testing.T) {
 	t.Parallel()
+	// NewLoader is a value-constructor; a nil return or nil ctx is impossible
+	// by construction. We exercise it to keep the constructor from being
+	// dead-code-eliminated by future refactors and to fail loudly if someone
+	// changes it to return an error.
 	l := NewLoader()
-	if l == nil {
-		t.Fatal("NewLoader() returned nil")
-	}
 	if l.ctx == nil {
 		t.Fatal("NewLoader().ctx is nil")
 	}

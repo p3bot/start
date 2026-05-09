@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"bufio"
 	"bytes"
 	"os"
 	"path/filepath"
@@ -138,9 +139,8 @@ func TestAutoSetup_NewAutoSetup(t *testing.T) {
 
 	as := NewAutoSetup(stdout, stderr, stdin, true)
 
-	if as == nil {
-		t.Fatal("NewAutoSetup returned nil")
-	}
+	// NewAutoSetup is a value-constructor (returns &AutoSetup{...}); a nil
+	// return is impossible, so we only check field wiring.
 	if as.stdout != stdout {
 		t.Error("stdout not set correctly")
 	}
@@ -152,6 +152,32 @@ func TestAutoSetup_NewAutoSetup(t *testing.T) {
 	}
 	if !as.isTTY {
 		t.Error("isTTY not set correctly")
+	}
+}
+
+// TestGenerateConfig_SlashKeyLabelAlignment verifies that when auto-setup uses
+// the registry key as the agent name, the agents.cue label and the settings.cue
+// default_agent value are byte-for-byte identical. This is the alignment
+// requirement that lets auto-setup and 'start assets add' coexist without drift.
+func TestGenerateConfig_SlashKeyLabelAlignment(t *testing.T) {
+	const key = "claude/interactive"
+	agent := Agent{
+		Name:    key,
+		Bin:     "claude",
+		Command: "{{.bin}}",
+	}
+
+	agentCUE := generateAgentCUE(agent)
+	settingsCUE := generateSettingsCUE(agent.Name)
+
+	wantLabel := `"claude/interactive": {`
+	if !strings.Contains(agentCUE, wantLabel) {
+		t.Errorf("agents.cue should use the registry key as label (%q), got:\n%s", wantLabel, agentCUE)
+	}
+
+	wantDefault := `default_agent: "claude/interactive"`
+	if !strings.Contains(settingsCUE, wantDefault) {
+		t.Errorf("settings.cue should set default_agent to the registry key (%q), got:\n%s", wantDefault, settingsCUE)
 	}
 }
 
@@ -300,39 +326,221 @@ func TestNoAgentsError_EmptyIndex(t *testing.T) {
 	}
 }
 
-func TestPromptSelection_NonTTY(t *testing.T) {
+func TestPickVariant(t *testing.T) {
+	mk := func(keys ...string) []detection.DetectedAgent {
+		out := make([]detection.DetectedAgent, len(keys))
+		for i, k := range keys {
+			out[i] = detection.DetectedAgent{Key: k, Entry: registry.IndexEntry{Bin: "claude"}}
+		}
+		return out
+	}
+
+	tests := []struct {
+		name     string
+		variants []detection.DetectedAgent
+		wantKey  string
+	}{
+		{
+			name:     "interactive wins over lex-first",
+			variants: mk("claude/zzz", "claude/interactive", "claude/aaa"),
+			wantKey:  "claude/interactive",
+		},
+		{
+			name:     "bare name wins when no interactive variant",
+			variants: mk("claude/zzz", "claude", "claude/aaa"),
+			wantKey:  "claude",
+		},
+		{
+			name:     "interactive beats bare name",
+			variants: mk("claude/zzz", "claude", "claude/interactive"),
+			wantKey:  "claude/interactive",
+		},
+		{
+			name:     "lex-first when neither interactive nor bare",
+			variants: mk("claude/zzz", "claude/aaa", "claude/middle"),
+			wantKey:  "claude/aaa",
+		},
+		{
+			name:     "single variant",
+			variants: mk("claude/edit"),
+			wantKey:  "claude/edit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pickVariant(tt.variants)
+			if got.Key != tt.wantKey {
+				t.Errorf("pickVariant(): got %q, want %q", got.Key, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestSelectAgent_NonTTYMultiBinPicksFirstWithFeedback(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	stdin := strings.NewReader("")
 
-	as := NewAutoSetup(stdout, stderr, stdin, false) // isTTY = false
+	as := NewAutoSetup(stdout, stderr, stdin, false)
 
 	detected := []detection.DetectedAgent{
-		{
-			Key:   "ai/claude",
-			Entry: registry.IndexEntry{Bin: "claude", Description: "Claude CLI"},
-		},
-		{
-			Key:   "ai/gemini",
-			Entry: registry.IndexEntry{Bin: "gemini", Description: "Gemini CLI"},
-		},
+		{Key: "gemini/interactive", Entry: registry.IndexEntry{Bin: "gemini"}},
+		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
 	}
 
-	_, err := as.promptSelection(detected)
-
-	if err == nil {
-		t.Fatal("expected error for non-TTY with multiple agents")
+	selected, err := as.selectAgent(detected)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if selected.Key != "claude/interactive" {
+		t.Errorf("expected lex-first bin's heuristic winner 'claude/interactive', got %q", selected.Key)
 	}
 
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "multiple AI CLI tools detected") {
-		t.Error("error should mention multiple tools detected")
+	out := stdout.String()
+	if !strings.Contains(out, "claude") || !strings.Contains(out, "gemini") {
+		t.Errorf("feedback should name all detected bins:\n%s", out)
 	}
-	if !strings.Contains(errMsg, "claude") {
-		t.Error("error should list claude")
+	if !strings.Contains(out, "using claude/interactive") {
+		t.Errorf("feedback should name the chosen variant key (not just the bin):\n%s", out)
 	}
-	if !strings.Contains(errMsg, "gemini") {
-		t.Error("error should list gemini")
+	if !strings.Contains(out, "default_agent") {
+		t.Errorf("feedback should mention default_agent override:\n%s", out)
+	}
+}
+
+func TestSelectAgent_NonTTYSingleBinMultipleVariants(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	stdin := strings.NewReader("")
+
+	as := NewAutoSetup(stdout, stderr, stdin, false)
+
+	detected := []detection.DetectedAgent{
+		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude/unattended", Entry: registry.IndexEntry{Bin: "claude"}},
+	}
+
+	selected, err := as.selectAgent(detected)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if selected.Key != "claude/interactive" {
+		t.Errorf("expected heuristic winner 'claude/interactive', got %q", selected.Key)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "claude/interactive") {
+		t.Errorf("feedback should name the chosen variant:\n%s", out)
+	}
+	if !strings.Contains(out, "default_agent") {
+		t.Errorf("feedback should mention default_agent override:\n%s", out)
+	}
+}
+
+func TestSelectAgent_SingleAgentPrintsSlashKey(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	stdin := strings.NewReader("")
+
+	as := NewAutoSetup(stdout, stderr, stdin, false)
+
+	detected := []detection.DetectedAgent{
+		{Key: "aichat/interactive", Entry: registry.IndexEntry{Bin: "aichat"}},
+	}
+
+	selected, err := as.selectAgent(detected)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if selected.Key != "aichat/interactive" {
+		t.Errorf("expected single detected agent to be selected, got %q", selected.Key)
+	}
+	if !strings.Contains(stdout.String(), "Detected: aichat/interactive") {
+		t.Errorf("expected 'Detected: aichat/interactive' in output:\n%s", stdout.String())
+	}
+}
+
+func TestSelectAgent_TTYMultiBinCascadesToVariantPrompt(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	// Two prompts: tool prompt picks "claude" by name, then variant prompt
+	// picks #2 ("claude/interactive" after lex sort of [edit, interactive]).
+	stdin := strings.NewReader("claude\n2\n")
+
+	as := NewAutoSetup(stdout, stderr, stdin, true)
+
+	detected := []detection.DetectedAgent{
+		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude", Description: "auto-edit"}},
+		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude", Description: "default"}},
+		{Key: "gemini/interactive", Entry: registry.IndexEntry{Bin: "gemini", Description: "Google Gemini"}},
+	}
+
+	selected, err := as.selectAgent(detected)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if selected.Key != "claude/interactive" {
+		// claude variants sorted lex: edit, interactive. Input "2" → interactive.
+		t.Errorf("expected cascade to land on 'claude/interactive', got %q", selected.Key)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "Multiple AI CLI tools detected") {
+		t.Errorf("expected tool prompt header:\n%s", out)
+	}
+	if !strings.Contains(out, "Multiple variants of claude detected") {
+		t.Errorf("expected cascade variant prompt header:\n%s", out)
+	}
+}
+
+func TestSelectAgent_TTYMultiBinSingleVariantSkipsCascade(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	stdin := strings.NewReader("aichat\n")
+
+	as := NewAutoSetup(stdout, stderr, stdin, true)
+
+	detected := []detection.DetectedAgent{
+		{Key: "aichat/interactive", Entry: registry.IndexEntry{Bin: "aichat"}},
+		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
+	}
+
+	selected, err := as.selectAgent(detected)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if selected.Key != "aichat/interactive" {
+		t.Errorf("expected single-variant bin selection without cascade, got %q", selected.Key)
+	}
+	if strings.Contains(stdout.String(), "Multiple variants of") {
+		t.Errorf("variant prompt should not appear for single-variant bin:\n%s", stdout.String())
+	}
+}
+
+func TestSelectAgent_TTYVariantPrompt(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	stdin := strings.NewReader("2\n")
+
+	as := NewAutoSetup(stdout, stderr, stdin, true)
+
+	detected := []detection.DetectedAgent{
+		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude", Description: "auto-edit"}},
+		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude", Description: "default"}},
+	}
+
+	selected, err := as.selectAgent(detected)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if selected.Key != "claude/interactive" {
+		t.Errorf("expected variant prompt selection 'claude/interactive', got %q", selected.Key)
+	}
+	if !strings.Contains(stdout.String(), "Multiple variants of claude detected") {
+		t.Errorf("expected variant prompt header:\n%s", stdout.String())
 	}
 }
 
@@ -345,23 +553,23 @@ func TestPromptSelection_TTY_ValidNumber(t *testing.T) {
 
 	detected := []detection.DetectedAgent{
 		{
-			Key:   "ai/claude",
+			Key:   "claude/interactive",
 			Entry: registry.IndexEntry{Bin: "claude", Description: "Claude CLI"},
 		},
 		{
-			Key:   "ai/gemini",
+			Key:   "gemini/interactive",
 			Entry: registry.IndexEntry{Bin: "gemini", Description: "Gemini CLI"},
 		},
 	}
 
-	selected, err := as.promptSelection(detected)
+	selected, err := as.promptSelection(detected, bufio.NewReader(stdin))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if selected.Key != "ai/gemini" {
-		t.Errorf("expected ai/gemini, got %s", selected.Key)
+	if selected.Key != "gemini/interactive" {
+		t.Errorf("expected gemini/interactive, got %s", selected.Key)
 	}
 }
 
@@ -374,16 +582,16 @@ func TestPromptSelection_TTY_ValidName(t *testing.T) {
 
 	detected := []detection.DetectedAgent{
 		{
-			Key:   "ai/claude",
+			Key:   "claude/interactive",
 			Entry: registry.IndexEntry{Bin: "claude", Description: "Claude CLI"},
 		},
 		{
-			Key:   "ai/gemini",
+			Key:   "gemini/interactive",
 			Entry: registry.IndexEntry{Bin: "gemini", Description: "Gemini CLI"},
 		},
 	}
 
-	selected, err := as.promptSelection(detected)
+	selected, err := as.promptSelection(detected, bufio.NewReader(stdin))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -403,16 +611,16 @@ func TestPromptSelection_TTY_InvalidNumber(t *testing.T) {
 
 	detected := []detection.DetectedAgent{
 		{
-			Key:   "ai/claude",
+			Key:   "claude/interactive",
 			Entry: registry.IndexEntry{Bin: "claude"},
 		},
 		{
-			Key:   "ai/gemini",
+			Key:   "gemini/interactive",
 			Entry: registry.IndexEntry{Bin: "gemini"},
 		},
 	}
 
-	_, err := as.promptSelection(detected)
+	_, err := as.promptSelection(detected, bufio.NewReader(stdin))
 
 	if err == nil {
 		t.Fatal("expected error for invalid number")
@@ -432,12 +640,12 @@ func TestPromptSelection_TTY_InvalidName(t *testing.T) {
 
 	detected := []detection.DetectedAgent{
 		{
-			Key:   "ai/claude",
+			Key:   "claude/interactive",
 			Entry: registry.IndexEntry{Bin: "claude"},
 		},
 	}
 
-	_, err := as.promptSelection(detected)
+	_, err := as.promptSelection(detected, bufio.NewReader(stdin))
 
 	if err == nil {
 		t.Fatal("expected error for invalid name")

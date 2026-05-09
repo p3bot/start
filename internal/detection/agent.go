@@ -4,7 +4,6 @@ package detection
 import (
 	"os/exec"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/start-cli/start/internal/registry"
@@ -12,20 +11,20 @@ import (
 
 // DetectedAgent represents an agent that was found in PATH.
 type DetectedAgent struct {
-	Key        string // Index key, e.g., "ai/claude"
+	Key        string // Index key, e.g., "claude/interactive"
 	Entry      registry.IndexEntry
 	BinaryPath string // Full path to the binary
 }
 
 // DetectAgents checks which agents from the index are installed.
-// It checks each agent's bin field against PATH in parallel.
+// It checks each agent's bin field against PATH in parallel and returns
+// every index entry whose Bin is non-empty and resolvable on PATH, sorted
+// lexicographically by key. Entries with an empty Bin are skipped.
 //
-// When multiple index entries reference the same binary (e.g. several
-// "claude/*" registry variants all with bin: "claude"), only one entry is
-// returned per resolved binary path. The chosen entry prefers keys ending in
-// "/interactive" (the canonical user-facing default) and falls back to the
-// alphabetically-first key. This keeps "Detected: <bin>" semantics tied to
-// distinct tools rather than registry entries.
+// When several index entries share a bin (e.g. all "claude/*" variants point
+// at "claude"), every variant is returned and the caller is responsible for
+// picking one — auto-setup prompts the user in TTY mode and applies a
+// deterministic heuristic in non-TTY mode.
 func DetectAgents(index *registry.Index) []DetectedAgent {
 	if index == nil || len(index.Agents) == 0 {
 		return nil
@@ -63,30 +62,11 @@ func DetectAgents(index *registry.Index) []DetectedAgent {
 
 	wg.Wait()
 
-	// Deterministic dedup: sort so that "/interactive" variants come first
-	// (they're the canonical user-facing default for tools like claude that
-	// publish multiple variants), with lexicographic key as the tiebreaker.
-	// Then keep the first entry per BinaryPath.
 	sort.Slice(found, func(i, j int) bool {
-		iInter := strings.HasSuffix(found[i].Key, "/interactive")
-		jInter := strings.HasSuffix(found[j].Key, "/interactive")
-		if iInter != jInter {
-			return iInter
-		}
 		return found[i].Key < found[j].Key
 	})
 
-	seen := make(map[string]bool, len(found))
-	detected := make([]DetectedAgent, 0, len(found))
-	for _, d := range found {
-		if seen[d.BinaryPath] {
-			continue
-		}
-		seen[d.BinaryPath] = true
-		detected = append(detected, d)
-	}
-
-	return detected
+	return found
 }
 
 // IsBinaryAvailable checks if a specific binary is available in PATH.

@@ -246,14 +246,14 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 	_, _ = fmt.Fprintf(w, "Found %d matches for %q:\n\n", len(matches), query)
 
 	maxDisplayLen := 0
-	for i := 0; i < displayCount; i++ {
+	for i := range displayCount {
 		display := formatAddress(matches[i].Category, matches[i].Name)
 		if len(display) > maxDisplayLen {
 			maxDisplayLen = len(display)
 		}
 	}
 
-	for i := 0; i < displayCount; i++ {
+	for i := range displayCount {
 		m := matches[i]
 		display := formatAddress(m.Category, m.Name)
 		padding := strings.Repeat(" ", maxDisplayLen-len(display)+2)

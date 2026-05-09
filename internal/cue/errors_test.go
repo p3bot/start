@@ -356,6 +356,7 @@ extra: true
 			ve := FormatErrorWithContext(err)
 			if ve == nil {
 				t.Fatal("FormatErrorWithContext returned nil for load error")
+				return
 			}
 			// Should have a message
 			if ve.Message == "" {
@@ -373,6 +374,7 @@ extra: true
 		ve := FormatErrorWithContext(cueErr)
 		if ve == nil {
 			t.Fatal("FormatErrorWithContext returned nil")
+			return
 		}
 		if ve.Message == "" {
 			t.Error("expected non-empty message")
@@ -404,6 +406,7 @@ extra: true
 		ve := FormatErrorWithContext(err)
 		if ve == nil {
 			t.Fatal("FormatErrorWithContext returned nil")
+			return
 		}
 		if ve.Message == "" {
 			t.Error("expected non-empty message")
@@ -418,6 +421,7 @@ extra: true
 		ve := FormatErrorWithContext(err)
 		if ve == nil {
 			t.Fatal("FormatErrorWithContext returned nil")
+			return
 		}
 		if ve.Message != "plain error" {
 			t.Errorf("expected message %q, got %q", "plain error", ve.Message)
