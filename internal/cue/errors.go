@@ -128,10 +128,7 @@ func generateSourceContext(filename string, line, column int) string {
 
 	// Read relevant lines
 	const contextLines = 2
-	startLine := line - contextLines
-	if startLine < 1 {
-		startLine = 1
-	}
+	startLine := max(line-contextLines, 1)
 	endLine := line + contextLines
 
 	scanner := bufio.NewScanner(file)

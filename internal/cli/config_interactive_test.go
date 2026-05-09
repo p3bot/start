@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -79,13 +80,7 @@ func TestLoadNamesForCategory(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			found := false
-			for _, n := range names {
-				if n == tc.want {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(names, tc.want)
 			if !found {
 				t.Errorf("expected %q in names %v", tc.want, names)
 			}

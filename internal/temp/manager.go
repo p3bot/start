@@ -165,8 +165,8 @@ func CheckGitignore(workingDir string) bool {
 		return false
 	}
 
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(content), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == ".start/temp" ||
 			line == ".start/temp/" ||

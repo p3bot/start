@@ -305,7 +305,7 @@ func TestDoctorCommand_JSONOutput(t *testing.T) {
 		t.Fatal("expected JSON output, got empty string")
 	}
 
-	var report map[string]interface{}
+	var report map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &report); err != nil {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
 	}
@@ -315,13 +315,13 @@ func TestDoctorCommand_JSONOutput(t *testing.T) {
 		t.Fatal("JSON output missing 'sections' key")
 	}
 
-	sectionList, ok := sections.([]interface{})
+	sectionList, ok := sections.([]any)
 	if !ok || len(sectionList) == 0 {
 		t.Fatal("'sections' should be a non-empty array")
 	}
 
 	// Verify first section has expected fields
-	firstSection, ok := sectionList[0].(map[string]interface{})
+	firstSection, ok := sectionList[0].(map[string]any)
 	if !ok {
 		t.Fatal("section should be an object")
 	}
@@ -333,9 +333,9 @@ func TestDoctorCommand_JSONOutput(t *testing.T) {
 	}
 
 	// Verify a check result has status as string
-	results, _ := firstSection["results"].([]interface{})
+	results, _ := firstSection["results"].([]any)
 	if len(results) > 0 {
-		result, _ := results[0].(map[string]interface{})
+		result, _ := results[0].(map[string]any)
 		status, _ := result["status"].(string)
 		if status == "" {
 			t.Error("check result 'status' should be a non-empty string")

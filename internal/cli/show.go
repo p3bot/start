@@ -12,11 +12,11 @@ import (
 
 	"cuelang.org/go/cue"
 	cueformat "cuelang.org/go/cue/format"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 // ShowResult holds the result of preparing show output.
@@ -73,12 +73,12 @@ type parsedAddress struct {
 // listing the valid set. When no colon is present, the entire input is
 // returned as the bare name with HasPrefix=false.
 func parseAddress(input string) (parsedAddress, error) {
-	idx := strings.Index(input, ":")
-	if idx < 0 {
+	before, after, ok := strings.Cut(input, ":")
+	if !ok {
 		return parsedAddress{Name: input}, nil
 	}
-	cat := input[:idx]
-	name := input[idx+1:]
+	cat := before
+	name := after
 	if showCategoryFor(cat) == nil {
 		return parsedAddress{}, fmt.Errorf("unknown category %q (valid: %s)", cat, knownCategoriesList())
 	}

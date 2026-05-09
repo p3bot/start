@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"cuelang.org/go/mod/modconfig"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 // NOTE(design): This file shares registry client creation, index fetching, and config

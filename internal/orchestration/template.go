@@ -242,9 +242,9 @@ func osName() string {
 	switch runtime.GOOS {
 	case "linux":
 		if data, err := os.ReadFile("/etc/os-release"); err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				if strings.HasPrefix(line, "NAME=") {
-					return strings.Trim(strings.TrimPrefix(line, "NAME="), `"`)
+			for line := range strings.SplitSeq(string(data), "\n") {
+				if after, ok := strings.CutPrefix(line, "NAME="); ok {
+					return strings.Trim(after, `"`)
 				}
 			}
 		}

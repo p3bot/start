@@ -12,7 +12,7 @@ func TestCategoryColor(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		input string
-		want  interface{} // expected *color.Color pointer
+		want  any // expected *color.Color pointer
 	}{
 		{"agents", ColorAgents},
 		{"AGENTS", ColorAgents},

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
@@ -16,7 +17,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/temp"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 // TaskSource indicates where a task comes from.

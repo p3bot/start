@@ -673,3 +673,49 @@ models: {
 		t.Errorf("wrong slow model: %s", agent.Models["slow"])
 	}
 }
+
+// TestLoadAgentFromModule_HyphenatedDir verifies that a registry key with a
+// hyphenated leaf (e.g. "claude/bypass-permissions") loads successfully when
+// the on-disk module uses the underscored package name CUE requires
+// (bypass_permissions). The directory is hyphenated; the package identifier
+// inside the .cue file substitutes underscore. Previously the loader was given
+// Package: "bypass-permissions" derived from the key leaf, which never matched
+// the actual package and caused the load to fail.
+func TestLoadAgentFromModule_HyphenatedDir(t *testing.T) {
+	root := t.TempDir()
+	moduleDir := filepath.Join(root, "bypass-permissions")
+	if err := os.MkdirAll(filepath.Join(moduleDir, "cue.mod"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	moduleCUE := `module: "test.example/bypass-permissions@v0"
+language: {
+	version: "v0.16.0"
+}
+`
+	if err := os.WriteFile(filepath.Join(moduleDir, "cue.mod", "module.cue"), []byte(moduleCUE), 0o644); err != nil {
+		t.Fatalf("write module.cue: %v", err)
+	}
+
+	agentCUE := `package bypass_permissions
+
+agent: {
+	bin:     "claude"
+	command: "{{.bin}} --bypass {{.prompt}}"
+}
+`
+	if err := os.WriteFile(filepath.Join(moduleDir, "agent.cue"), []byte(agentCUE), 0o644); err != nil {
+		t.Fatalf("write agent.cue: %v", err)
+	}
+
+	agent, err := loadAgentFromModule(moduleDir, "claude/bypass-permissions", nil)
+	if err != nil {
+		t.Fatalf("loadAgentFromModule failed: %v", err)
+	}
+	if agent.Bin != "claude" {
+		t.Errorf("wrong bin: %q", agent.Bin)
+	}
+	if agent.Command != "{{.bin}} --bypass {{.prompt}}" {
+		t.Errorf("wrong command: %q", agent.Command)
+	}
+}

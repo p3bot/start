@@ -80,8 +80,8 @@ func WriteIndex(version string) error {
 
 // formatCacheFile produces the CUE content for the cache file.
 func formatCacheFile(version string, updated time.Time) []byte {
-	return []byte(fmt.Sprintf("index_updated: %q\nindex_version: %q\n",
-		updated.Format(time.RFC3339), version))
+	return fmt.Appendf(nil, "index_updated: %q\nindex_version: %q\n",
+		updated.Format(time.RFC3339), version)
 }
 
 // parseCacheFile extracts IndexCache from raw CUE cache file bytes.

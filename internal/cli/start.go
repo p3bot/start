@@ -12,13 +12,13 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/shell"
 	"github.com/start-cli/start/internal/temp"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 // flagsKey is the context key for storing Flags.
@@ -64,10 +64,10 @@ const (
 
 // debugf prints debug output if debug mode is enabled.
 // Format: [DEBUG HH:MM:SS.mmm] <category>: <message>
-func debugf(stderr io.Writer, flags *Flags, category, format string, args ...interface{}) {
+func debugf(stderr io.Writer, flags *Flags, category, format string, args ...any) {
 	if flags.Debug {
 		ts := time.Now().Format("15:04:05.000")
-		_, _ = fmt.Fprintf(stderr, "[DEBUG %s] %s: "+format+"\n", append([]interface{}{ts, category}, args...)...)
+		_, _ = fmt.Fprintf(stderr, "[DEBUG %s] %s: "+format+"\n", append([]any{ts, category}, args...)...)
 	}
 }
 
@@ -554,7 +554,7 @@ func printContentPreview(w io.Writer, label string, labelColor *color.Color, tex
 	}
 
 	if truncated {
-		for i := 0; i < maxLines; i++ {
+		for i := range maxLines {
 			_, _ = fmt.Fprintf(w, "  %s\n", lines[i])
 		}
 		_, _ = fmt.Fprintf(w, "  ... %s\n", tui.Annotate("%d more lines", len(lines)-maxLines))

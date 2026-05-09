@@ -12,9 +12,9 @@ import (
 
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/parser"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/registry"
-	"github.com/spf13/cobra"
 )
 
 // parseCUEStruct parses a CUE struct literal string into an ast.Expr for test input.
@@ -934,7 +934,7 @@ func TestUpdateResultJSON(t *testing.T) {
 	}
 
 	// Verify the Error (interface) field is excluded from JSON
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
@@ -989,7 +989,7 @@ func TestAssetInfoResultJSON(t *testing.T) {
 	}
 
 	// installedScope should be omitted for non-installed
-	var decoded []map[string]interface{}
+	var decoded []map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}

@@ -244,15 +244,8 @@ func (a *AutoSetup) promptSelection(detected []detection.DetectedAgent) (detecti
 func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, error) {
 	cctx := cuecontext.New()
 
-	// Extract package name from key (e.g., "ai/claude" -> "claude")
-	pkgName := key
-	if idx := strings.LastIndex(key, "/"); idx != -1 {
-		pkgName = key[idx+1:]
-	}
-
 	cfg := &load.Config{
 		Dir:      dir,
-		Package:  pkgName,
 		Registry: reg,
 	}
 
@@ -271,7 +264,7 @@ func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, error)
 		return Agent{}, fmt.Errorf("building module: %w", err)
 	}
 
-	return extractAgentFromValue(v, pkgName)
+	return extractAgentFromValue(v, key)
 }
 
 // extractAgentFromValue extracts agent config from a CUE value.

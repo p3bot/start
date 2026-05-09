@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/start-cli/start/internal/orchestration"
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/orchestration"
 )
 
 // addPromptCommand adds the prompt command to the parent command.

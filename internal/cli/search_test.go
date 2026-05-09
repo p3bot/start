@@ -211,8 +211,8 @@ func TestPrintSearchSections(t *testing.T) {
 		}
 		printSearchSections(&buf, sections, false, nil)
 
-		lines := strings.Split(buf.String(), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(buf.String(), "\n")
+		for line := range lines {
 			if strings.Contains(line, "golang") {
 				if !strings.HasPrefix(line, "    ") {
 					t.Errorf("item should be indented with 4 spaces, got: %q", line)
@@ -288,7 +288,7 @@ func TestSearchCommandJSON_WithConfigResults(t *testing.T) {
 		t.Fatal("expected JSON output even if registry unavailable")
 	}
 
-	var sections []map[string]interface{}
+	var sections []map[string]any
 	if err := json.Unmarshal([]byte(output), &sections); err != nil {
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
 	}

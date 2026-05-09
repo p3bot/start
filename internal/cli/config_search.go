@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/spf13/cobra"
 )
 
 // addConfigSearchCommand adds the search subcommand to the config command group.

@@ -2179,7 +2179,7 @@ func TestConfigListJSON_WithAgents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var items []map[string]interface{}
+	var items []map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &items); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
@@ -2244,7 +2244,7 @@ roles: {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var items []map[string]interface{}
+	var items []map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &items); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
@@ -2294,7 +2294,7 @@ tasks: {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var items []map[string]interface{}
+	var items []map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &items); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
@@ -2349,7 +2349,7 @@ func TestConfigInfoJSON_WithMatch(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var items []map[string]interface{}
+	var items []map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &items); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
@@ -2440,7 +2440,7 @@ func TestConfigSearchJSON_WithResults(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var sections []map[string]interface{}
+	var sections []map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &sections); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
@@ -2496,7 +2496,7 @@ func TestConfigSettingsJSON_List(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var entries map[string]map[string]interface{}
+	var entries map[string]map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &entries); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
@@ -2532,7 +2532,7 @@ func TestConfigSettingsJSON_SingleKey(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var entry map[string]interface{}
+	var entry map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &entry); err != nil {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}

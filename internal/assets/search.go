@@ -3,6 +3,7 @@ package assets
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -222,11 +223,8 @@ func matchScorePatterns(name string, entry registry.IndexEntry, patterns []*rege
 		if pattern.MatchString(entry.Description) {
 			termScore += 1
 		}
-		for _, tag := range entry.Tags {
-			if pattern.MatchString(tag) {
-				termScore += 1
-				break
-			}
+		if slices.ContainsFunc(entry.Tags, pattern.MatchString) {
+			termScore += 1
 		}
 
 		if termScore == 0 {

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"regexp"
@@ -336,7 +337,7 @@ func promptTags(w io.Writer, r io.Reader, current []string, showCurrent bool) ([
 
 	// Parse comma-separated tags
 	var tags []string
-	for _, t := range strings.Split(input, ",") {
+	for t := range strings.SplitSeq(input, ",") {
 		t = strings.TrimSpace(t)
 		if t != "" {
 			tags = append(tags, t)
@@ -444,9 +445,7 @@ func promptModelsEdit(w io.Writer, reader *bufio.Reader, current map[string]stri
 	if err != nil {
 		return nil, err
 	}
-	for alias, modelID := range newModels {
-		result[alias] = modelID
-	}
+	maps.Copy(result, newModels)
 
 	return result, nil
 }
@@ -536,7 +535,7 @@ func writeCUEPrompt(sb *strings.Builder, prompt string) {
 	}
 	if strings.Contains(prompt, "\n") || len(prompt) > 80 {
 		sb.WriteString("\t\tprompt: \"\"\"\n")
-		for _, line := range strings.Split(prompt, "\n") {
+		for line := range strings.SplitSeq(prompt, "\n") {
 			fmt.Fprintf(sb, "\t\t\t%s\n", line)
 		}
 		sb.WriteString("\t\t\t\"\"\"\n")
@@ -694,7 +693,7 @@ func parseSelectionInput(input string, count int) ([]int, error) {
 	seen := make(map[int]bool)
 	var indices []int
 
-	for _, part := range strings.Split(input, ",") {
+	for part := range strings.SplitSeq(input, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

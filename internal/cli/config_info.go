@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/start-cli/start/internal/tui"
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/tui"
 )
 
 // addConfigInfoCommand adds the "config info [query]" command.

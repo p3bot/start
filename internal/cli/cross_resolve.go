@@ -241,10 +241,7 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 		return AssetMatch{}, errors.New(b.String())
 	}
 
-	displayCount := len(matches)
-	if displayCount > maxAssetResults {
-		displayCount = maxAssetResults
-	}
+	displayCount := min(len(matches), maxAssetResults)
 
 	_, _ = fmt.Fprintf(w, "Found %d matches for %q:\n\n", len(matches), query)
 

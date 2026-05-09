@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/doctor"
 	"github.com/start-cli/start/internal/registry"
-	"github.com/spf13/cobra"
 )
 
 // addDoctorCommand adds the doctor command to the parent command.

@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/shell"
-	"github.com/spf13/cobra"
 )
 
 // addReadCommand registers the `start read` subcommand.

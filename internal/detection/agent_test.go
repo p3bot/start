@@ -177,7 +177,7 @@ func TestDetectAgents_ParallelExecution(t *testing.T) {
 	}
 
 	// Run multiple times to catch race conditions
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		detected := DetectAgents(index)
 		if len(detected) != 0 {
 			t.Errorf("iteration %d: expected 0 detected agents, got %d", i, len(detected))

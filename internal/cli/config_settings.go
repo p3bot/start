@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,10 +12,10 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 // addConfigSettingsCommand adds the settings subcommand to config.
@@ -334,9 +335,7 @@ func loadSettingsForScope(localOnly bool) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			for k, v := range localSettings {
-				settings[k] = v
-			}
+			maps.Copy(settings, localSettings)
 		}
 	} else {
 		if paths.GlobalExists {
@@ -344,18 +343,14 @@ func loadSettingsForScope(localOnly bool) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			for k, v := range globalSettings {
-				settings[k] = v
-			}
+			maps.Copy(settings, globalSettings)
 		}
 		if paths.LocalExists {
 			localSettings, err := config.LoadSettingsFromDir(paths.Local)
 			if err != nil {
 				return nil, err
 			}
-			for k, v := range localSettings {
-				settings[k] = v
-			}
+			maps.Copy(settings, localSettings)
 		}
 	}
 

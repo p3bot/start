@@ -287,7 +287,7 @@ settings: {
 
 	// Verify it's shown as skipped (○), not loaded (✓)
 	// Find the default_context line and check it has ○
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.Contains(line, "default_context") {
 			if !strings.Contains(line, "○") {
 				t.Errorf("default_context should show skipped status (○), got line: %s", line)

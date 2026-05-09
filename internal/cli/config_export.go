@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/start-cli/start/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/config"
 )
 
 // addConfigExportCommand registers the "config export [category]" subcommand.

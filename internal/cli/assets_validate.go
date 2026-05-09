@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/doctor"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
 )
 
@@ -414,7 +414,7 @@ func validateListTags(cacheDir string) ([]string, error) {
 		return nil, fmt.Errorf("listing tags: %w", err)
 	}
 	var tags []string
-	for _, t := range strings.Split(string(out), "\n") {
+	for t := range strings.SplitSeq(string(out), "\n") {
 		if t := strings.TrimSpace(t); t != "" {
 			tags = append(tags, t)
 		}
@@ -566,10 +566,8 @@ func validateCheckIndexVersionExists(ctx context.Context, client *registry.Clien
 		// Can't determine — let the subsequent resolve/fetch handle it
 		return nil
 	}
-	for _, v := range versions {
-		if v == ver {
-			return nil
-		}
+	if slices.Contains(versions, ver) {
+		return nil
 	}
 	return fmt.Errorf("version %s not found in registry (available: %s)", ver, strings.Join(versions, ", "))
 }

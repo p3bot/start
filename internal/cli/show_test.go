@@ -1196,7 +1196,6 @@ func TestNotifyScopeWidenedIfLocal(t *testing.T) {
 		{"global + install -> no notice", &Flags{}, true, false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			buf := new(bytes.Buffer)

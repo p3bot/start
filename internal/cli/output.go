@@ -22,7 +22,7 @@ func writeJSON(w io.Writer, v any) error {
 }
 
 // printWarning prints a warning message in yellow.
-func printWarning(w io.Writer, format string, args ...interface{}) {
+func printWarning(w io.Writer, format string, args ...any) {
 	_, _ = tui.ColorWarning.Fprintf(w, "Warning: ")
 	_, _ = fmt.Fprintf(w, format, args...)
 	_, _ = fmt.Fprintln(w)

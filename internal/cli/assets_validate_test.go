@@ -458,16 +458,16 @@ func makeTestRegistryIndex(agents, roles, contexts, tasks int) *registry.Index {
 		Contexts: make(map[string]registry.IndexEntry, contexts),
 		Tasks:    make(map[string]registry.IndexEntry, tasks),
 	}
-	for i := 0; i < agents; i++ {
+	for i := range agents {
 		idx.Agents[fmt.Sprintf("agent%d", i)] = registry.IndexEntry{Version: "v0.1.0"}
 	}
-	for i := 0; i < roles; i++ {
+	for i := range roles {
 		idx.Roles[fmt.Sprintf("role%d", i)] = registry.IndexEntry{Version: "v0.1.0"}
 	}
-	for i := 0; i < contexts; i++ {
+	for i := range contexts {
 		idx.Contexts[fmt.Sprintf("ctx%d", i)] = registry.IndexEntry{Version: "v0.1.0"}
 	}
-	for i := 0; i < tasks; i++ {
+	for i := range tasks {
 		idx.Tasks[fmt.Sprintf("task%d", i)] = registry.IndexEntry{Version: "v0.1.0"}
 	}
 	return idx

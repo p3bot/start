@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/start-cli/start/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/config"
 )
 
 // openCategories is the ordered list of categories for the config open prompt.

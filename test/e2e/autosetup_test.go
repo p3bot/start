@@ -285,21 +285,20 @@ func TestE2E_AutoSetup_ExistingConfig_SkipsSetup(t *testing.T) {
 
 	binary := binaryPath(t)
 
-	// Find any AI tool
-	var toolDir string
-	tools := []string{"claude", "gemini", "aichat"}
-	for _, tool := range tools {
-		if path, err := exec.LookPath(tool); err == nil {
-			toolDir = filepath.Dir(path)
+	// Sterile PATH containing exactly one AI tool, whichever is installed.
+	var tool string
+	for _, candidate := range []string{"claude", "gemini", "aichat"} {
+		if _, err := exec.LookPath(candidate); err == nil {
+			tool = candidate
 			break
 		}
 	}
-
-	if toolDir == "" {
+	if tool == "" {
 		t.Skip("no AI tools installed")
 	}
+	binDir := sterileBinDir(t, []string{tool})
 
-	tmpDir, env, cleanup := setupTestEnv(t, []string{toolDir})
+	tmpDir, env, cleanup := setupTestEnv(t, []string{binDir})
 	defer cleanup()
 
 	// Create existing config

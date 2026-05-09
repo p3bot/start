@@ -135,7 +135,7 @@ func assetTypeToConfigFile(category string) string {
 // ExtractAssetContent loads the asset module and extracts its content as a CUE AST struct.
 // originPath is the module path (without version) to store in the origin field.
 // roleName, if non-empty, replaces an inline role struct with a string reference.
-func ExtractAssetContent(moduleDir string, asset SearchResult, reg interface{}, originPath, roleName string) (*ast.StructLit, error) {
+func ExtractAssetContent(moduleDir string, asset SearchResult, reg any, originPath, roleName string) (*ast.StructLit, error) {
 	cctx := cuecontext.New()
 
 	cfg := &load.Config{

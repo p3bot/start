@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 // addConfigCommand adds the config command group and its subcommands to the parent.
