@@ -137,7 +137,7 @@ roles: {
 	"role-traced": {
 		description: "File source with origin (verbose metadata)"
 		file:        "` + tracedFile + `"
-		origin:      "github.com/example/start-assets/roles/traced@v1.2.3"
+		origin:      "github.com/example/start-library/roles/traced@v1.2.3"
 	}
 	"fc-cmd-ref": {
 		description: "File source whose content references {{.command_output}}; command must not run"
@@ -245,7 +245,7 @@ func TestReadUTDFileWinsOverPrompt(t *testing.T) {
 	}
 }
 
-// TestReadUTDCommandSource verifies a command-source UTD asset executes the
+// TestReadUTDCommandSource verifies a command-source UTD module executes the
 // command and that custom shell/timeout flow through to the runner. The trim
 // block in readUTD must preserve Shell and Timeout — they are execution
 // config, not source fields.
@@ -300,18 +300,18 @@ func TestReadAgentNoCommand(t *testing.T) {
 	}
 }
 
-// TestReadUTDEmptyFields verifies a UTD asset with no file, prompt, or command
-// returns a configuration error naming the asset and listing the expected
+// TestReadUTDEmptyFields verifies a UTD module with no file, prompt, or command
+// returns a configuration error naming the module and listing the expected
 // fields. Stdout stays empty.
 func TestReadUTDEmptyFields(t *testing.T) {
 	setupReadTestConfig(t)
 
 	stdout, _, err := runReadCmd(t, "role-empty")
 	if err == nil {
-		t.Fatal("expected error for UTD asset with no source fields")
+		t.Fatal("expected error for UTD module with no source fields")
 	}
 	if !strings.Contains(err.Error(), "role-empty") {
-		t.Errorf("error should name the asset, got: %v", err)
+		t.Errorf("error should name the module, got: %v", err)
 	}
 	for _, want := range []string{"file", "prompt", "command"} {
 		if !strings.Contains(err.Error(), want) {
@@ -394,7 +394,7 @@ tasks: {
 }
 
 // TestReadVerboseCommandSource verifies --verbose against a command-source
-// UTD asset emits a "Command: ..." line on stderr alongside Type/Name.
+// UTD module emits a "Command: ..." line on stderr alongside Type/Name.
 // Without this metadata, a user piping `start read --verbose ctx-cmd | ...`
 // has no visibility into the shell-out that produced stdout.
 func TestReadVerboseCommandSource(t *testing.T) {
@@ -459,7 +459,7 @@ func TestReadVerboseToStderr(t *testing.T) {
 }
 
 // TestReadQuietSuppressesStderr verifies that --quiet leaves stdout holding
-// only the asset content with stderr empty. Three independent stderr-write
+// only the module content with stderr empty. Three independent stderr-write
 // paths converge in runRead and read* helpers — autoInstall progress
 // (resolve.go), notifyScopeWidenedIfLocal (show.go), and printReadVerbose
 // (read.go) — and a regression in any single Quiet/Verbose gate would leak
@@ -587,23 +587,23 @@ func TestReadAppearsInRootHelp(t *testing.T) {
 
 // TestReadUnknownName verifies that a name with no installed or registry
 // matches surfaces a clear error and leaves stdout empty. Acceptance criterion
-// "Unknown asset names produce a clear error".
+// "Unknown module names produce a clear error".
 func TestReadUnknownName(t *testing.T) {
 	setupReadTestConfig(t)
 
-	stdout, _, err := runReadCmd(t, "definitely-not-a-real-asset-zzz")
+	stdout, _, err := runReadCmd(t, "definitely-not-a-real-module-zzz")
 	if err == nil {
-		t.Fatal("expected error for unknown asset name")
+		t.Fatal("expected error for unknown module name")
 	}
-	if !strings.Contains(err.Error(), "definitely-not-a-real-asset-zzz") {
-		t.Errorf("error should name the missing asset, got: %v", err)
+	if !strings.Contains(err.Error(), "definitely-not-a-real-module-zzz") {
+		t.Errorf("error should name the missing module, got: %v", err)
 	}
 	if stdout != "" {
 		t.Errorf("stdout should be empty on error, got: %q", stdout)
 	}
 }
 
-// TestReadUTDTildePath verifies that a UTD asset whose `file` field uses a
+// TestReadUTDTildePath verifies that a UTD module whose `file` field uses a
 // `~/`-prefixed path resolves through DefaultFileReader's tilde expansion and
 // outputs the file's contents. Acceptance criterion: "UTD file resolution
 // succeeds for @module/, ~/, and relative paths".
@@ -619,7 +619,7 @@ func TestReadUTDTildePath(t *testing.T) {
 	}
 }
 
-// TestReadVerboseFileAndOrigin verifies that --verbose against a UTD asset
+// TestReadVerboseFileAndOrigin verifies that --verbose against a UTD module
 // with both `file` and `origin` emits Type, Name, Origin, and Path metadata
 // lines to stderr, while stdout still receives the raw file contents.
 func TestReadVerboseFileAndOrigin(t *testing.T) {
@@ -641,7 +641,7 @@ func TestReadVerboseFileAndOrigin(t *testing.T) {
 	wants := []string{
 		"Type: Role",
 		"Name: role-traced",
-		"Origin: github.com/example/start-assets/roles/traced@v1.2.3",
+		"Origin: github.com/example/start-library/roles/traced@v1.2.3",
 		"Path: ", // Path: <absolute> — only assert the prefix; absolute path varies by tempdir
 	}
 	for _, want := range wants {
@@ -692,7 +692,7 @@ func TestReadShortQueryNonTTYEndToEnd(t *testing.T) {
 // TestReadUTDFileSourceSuppressesCommand pins the safety property of
 // readUTD's source-priority trim block for the file branch. With both `file`
 // and `command` set, and the file's content referencing {{.command_output}},
-// the asset's command must not execute. TemplateProcessor.Process's lazy
+// the module's command must not execute. TemplateProcessor.Process's lazy
 // {{.command_output}} expansion (template.go: needsCommandOutput &&
 // fields.Command != "") would otherwise shell out — readUTD's trim block
 // (read.go: file != "" → fields.Command = "") is what prevents it. If
@@ -761,7 +761,7 @@ func TestReadUTDPromptWinsOverCommand(t *testing.T) {
 	}
 }
 
-// TestReadUTDRelativePath verifies a UTD asset whose `file` field is a
+// TestReadUTDRelativePath verifies a UTD module whose `file` field is a
 // relative path (e.g. "./role.md") resolves through ExpandFilePath's
 // filepath.Abs branch and outputs the file's contents. Acceptance criterion:
 // "UTD file resolution succeeds for @module/, ~/, and relative paths".
@@ -777,9 +777,9 @@ func TestReadUTDRelativePath(t *testing.T) {
 	}
 }
 
-// TestReadUTDModuleNoOrigin verifies the error guard in readUTD: an asset
+// TestReadUTDModuleNoOrigin verifies the error guard in readUTD: a module
 // with an @module/ file path but no origin field returns a descriptive error
-// naming the asset, and stdout stays empty.
+// naming the module, and stdout stays empty.
 func TestReadUTDModuleNoOrigin(t *testing.T) {
 	setupReadTestConfig(t)
 
@@ -788,7 +788,7 @@ func TestReadUTDModuleNoOrigin(t *testing.T) {
 		t.Fatal("expected error for @module/ path without origin")
 	}
 	if !strings.Contains(err.Error(), "role-module-no-origin") {
-		t.Errorf("error should name the asset, got: %v", err)
+		t.Errorf("error should name the module, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "@module/") {
 		t.Errorf("error should mention @module/, got: %v", err)
@@ -1144,7 +1144,7 @@ roles: {
 // conflict — so a "shared role under --local returns local content" check
 // would pass even if --local were silently ignored and merged scope used
 // instead. The only discriminating assertion for --local wiring is the
-// not-found path on a global-only asset: under --local-respected the asset
+// not-found path on a global-only module: under --local-respected the module
 // is invisible, under --local-ignored merged scope finds it. See
 // TestReadGlobalScope for the symmetric test, which has two assertions
 // because merged scope returns the local value for shared roles, making the
@@ -1157,7 +1157,7 @@ func TestReadLocalScope(t *testing.T) {
 		t.Fatal("expected not-found error for global-only role under --local")
 	}
 	if !strings.Contains(err.Error(), "global-only-role") {
-		t.Errorf("error should name the missing asset, got: %v", err)
+		t.Errorf("error should name the missing module, got: %v", err)
 	}
 	if stdout != "" {
 		t.Errorf("stdout should be empty on not-found error, got: %q", stdout)
@@ -1186,7 +1186,7 @@ func TestReadGlobalScope(t *testing.T) {
 			t.Fatal("expected not-found error for local-only role under --global")
 		}
 		if !strings.Contains(err.Error(), "local-only-role") {
-			t.Errorf("error should name the missing asset, got: %v", err)
+			t.Errorf("error should name the missing module, got: %v", err)
 		}
 		if stdout != "" {
 			t.Errorf("stdout should be empty on not-found error, got: %q", stdout)
@@ -1213,7 +1213,7 @@ func TestReadLocalAndGlobalMutuallyExclusive(t *testing.T) {
 }
 
 // TestEnsureTrailingNewline pins the helper that normalises stdout line-
-// alignment. Empty content stays empty (so an empty asset does not produce a
+// alignment. Empty content stays empty (so an empty module does not produce a
 // stray blank line), an already-newline-terminated string is returned
 // unchanged (no double newline), and a string without a trailing newline
 // gets exactly one appended.
@@ -1354,7 +1354,7 @@ func TestReadStdoutContentOnly(t *testing.T) {
 }
 
 // TestReadAllSourceFieldsFileWins covers the explicit three-field case: an
-// asset declaring file, prompt, AND command must emit only the file
+// module declaring file, prompt, AND command must emit only the file
 // content. This pins the trim block (file != "" → both prompt and command
 // cleared) against a regression that handled only the two-field case.
 func TestReadAllSourceFieldsFileWins(t *testing.T) {
@@ -1439,7 +1439,7 @@ roles: {
 
 // TestReadUTDTaskPromptSource verifies a prompt-source task resolves and
 // renders. The fixture defines task-prompt, but no other test exercises a
-// task asset through read — this guards regressions where read silently
+// task module through read — this guards regressions where read silently
 // stops handling a category.
 func TestReadUTDTaskPromptSource(t *testing.T) {
 	setupReadTestConfig(t)
@@ -1548,7 +1548,7 @@ roles: {
 	}
 }
 
-// TestReadCrossCategoryFindsContext verifies a context asset is reachable
+// TestReadCrossCategoryFindsContext verifies a context module is reachable
 // via the cross-category resolver. The other categories (agents, roles,
 // tasks) all have at least one direct read test; without this case a
 // regression dropping contexts from showCategories would only surface in

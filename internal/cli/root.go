@@ -110,7 +110,7 @@ Examples:
 	addReadCommand(cmd)
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)
-	addAssetsCommand(cmd)
+	addModulesCommand(cmd)
 	addConfigCommand(cmd)
 	addSearchCommand(cmd)
 	addDoctorCommand(cmd)

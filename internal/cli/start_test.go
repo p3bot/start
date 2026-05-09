@@ -1480,16 +1480,16 @@ func TestRegistryAwareGuard_MergedMatchesTriggerFallthrough(t *testing.T) {
 
 	// Simulate the guard logic from task.go lines 209-224.
 	// Scenario: "start" is an exact installed match with 1 installed substring match.
-	// The registry also contains "start/assets/agent/create" matching "start".
+	// The registry also contains "start/modules/agent/create" matching "start".
 	installedMatches := []TaskMatch{
 		{Name: "start", Source: TaskSourceInstalled},
 	}
 
 	index := &registry.Index{
 		Tasks: map[string]registry.IndexEntry{
-			"start/assets/agent/create": {
-				Module:      "github.com/example/start-assets-agent-create@v0",
-				Description: "Create an agent asset",
+			"start/modules/agent/create": {
+				Module:      "github.com/example/start-library-agent-create@v0",
+				Description: "Create an agent module",
 			},
 		},
 	}

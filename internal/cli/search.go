@@ -9,20 +9,20 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
 // searchSection groups search results under a labelled section.
 type searchSection struct {
-	Label         string                `json:"label"`
-	Path          string                `json:"path,omitempty"`
-	Results       []assets.SearchResult `json:"results"`
-	ShowInstalled bool                  `json:"-"` // Only true for registry section; display-only
+	Label         string                 `json:"label"`
+	Path          string                 `json:"path,omitempty"`
+	Results       []modules.SearchResult `json:"results"`
+	ShowInstalled bool                   `json:"-"` // Only true for registry section; display-only
 }
 
 // addSearchCommand adds the top-level search command.
@@ -31,10 +31,10 @@ func addSearchCommand(parent *cobra.Command) {
 		Use:     "search [query]...",
 		Aliases: []string{"find"},
 		GroupID: "commands",
-		Short:   "Search configs and registry for assets",
-		Long: `Search local config, global config, and the asset registry by keyword.
+		Short:   "Search configs and registry for modules",
+		Long: `Search local config, global config, and the module registry by keyword.
 
-Searches asset names, descriptions, and tags. Multiple words are combined
+Searches module names, descriptions, and tags. Multiple words are combined
 with AND logic - all terms must match. Terms can be space-separated or
 comma-separated. Total query must be at least 3 characters.
 Terms support regex patterns (e.g. '^home', 'expert$', 'go.*review').
@@ -59,10 +59,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
 	tagFlags, _ := cmd.Flags().GetStringSlice("tag")
-	tags := assets.ParseSearchTerms(strings.Join(tagFlags, ","))
+	tags := modules.ParseSearchTerms(strings.Join(tagFlags, ","))
 
-	terms := assets.ParseSearchPatterns(query)
-	if err := assets.ValidateSearchQuery(terms, tags); err != nil {
+	terms := modules.ParseSearchPatterns(query)
+	if err := modules.ValidateSearchQuery(terms, tags); err != nil {
 		if jsonFlag {
 			return err
 		}
@@ -82,12 +82,12 @@ func runSearch(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		query = input
-		terms = assets.ParseSearchPatterns(query)
+		terms = modules.ParseSearchPatterns(query)
 	}
 
 	// Validate regex patterns before searching
 	if len(terms) > 0 {
-		if _, err := assets.CompileSearchTerms(terms); err != nil {
+		if _, err := modules.CompileSearchTerms(terms); err != nil {
 			return err
 		}
 	}
@@ -118,9 +118,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
 			printWarning(stderr, "failed to load local config: %s", err)
 		} else if err == nil {
-			var results []assets.SearchResult
+			var results []modules.SearchResult
 			for _, cat := range categories {
-				catResults, err := assets.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
+				catResults, err := modules.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
 				if err != nil {
 					return err
 				}
@@ -142,9 +142,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
 			printWarning(stderr, "failed to load global config: %s", err)
 		} else if err == nil {
-			var results []assets.SearchResult
+			var results []modules.SearchResult
 			for _, cat := range categories {
-				catResults, err := assets.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
+				catResults, err := modules.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
 				if err != nil {
 					return err
 				}
@@ -167,14 +167,14 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		registryErr = err
 	} else {
-		index, indexVersion, err := client.FetchIndex(ctx, resolveAssetsIndexPath())
+		index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
 		if err != nil {
 			registryErr = err
 		} else {
 			if err := cache.WriteIndex(indexVersion); err != nil {
 				debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
 			}
-			results, err := assets.SearchIndex(index, query, tags)
+			results, err := modules.SearchIndex(index, query, tags)
 			if err != nil {
 				return err
 			}
@@ -241,7 +241,7 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 		}
 
 		// Group results by category
-		grouped := make(map[string][]assets.SearchResult)
+		grouped := make(map[string][]modules.SearchResult)
 		for _, r := range section.Results {
 			grouped[r.Category] = append(grouped[r.Category], r)
 		}

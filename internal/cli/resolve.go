@@ -11,28 +11,28 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
-// AssetSource indicates where an asset was found.
-type AssetSource string
+// ModuleSource indicates where a module was found.
+type ModuleSource string
 
 const (
-	AssetSourceInstalled AssetSource = "installed"
-	AssetSourceRegistry  AssetSource = "registry"
+	ModuleSourceInstalled ModuleSource = "installed"
+	ModuleSourceRegistry  ModuleSource = "registry"
 )
 
-// AssetMatch represents a single matched asset during resolution.
-type AssetMatch struct {
+// ModuleMatch represents a single matched module during resolution.
+type ModuleMatch struct {
 	Name     string
 	Category string
-	Source   AssetSource
+	Source   ModuleSource
 	Entry    registry.IndexEntry
 	Score    int
 }
@@ -40,10 +40,10 @@ type AssetMatch struct {
 // contextScoreThreshold is the minimum match score for context inclusion.
 const contextScoreThreshold = 2
 
-// maxAssetResults is the maximum number of results to display in interactive selection.
-const maxAssetResults = 20
+// maxModuleResults is the maximum number of results to display in interactive selection.
+const maxModuleResults = 20
 
-// resolver performs two-phase resolution for asset-selecting flags.
+// resolver performs two-phase resolution for module-selecting flags.
 // It lazily fetches the registry index and tracks whether any installs occurred.
 type resolver struct {
 	cfg          internalcue.LoadResult
@@ -72,15 +72,15 @@ func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Wri
 
 // resolveAgent resolves an agent name through three-tier search.
 func (r *resolver) resolveAgent(name string) (string, error) {
-	return r.resolveAsset(name, internalcue.KeyAgents, "agents", "Agent", false)
+	return r.resolveModule(name, internalcue.KeyAgents, "agents", "Agent", false)
 }
 
 // resolveRole resolves a role name through file path bypass then three-tier search.
 func (r *resolver) resolveRole(name string) (string, error) {
-	return r.resolveAsset(name, internalcue.KeyRoles, "roles", "Role", true)
+	return r.resolveModule(name, internalcue.KeyRoles, "roles", "Role", true)
 }
 
-// resolveAsset performs two-phase resolution for an asset:
+// resolveModule performs two-phase resolution for a module:
 // Phase 1: Exact full name match in installed config - use directly, no registry needed.
 // Phase 2: Collect all candidates from installed config and registry, merge, select.
 // displayType is the capitalised display name (e.g., "Agent", "Role").
@@ -91,7 +91,7 @@ func (r *resolver) resolveRole(name string) (string, error) {
 // resolver's expected category, the prefix is stripped and the bare name is
 // resolved as usual. When the prefix names a different category, an error is
 // returned identifying the mismatch.
-func (r *resolver) resolveAsset(name, cueKey, category, displayType string, allowFilePath bool) (string, error) {
+func (r *resolver) resolveModule(name, cueKey, category, displayType string, allowFilePath bool) (string, error) {
 	if name == "" {
 		return "", nil
 	}
@@ -130,7 +130,7 @@ func (r *resolver) resolveAsset(name, cueKey, category, displayType string, allo
 
 	// ensureIndex returns nil error; errors are stored in r.indexErr for graceful fallback.
 	index, client, _ := r.ensureIndex()
-	var registryMatches []AssetMatch
+	var registryMatches []ModuleMatch
 	if index != nil {
 		entries := registryEntries(index, category)
 		registryMatches, err = searchRegistryCategory(entries, category, name)
@@ -139,7 +139,7 @@ func (r *resolver) resolveAsset(name, cueKey, category, displayType string, allo
 		}
 	}
 
-	allMatches := mergeAssetMatches(installedMatches, registryMatches)
+	allMatches := mergeModuleMatches(installedMatches, registryMatches)
 	debugf(r.stderr, r.flags, dbgResolve, "%s %q: %d installed, %d registry, %d total matches",
 		displayType, name, len(installedMatches), len(registryMatches), len(allMatches))
 
@@ -148,8 +148,8 @@ func (r *resolver) resolveAsset(name, cueKey, category, displayType string, allo
 		return "", err
 	}
 
-	if selected.Source == AssetSourceRegistry {
-		if err := r.autoInstall(client, assets.SearchResult{
+	if selected.Source == ModuleSourceRegistry {
+		if err := r.autoInstall(client, modules.SearchResult{
 			Category: selected.Category,
 			Name:     selected.Name,
 			Entry:    selected.Entry,
@@ -203,7 +203,7 @@ func (r *resolver) resolveModelName(name string, agent orchestration.Agent) stri
 	}
 
 	// Multi-term AND substring match
-	terms := assets.ParseSearchTerms(name)
+	terms := modules.ParseSearchTerms(name)
 	if len(terms) == 0 {
 		return name
 	}
@@ -329,7 +329,7 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 
 		// Combined search across installed + registry (all matches above threshold).
 		// Reuse installed matches from above.
-		var registryMatches []AssetMatch
+		var registryMatches []ModuleMatch
 		if index != nil {
 			registryMatches, err = searchRegistryCategory(index.Contexts, "contexts", term)
 			if err != nil {
@@ -338,10 +338,10 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 				continue
 			}
 		}
-		allMatches := mergeAssetMatches(installedMatches, registryMatches)
+		allMatches := mergeModuleMatches(installedMatches, registryMatches)
 
 		// Filter by threshold
-		var qualified []AssetMatch
+		var qualified []ModuleMatch
 		for _, m := range allMatches {
 			if m.Score >= contextScoreThreshold {
 				qualified = append(qualified, m)
@@ -359,8 +359,8 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 
 		// Install any registry matches and add all to resolved
 		for _, m := range qualified {
-			if m.Source == AssetSourceRegistry && client != nil {
-				if err := r.autoInstall(client, assets.SearchResult{
+			if m.Source == ModuleSourceRegistry && client != nil {
+				if err := r.autoInstall(client, modules.SearchResult{
 					Category: m.Category,
 					Name:     m.Name,
 					Entry:    m.Entry,
@@ -378,7 +378,7 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 	return resolved, nil
 }
 
-// findExactInstalledName finds an asset by exact or short name in installed config.
+// findExactInstalledName finds a module by exact or short name in installed config.
 // Supports both full name (e.g., "golang/assistant") and short name match.
 // Returns the resolved full name, or empty string if not found.
 // Returns an error if the short name is ambiguous.
@@ -423,10 +423,10 @@ func findExactInstalledName(cfg cue.Value, cueKey, name string) (string, error) 
 // findExactInRegistry searches for an exact name match in registry entries.
 // Supports both full name (e.g., "golang/assistant") and short name match.
 // Returns an error if multiple entries share the same short name.
-func findExactInRegistry(entries map[string]registry.IndexEntry, category, name string) (*assets.SearchResult, error) {
+func findExactInRegistry(entries map[string]registry.IndexEntry, category, name string) (*modules.SearchResult, error) {
 	// Full name match is always unambiguous
 	if entry, ok := entries[name]; ok {
-		return &assets.SearchResult{
+		return &modules.SearchResult{
 			Category: category,
 			Name:     name,
 			Entry:    entry,
@@ -447,7 +447,7 @@ func findExactInRegistry(entries map[string]registry.IndexEntry, category, name 
 	case 0:
 		return nil, nil
 	case 1:
-		return &assets.SearchResult{
+		return &modules.SearchResult{
 			Category: category,
 			Name:     matches[0],
 			Entry:    entries[matches[0]],
@@ -458,18 +458,18 @@ func findExactInRegistry(entries map[string]registry.IndexEntry, category, name 
 	}
 }
 
-// searchInstalled searches installed config entries and returns AssetMatch results.
-func searchInstalled(cfg cue.Value, cueKey, category, query string) ([]AssetMatch, error) {
-	results, err := assets.SearchInstalledConfig(cfg, cueKey, category, query, nil)
+// searchInstalled searches installed config entries and returns ModuleMatch results.
+func searchInstalled(cfg cue.Value, cueKey, category, query string) ([]ModuleMatch, error) {
+	results, err := modules.SearchInstalledConfig(cfg, cueKey, category, query, nil)
 	if err != nil {
 		return nil, err
 	}
-	var matches []AssetMatch
+	var matches []ModuleMatch
 	for _, r := range results {
-		matches = append(matches, AssetMatch{
+		matches = append(matches, ModuleMatch{
 			Name:     r.Name,
 			Category: r.Category,
-			Source:   AssetSourceInstalled,
+			Source:   ModuleSourceInstalled,
 			Entry:    r.Entry,
 			Score:    r.MatchScore,
 		})
@@ -477,18 +477,18 @@ func searchInstalled(cfg cue.Value, cueKey, category, query string) ([]AssetMatc
 	return matches, nil
 }
 
-// searchRegistryCategory searches registry entries and returns AssetMatch results.
-func searchRegistryCategory(entries map[string]registry.IndexEntry, category, query string) ([]AssetMatch, error) {
-	results, err := assets.SearchCategoryEntries(category, entries, query, nil)
+// searchRegistryCategory searches registry entries and returns ModuleMatch results.
+func searchRegistryCategory(entries map[string]registry.IndexEntry, category, query string) ([]ModuleMatch, error) {
+	results, err := modules.SearchCategoryEntries(category, entries, query, nil)
 	if err != nil {
 		return nil, err
 	}
-	var matches []AssetMatch
+	var matches []ModuleMatch
 	for _, r := range results {
-		matches = append(matches, AssetMatch{
+		matches = append(matches, ModuleMatch{
 			Name:     r.Name,
 			Category: r.Category,
-			Source:   AssetSourceRegistry,
+			Source:   ModuleSourceRegistry,
 			Entry:    r.Entry,
 			Score:    r.MatchScore,
 		})
@@ -496,11 +496,11 @@ func searchRegistryCategory(entries map[string]registry.IndexEntry, category, qu
 	return matches, nil
 }
 
-// mergeAssetMatches combines installed and registry matches, deduplicating by name.
+// mergeModuleMatches combines installed and registry matches, deduplicating by name.
 // Installed matches take precedence. Results are sorted by score descending, then name.
-func mergeAssetMatches(installed, reg []AssetMatch) []AssetMatch {
+func mergeModuleMatches(installed, reg []ModuleMatch) []ModuleMatch {
 	seen := make(map[string]bool)
-	var merged []AssetMatch
+	var merged []ModuleMatch
 
 	for _, m := range installed {
 		seen[m.Name] = true
@@ -525,20 +525,20 @@ func mergeAssetMatches(installed, reg []AssetMatch) []AssetMatch {
 
 // selectSingleMatch handles single-select resolution: auto-select on one match,
 // prompt on multiple matches (TTY), error on multiple (non-TTY), error on zero.
-func (r *resolver) selectSingleMatch(matches []AssetMatch, assetType, query string) (AssetMatch, error) {
+func (r *resolver) selectSingleMatch(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
 	switch len(matches) {
 	case 0:
-		return AssetMatch{}, fmt.Errorf("%s %q not found", assetType, query)
+		return ModuleMatch{}, fmt.Errorf("%s %q not found", categoryType, query)
 	case 1:
 		return matches[0], nil
 	default:
-		return r.promptAssetSelection(matches, assetType, query)
+		return r.promptModuleSelection(matches, categoryType, query)
 	}
 }
 
-// promptAssetSelection prompts the user to select from multiple matches.
+// promptModuleSelection prompts the user to select from multiple matches.
 // In non-TTY mode, returns an error with the match list.
-func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query string) (AssetMatch, error) {
+func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
 	isTTY := isTerminal(r.stdin)
 
 	if !isTTY {
@@ -546,18 +546,18 @@ func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query s
 		for _, m := range matches {
 			names = append(names, m.Name)
 		}
-		return AssetMatch{}, fmt.Errorf("ambiguous %s %q matches: %s\nSpecify exact name or run interactively",
-			assetType, query, strings.Join(names, ", "))
+		return ModuleMatch{}, fmt.Errorf("ambiguous %s %q matches: %s\nSpecify exact name or run interactively",
+			categoryType, query, strings.Join(names, ", "))
 	}
 
 	displayCount := len(matches)
 	truncated := false
-	if displayCount > maxAssetResults {
-		displayCount = maxAssetResults
+	if displayCount > maxModuleResults {
+		displayCount = maxModuleResults
 		truncated = true
 	}
 
-	_, _ = fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), assetType, query)
+	_, _ = fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), categoryType, query)
 
 	// Find longest name for alignment
 	maxNameLen := 0
@@ -571,7 +571,7 @@ func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query s
 		m := matches[i]
 		padding := strings.Repeat(" ", maxNameLen-len(m.Name)+2)
 		var sourceLabel string
-		if m.Source == AssetSourceInstalled {
+		if m.Source == ModuleSourceInstalled {
 			sourceLabel = tui.ColorInstalled.Sprint(m.Source)
 		} else {
 			sourceLabel = tui.ColorRegistry.Sprint(m.Source)
@@ -590,7 +590,7 @@ func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query s
 	reader := bufio.NewReader(r.stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
-		return AssetMatch{}, fmt.Errorf("reading input: %w", err)
+		return ModuleMatch{}, fmt.Errorf("reading input: %w", err)
 	}
 	input = strings.TrimSpace(input)
 
@@ -599,7 +599,7 @@ func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query s
 		if choice >= 1 && choice <= displayCount {
 			return matches[choice-1], nil
 		}
-		return AssetMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
+		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
 	}
 
 	// Try exact name match
@@ -611,7 +611,7 @@ func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query s
 	}
 
 	// Try substring
-	var subMatches []AssetMatch
+	var subMatches []ModuleMatch
 	for i := 0; i < displayCount; i++ {
 		if strings.Contains(strings.ToLower(matches[i].Name), inputLower) {
 			subMatches = append(subMatches, matches[i])
@@ -621,11 +621,11 @@ func (r *resolver) promptAssetSelection(matches []AssetMatch, assetType, query s
 		return subMatches[0], nil
 	}
 
-	return AssetMatch{}, fmt.Errorf("invalid selection: %s", input)
+	return ModuleMatch{}, fmt.Errorf("invalid selection: %s", input)
 }
 
-// autoInstall installs a registry asset to global config.
-func (r *resolver) autoInstall(client *registry.Client, result assets.SearchResult) error {
+// autoInstall installs a registry module to global config.
+func (r *resolver) autoInstall(client *registry.Client, result modules.SearchResult) error {
 	if client == nil {
 		return fmt.Errorf("registry client unavailable")
 	}
@@ -643,7 +643,7 @@ func (r *resolver) autoInstall(client *registry.Client, result assets.SearchResu
 		_, _ = fmt.Fprintf(r.stdout, "Installing %s from registry...\n", result.Name)
 	}
 
-	version, err := assets.InstallAsset(ctx, client, r.index, result, paths.Global)
+	version, err := modules.InstallModule(ctx, client, r.index, result, paths.Global)
 	if err != nil {
 		return err
 	}
@@ -680,12 +680,12 @@ func (r *resolver) ensureIndex() (*registry.Index, *registry.Client, error) {
 
 	// Check cache for a fresh canonical version to avoid network calls.
 	// Only use the cache when it belongs to the same module as the configured index.
-	indexPath := resolveAssetsIndexPath()
+	indexPath := resolveLibraryIndexPath()
 	effectivePath := registry.EffectiveIndexPath(indexPath)
 	usedCache := false
 	cached, cacheErr := cache.ReadIndex()
 	if cacheErr == nil && cached.IsFresh(cache.DefaultMaxAge) &&
-		assets.ModuleFromOrigin(cached.Version) == assets.ModuleFromOrigin(effectivePath) {
+		modules.ModuleFromOrigin(cached.Version) == modules.ModuleFromOrigin(effectivePath) {
 		debugf(r.stderr, r.flags, dbgResolve, "Using cached index version: %s", cached.Version)
 		indexPath = cached.Version
 		usedCache = true
@@ -738,10 +738,10 @@ func (r *resolver) ensureIndex() (*registry.Index, *registry.Client, error) {
 	return index, client, nil
 }
 
-// resolveAssetsIndexPath returns the configured library_index setting value,
+// resolveLibraryIndexPath returns the configured library_index setting value,
 // or empty string if not set or on any error. Callers should pass the result
 // to registry.EffectiveIndexPath to get the final module path.
-func resolveAssetsIndexPath() string {
+func resolveLibraryIndexPath() string {
 	settings, err := loadSettingsForScope(false)
 	if err != nil {
 		return ""

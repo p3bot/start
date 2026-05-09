@@ -27,7 +27,7 @@ func addConfigSettingsCommand(parent *cobra.Command) {
 		Long: `Manage settings for start.
 
 Available settings:
-  library_index  CUE module path for the assets index (default: built-in)
+  library_index  CUE module path for the modules index (default: built-in)
   default_agent  Agent to use when --agent not specified
   shell          Shell for command execution (default: auto-detect)
   timeout        Command timeout in seconds`,

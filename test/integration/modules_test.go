@@ -17,8 +17,8 @@ import (
 // Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
 // to any test that calls os.Chdir — it will cause data races on the working directory.
 
-// TestIntegration_AssetsListWithConfig tests listing assets from config.
-func TestIntegration_AssetsListWithConfig(t *testing.T) {
+// TestIntegration_ModulesListWithConfig tests listing modules from config.
+func TestIntegration_ModulesListWithConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create config directory
@@ -27,7 +27,7 @@ func TestIntegration_AssetsListWithConfig(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Write config with assets
+	// Write config with modules
 	config := `
 agents: {
 	claude: {
@@ -71,17 +71,17 @@ tasks: {
 	cmd := cli.NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"assets", "list"})
+	cmd.SetArgs([]string{"modules", "list"})
 
 	err := cmd.Execute()
 	if err != nil {
-		t.Fatalf("assets list failed: %v", err)
+		t.Fatalf("modules list failed: %v", err)
 	}
 
 	output := buf.String()
 
-	if !strings.Contains(output, "Installed assets") {
-		t.Errorf("output should mention installed assets, got: %s", output)
+	if !strings.Contains(output, "Installed modules") {
+		t.Errorf("output should mention installed modules, got: %s", output)
 	}
 	if !strings.Contains(output, "agents/") {
 		t.Errorf("output should show agents category, got: %s", output)
@@ -103,8 +103,8 @@ tasks: {
 	}
 }
 
-// TestIntegration_AssetsListJSON tests --json output for installed assets.
-func TestIntegration_AssetsListJSON(t *testing.T) {
+// TestIntegration_ModulesListJSON tests --json output for installed modules.
+func TestIntegration_ModulesListJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	configDir := filepath.Join(tmpDir, ".start")
@@ -137,15 +137,15 @@ roles: {
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
 
-	t.Run("assets list --json", func(t *testing.T) {
+	t.Run("modules list --json", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"assets", "list", "--json"})
+		cmd.SetArgs([]string{"modules", "list", "--json"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("assets list --json failed: %v", err)
+			t.Fatalf("modules list --json failed: %v", err)
 		}
 
 		var result []map[string]interface{}
@@ -165,15 +165,15 @@ roles: {
 		}
 	})
 
-	t.Run("start assets --json (parent command)", func(t *testing.T) {
+	t.Run("start modules --json (parent command)", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"assets", "--json"})
+		cmd.SetArgs([]string{"modules", "--json"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("start assets --json failed: %v", err)
+			t.Fatalf("start modules --json failed: %v", err)
 		}
 
 		var result []map[string]interface{}
@@ -185,15 +185,15 @@ roles: {
 		}
 	})
 
-	t.Run("assets list roles --json", func(t *testing.T) {
+	t.Run("modules list roles --json", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"assets", "list", "roles", "--json"})
+		cmd.SetArgs([]string{"modules", "list", "roles", "--json"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("assets list roles --json failed: %v", err)
+			t.Fatalf("modules list roles --json failed: %v", err)
 		}
 
 		var result []map[string]interface{}
@@ -208,8 +208,8 @@ roles: {
 	})
 }
 
-// TestIntegration_AssetsListCategory tests filtering installed assets by category.
-func TestIntegration_AssetsListCategory(t *testing.T) {
+// TestIntegration_ModulesListCategory tests filtering installed modules by category.
+func TestIntegration_ModulesListCategory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	configDir := filepath.Join(tmpDir, ".start")
@@ -248,10 +248,10 @@ roles: {
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"assets", "list", "agents"})
+		cmd.SetArgs([]string{"modules", "list", "agents"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("assets list agents failed: %v", err)
+			t.Fatalf("modules list agents failed: %v", err)
 		}
 
 		output := buf.String()
@@ -271,10 +271,10 @@ roles: {
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"assets", "list", "roles"})
+		cmd.SetArgs([]string{"modules", "list", "roles"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("assets list roles failed: %v", err)
+			t.Fatalf("modules list roles failed: %v", err)
 		}
 
 		output := buf.String()
@@ -294,10 +294,10 @@ roles: {
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"assets", "list", "tasks"})
+		cmd.SetArgs([]string{"modules", "list", "tasks"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("assets list tasks failed: %v", err)
+			t.Fatalf("modules list tasks failed: %v", err)
 		}
 
 		output := buf.String()
@@ -307,8 +307,8 @@ roles: {
 	})
 }
 
-// TestIntegration_AssetsListNoConfig tests listing when no config exists.
-func TestIntegration_AssetsListNoConfig(t *testing.T) {
+// TestIntegration_ModulesListNoConfig tests listing when no config exists.
+func TestIntegration_ModulesListNoConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	chdir(t, tmpDir)
@@ -322,11 +322,11 @@ func TestIntegration_AssetsListNoConfig(t *testing.T) {
 	cmd := cli.NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"assets", "list"})
+	cmd.SetArgs([]string{"modules", "list"})
 
 	err := cmd.Execute()
 	if err != nil {
-		t.Fatalf("assets list failed: %v", err)
+		t.Fatalf("modules list failed: %v", err)
 	}
 
 	output := buf.String()
@@ -447,26 +447,26 @@ func matchesQuery(name string, entry registry.IndexEntry, queryLower string) boo
 	return false
 }
 
-// TestIntegration_AssetsCommandHelp tests that help works for assets commands.
-func TestIntegration_AssetsCommandHelp(t *testing.T) {
+// TestIntegration_ModulesCommandHelp tests that help works for modules commands.
+func TestIntegration_ModulesCommandHelp(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
 		want []string
 	}{
 		{
-			name: "assets help",
-			args: []string{"assets", "--help"},
-			want: []string{"Manage assets", "browse", "search", "add", "list", "info", "update"},
+			name: "modules help",
+			args: []string{"modules", "--help"},
+			want: []string{"Manage modules", "browse", "search", "add", "list", "info", "update"},
 		},
 		{
-			name: "assets search help",
-			args: []string{"assets", "search", "--help"},
+			name: "modules search help",
+			args: []string{"modules", "search", "--help"},
 			want: []string{"Search", "query", "3 characters"},
 		},
 		{
-			name: "assets add help",
-			args: []string{"assets", "add", "--help"},
+			name: "modules add help",
+			args: []string{"modules", "add", "--help"},
 			want: []string{"Install", "--local"},
 		},
 	}

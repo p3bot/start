@@ -10,27 +10,27 @@ import (
 
 	"cuelang.org/go/mod/modconfig"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
 // NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with assets_add.go, assets_list.go, assets_search.go, and
-// assets_update.go. This duplication is accepted - each command uses the results
+// loading patterns with modules_add.go, modules_list.go, modules_search.go, and
+// modules_update.go. This duplication is accepted - each command uses the results
 // differently and a shared helper would couple them for modest line savings.
 
-// addAssetsIndexCommand adds the index subcommand to the assets command.
-func addAssetsIndexCommand(parent *cobra.Command) {
+// addModulesIndexCommand adds the index subcommand to the modules command.
+func addModulesIndexCommand(parent *cobra.Command) {
 	indexCmd := &cobra.Command{
 		Use:     "index [category]",
 		Aliases: []string{"idx"},
-		Short:   "Show registry asset catalog",
-		Long: `Display the full asset catalog from the CUE Central Registry.
+		Short:   "Show registry module catalog",
+		Long: `Display the full module catalog from the CUE Central Registry.
 
-Shows all available assets grouped by type (agents, roles, contexts, tasks).
-Installed assets are marked with ★.
+Shows all available modules grouped by type (agents, roles, contexts, tasks).
+Installed modules are marked with ★.
 
 Optionally filter by category: agents, roles, contexts, or tasks.
 Category filtering is supported with --json but not with --export.
@@ -38,7 +38,7 @@ Category filtering is supported with --json but not with --export.
 Use --json to output machine-readable JSON, or --export to display the
 raw CUE source files from the index module.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runAssetsIndex,
+		RunE: runModulesIndex,
 	}
 
 	indexCmd.Flags().Bool("json", false, "Output index as JSON")
@@ -47,8 +47,8 @@ raw CUE source files from the index module.`,
 	parent.AddCommand(indexCmd)
 }
 
-// runAssetsIndex fetches and displays the full registry asset catalog.
-func runAssetsIndex(cmd *cobra.Command, args []string) error {
+// runModulesIndex fetches and displays the full registry module catalog.
+func runModulesIndex(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -79,14 +79,14 @@ func runAssetsIndex(cmd *cobra.Command, args []string) error {
 
 	// Resolve latest version
 	prog.Update("Fetching index...")
-	indexPath := registry.EffectiveIndexPath(resolveAssetsIndexPath())
+	indexPath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
 	resolvedPath, err := client.ResolveLatestVersion(ctx, indexPath)
 	if err != nil {
 		return fmt.Errorf("resolving index version: %w", err)
 	}
 
 	// Extract version string (after @)
-	version := assets.VersionFromOrigin(resolvedPath)
+	version := modules.VersionFromOrigin(resolvedPath)
 	if version == "" {
 		version = resolvedPath
 	}
@@ -169,7 +169,7 @@ func filterIndexByCategory(index *registry.Index, category string) *registry.Ind
 // header always reflects the full index.
 func printIndex(w io.Writer, index *registry.Index, version string, verbose bool, installed map[string]bool, category string) {
 	total := len(index.Agents) + len(index.Roles) + len(index.Contexts) + len(index.Tasks)
-	_, _ = fmt.Fprintf(w, "\nIndex: %s (%d assets)\n\n", version, total)
+	_, _ = fmt.Fprintf(w, "\nIndex: %s (%d modules)\n\n", version, total)
 
 	categories := []struct {
 		name    string

@@ -16,11 +16,11 @@ import (
 	"cuelang.org/go/cue/load"
 	"cuelang.org/go/mod/modconfig"
 
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/detection"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
@@ -97,7 +97,7 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	// loadAgentFromModule receives selected.Key as the agent name, which
 	// flows into agent.Name via extractAgentFields. The slash-form key
 	// (e.g. "claude/interactive") becomes both the agents.cue label and
-	// the settings.cue default_agent value, matching what 'start assets
+	// the settings.cue default_agent value, matching what 'start modules
 	// add' produces so the two writers cannot drift.
 	agent, err := loadAgentFromModule(agentResult.SourceDir, selected.Key, client.Registry())
 	if err != nil {
@@ -112,8 +112,8 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 
 	_, _ = fmt.Fprintf(a.stdout, "Configuration saved to %s\n", configPath)
 
-	// Install default assets (contexts that are commonly needed)
-	a.installDefaultAssets(ctx, client, index)
+	// Install default modules (contexts that are commonly needed)
+	a.installDefaultModules(ctx, client, index)
 
 	_, _ = fmt.Fprintln(a.stdout)
 	_, _ = fmt.Fprintln(a.stdout, "Note: The generated configuration uses generic model aliases.")
@@ -516,9 +516,9 @@ func generateSettingsCUE(defaultAgent string) string {
 	return sb.String()
 }
 
-// installDefaultAssets installs commonly-needed contexts during auto-setup.
+// installDefaultModules installs commonly-needed contexts during auto-setup.
 // Errors are logged to stderr but don't fail the setup process.
-func (a *AutoSetup) installDefaultAssets(ctx context.Context, client *registry.Client, index *registry.Index) {
+func (a *AutoSetup) installDefaultModules(ctx context.Context, client *registry.Client, index *registry.Index) {
 	// Get global config directory
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -527,8 +527,8 @@ func (a *AutoSetup) installDefaultAssets(ctx context.Context, client *registry.C
 	}
 	configDir := paths.Global
 
-	// List of default assets to install (currently just cwd/agents-md)
-	defaultAssets := []struct {
+	// List of default modules to install (currently just cwd/agents-md)
+	defaultModules := []struct {
 		category string
 		name     string
 	}{
@@ -537,7 +537,7 @@ func (a *AutoSetup) installDefaultAssets(ctx context.Context, client *registry.C
 
 	// Load CUE config once for existence checks.
 	// On error with no CUE files (fresh install), cfg is a zero-value cue.Value;
-	// LookupPath on it returns non-existent, so AssetExists correctly returns false.
+	// LookupPath on it returns non-existent, so ModuleExists correctly returns false.
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {
@@ -548,44 +548,40 @@ func (a *AutoSetup) installDefaultAssets(ctx context.Context, client *registry.C
 		}
 	}
 
-	for _, asset := range defaultAssets {
-		// Check if already installed (skip silently)
-		if assets.AssetExists(cfg, asset.category, asset.name) {
+	for _, mod := range defaultModules {
+		if modules.ModuleExists(cfg, mod.category, mod.name) {
 			continue
 		}
 
-		// Look up the asset in the index
 		var entry *registry.IndexEntry
-		switch asset.category {
+		switch mod.category {
 		case "contexts":
-			if e, ok := index.Contexts[asset.name]; ok {
+			if e, ok := index.Contexts[mod.name]; ok {
 				entry = &e
 			}
 		case "roles":
-			if e, ok := index.Roles[asset.name]; ok {
+			if e, ok := index.Roles[mod.name]; ok {
 				entry = &e
 			}
 		case "tasks":
-			if e, ok := index.Tasks[asset.name]; ok {
+			if e, ok := index.Tasks[mod.name]; ok {
 				entry = &e
 			}
 		}
 
 		if entry == nil {
-			_, _ = fmt.Fprintf(a.stderr, "Warning: Default asset %s/%s not found in registry\n", asset.category, asset.name)
+			_, _ = fmt.Fprintf(a.stderr, "Warning: Default module %s/%s not found in registry\n", mod.category, mod.name)
 			continue
 		}
 
-		// Create SearchResult for installation
-		searchResult := assets.SearchResult{
-			Category: asset.category,
-			Name:     asset.name,
+		searchResult := modules.SearchResult{
+			Category: mod.category,
+			Name:     mod.name,
 			Entry:    *entry,
 		}
 
-		// Install the asset (silent on success, log errors)
-		if _, err := assets.InstallAsset(ctx, client, index, searchResult, configDir); err != nil {
-			_, _ = fmt.Fprintf(a.stderr, "Warning: Failed to install %s/%s: %v\n", asset.category, asset.name, err)
+		if _, err := modules.InstallModule(ctx, client, index, searchResult, configDir); err != nil {
+			_, _ = fmt.Fprintf(a.stderr, "Warning: Failed to install %s/%s: %v\n", mod.category, mod.name, err)
 		}
 	}
 }

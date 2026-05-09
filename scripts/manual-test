@@ -142,32 +142,32 @@ cmd "help" "config settings --help" \
 cmd "help" "show --help" \
     "./start show --help"
 
-cmd "help" "assets --help" \
-    "./start assets --help"
+cmd "help" "modules --help" \
+    "./start modules --help"
 
-cmd "help" "assets browse --help" \
-    "./start assets browse --help"
+cmd "help" "modules browse --help" \
+    "./start modules browse --help"
 
-cmd "help" "assets index --help" \
-    "./start assets index --help"
+cmd "help" "modules index --help" \
+    "./start modules index --help"
 
-cmd "help" "assets search --help" \
-    "./start assets search --help"
+cmd "help" "modules search --help" \
+    "./start modules search --help"
 
-cmd "help" "assets add --help" \
-    "./start assets add --help"
+cmd "help" "modules add --help" \
+    "./start modules add --help"
 
-cmd "help" "assets list --help" \
-    "./start assets list --help"
+cmd "help" "modules list --help" \
+    "./start modules list --help"
 
-cmd "help" "assets info --help" \
-    "./start assets info --help"
+cmd "help" "modules info --help" \
+    "./start modules info --help"
 
-cmd "help" "assets update --help" \
-    "./start assets update --help"
+cmd "help" "modules update --help" \
+    "./start modules update --help"
 
-cmd "help" "assets validate --help" \
-    "./start assets validate --help"
+cmd "help" "modules validate --help" \
+    "./start modules validate --help"
 
 cmd "help" "doctor --help" \
     "./start doctor --help"
@@ -559,107 +559,107 @@ cmd "show" "view alias" \
     "./start view claude"
 
 # --------------------------------------------------------------------------
-section "19. Assets Commands"
+section "19. Modules Commands"
 # --------------------------------------------------------------------------
 
-cmd "assets" "assets (no args - lists installed)" \
-    "./start assets"
+cmd "modules" "modules (no args - lists installed)" \
+    "./start modules"
 
-cmd "assets" "assets browse (opens browser)" \
-    "./start assets browse"
+cmd "modules" "modules browse (opens browser)" \
+    "./start modules browse"
 
-cmd "assets" "assets search role" \
-    "./start assets search role"
+cmd "modules" "modules search role" \
+    "./start modules search role"
 
-cmd "assets" "assets search golang" \
-    "./start assets search golang"
+cmd "modules" "modules search golang" \
+    "./start modules search golang"
 
-cmd "assets" "assets search --verbose" \
-    "./start assets search role --verbose"
+cmd "modules" "modules search --verbose" \
+    "./start modules search role --verbose"
 
-cmd "assets" "assets search --json" \
-    "./start assets search role --json"
+cmd "modules" "modules search --json" \
+    "./start modules search role --json"
 
-cmd "assets" "assets search --tag filter" \
-    "./start assets search --tag golang"
+cmd "modules" "modules search --tag filter" \
+    "./start modules search --tag golang"
 
-cmd "assets" "assets search too short (expect error)" \
-    "./start assets search ab"
+cmd "modules" "modules search too short (expect error)" \
+    "./start modules search ab"
 
-cmd "assets" "assets search no results" \
-    "./start assets search xyznonexistent123"
+cmd "modules" "modules search no results" \
+    "./start modules search xyznonexistent123"
 
-cmd "assets" "assets list" \
-    "./start assets list"
+cmd "modules" "modules list" \
+    "./start modules list"
 
-cmd "assets" "assets list agents" \
-    "./start assets list agents"
+cmd "modules" "modules list agents" \
+    "./start modules list agents"
 
-cmd "assets" "assets list roles" \
-    "./start assets list roles"
+cmd "modules" "modules list roles" \
+    "./start modules list roles"
 
-cmd "assets" "assets list contexts" \
-    "./start assets list contexts"
+cmd "modules" "modules list contexts" \
+    "./start modules list contexts"
 
-cmd "assets" "assets list tasks" \
-    "./start assets list tasks"
+cmd "modules" "modules list tasks" \
+    "./start modules list tasks"
 
-cmd "assets" "assets list --json" \
-    "./start assets list --json"
+cmd "modules" "modules list --json" \
+    "./start modules list --json"
 
-cmd "assets" "assets list --verbose" \
-    "./start assets list --verbose"
+cmd "modules" "modules list --verbose" \
+    "./start modules list --verbose"
 
-cmd "assets" "assets index (show catalog)" \
-    "./start assets index"
+cmd "modules" "modules index (show catalog)" \
+    "./start modules index"
 
-cmd "assets" "assets index --json" \
-    "./start assets index --json"
+cmd "modules" "modules index --json" \
+    "./start modules index --json"
 
-cmd "assets" "assets index --export" \
-    "./start assets index --export"
+cmd "modules" "modules index --export" \
+    "./start modules index --export"
 
-cmd "assets" "assets index roles (category filter)" \
-    "./start assets index roles"
+cmd "modules" "modules index roles (category filter)" \
+    "./start modules index roles"
 
-cmd "assets" "assets info (direct path)" \
-    "./start assets info golang/debug"
+cmd "modules" "modules info (direct path)" \
+    "./start modules info golang/debug"
 
-cmd "assets" "assets info (search)" \
-    "./start assets info 'code review'"
+cmd "modules" "modules info (search)" \
+    "./start modules info 'code review'"
 
-cmd "assets" "assets info --json" \
-    "./start assets info --json golang/debug"
+cmd "modules" "modules info --json" \
+    "./start modules info --json golang/debug"
 
-cmd "assets" "assets add (direct path)" \
-    "./start assets add golang/debug"
+cmd "modules" "modules add (direct path)" \
+    "./start modules add golang/debug"
 
-cmd "assets" "assets add --local (install to project config)" \
-    "./start assets add --local golang/debug"
+cmd "modules" "modules add --local (install to project config)" \
+    "./start modules add --local golang/debug"
 
-cmd "assets" "assets update (all)" \
-    "./start assets update"
+cmd "modules" "modules update (all)" \
+    "./start modules update"
 
-cmd "assets" "assets update (specific)" \
-    "./start assets update golang"
+cmd "modules" "modules update (specific)" \
+    "./start modules update golang"
 
-cmd "assets" "assets update --dry-run" \
-    "./start assets update --dry-run"
+cmd "modules" "modules update --dry-run" \
+    "./start modules update --dry-run"
 
-cmd "assets" "assets update --force" \
-    "./start assets update --force"
+cmd "modules" "modules update --force" \
+    "./start modules update --force"
 
-cmd "assets" "assets update --json" \
-    "./start assets update --json"
+cmd "modules" "modules update --json" \
+    "./start modules update --json"
 
-cmd "assets" "assets validate (gate message - no --yes)" \
-    "./start assets validate"
+cmd "modules" "modules validate (gate message - no --yes)" \
+    "./start modules validate"
 
-cmd "assets" "assets validate --yes (network-heavy maintainer check)" \
-    "./start assets validate --yes"
+cmd "modules" "modules validate --yes (network-heavy maintainer check)" \
+    "./start modules validate --yes"
 
-cmd "assets" "assets validate --yes --json" \
-    "./start assets validate --yes --json"
+cmd "modules" "modules validate --yes --json" \
+    "./start modules validate --yes --json"
 
 # --------------------------------------------------------------------------
 section "20. Doctor Command"

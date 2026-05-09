@@ -662,7 +662,7 @@ func CheckCache() SectionResult {
 			Status:  StatusNotFound,
 			Label:   "Index cache",
 			Message: "not found",
-			Fix:     "Run any registry command (e.g., start assets list) to create the cache",
+			Fix:     "Run any registry command (e.g., start modules list) to create the cache",
 		})
 		return section
 	}

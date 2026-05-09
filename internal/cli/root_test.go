@@ -71,25 +71,25 @@ func TestHelpArgLeafCommands(t *testing.T) {
 		args []string
 		want string // expected substring in help output
 	}{
-		// assets subcommands
+		// modules subcommands
 		{
-			name: "assets browse help",
-			args: []string{"assets", "browse", "help"},
+			name: "modules browse help",
+			args: []string{"modules", "browse", "help"},
 			want: "browser",
 		},
 		{
-			name: "assets index help",
-			args: []string{"assets", "index", "help"},
-			want: "asset catalog",
+			name: "modules index help",
+			args: []string{"modules", "index", "help"},
+			want: "module catalog",
 		},
 		{
-			name: "assets list help",
-			args: []string{"assets", "list", "help"},
+			name: "modules list help",
+			args: []string{"modules", "list", "help"},
 			want: "installed",
 		},
 		{
-			name: "assets validate help",
-			args: []string{"assets", "validate", "help"},
+			name: "modules validate help",
+			args: []string{"modules", "validate", "help"},
 			want: "git tags",
 		},
 		// completion subcommands
@@ -153,7 +153,7 @@ func TestHelpArgLeafCommands(t *testing.T) {
 		{
 			name: "config search help",
 			args: []string{"config", "search", "help"},
-			want: "installed assets",
+			want: "installed modules",
 		},
 		{
 			name: "config settings help",
@@ -176,25 +176,25 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"doctor", "help"},
 			want: "Check start installation",
 		},
-		// assets subcommands
+		// modules subcommands
 		{
-			name: "assets add help",
-			args: []string{"assets", "add", "help"},
+			name: "modules add help",
+			args: []string{"modules", "add", "help"},
 			want: "Install",
 		},
 		{
-			name: "assets search help",
-			args: []string{"assets", "search", "help"},
+			name: "modules search help",
+			args: []string{"modules", "search", "help"},
 			want: "registry index",
 		},
 		{
-			name: "assets info help",
-			args: []string{"assets", "info", "help"},
-			want: "asset",
+			name: "modules info help",
+			args: []string{"modules", "info", "help"},
+			want: "module",
 		},
 		{
-			name: "assets update help",
-			args: []string{"assets", "update", "help"},
+			name: "modules update help",
+			args: []string{"modules", "update", "help"},
 			want: "Update installed",
 		},
 	}
@@ -229,15 +229,15 @@ func TestNoArgsOrHelpRejectsInvalidArgs(t *testing.T) {
 	}{
 		{
 			name: "unknown positional arg",
-			args: []string{"assets", "browse", "unexpected"},
+			args: []string{"modules", "browse", "unexpected"},
 		},
 		{
 			name: "help plus extra arg",
-			args: []string{"assets", "browse", "help", "extra"},
+			args: []string{"modules", "browse", "help", "extra"},
 		},
 		{
 			name: "multiple unknown args",
-			args: []string{"assets", "browse", "foo", "bar"},
+			args: []string{"modules", "browse", "foo", "bar"},
 		},
 	}
 

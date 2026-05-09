@@ -47,7 +47,7 @@ var showCategories = []showCategory{
 // showCategoryFor looks up a showCategory by its category string.
 // Returns nil only if category is not in showCategories. All callers pass
 // Category values that originate from iterating showCategories, so nil is
-// unreachable in practice. If a new AssetMatch source is added, ensure its
+// unreachable in practice. If a new ModuleMatch source is added, ensure its
 // Category is drawn from showCategories.
 func showCategoryFor(category string) *showCategory {
 	for i := range showCategories {
@@ -122,9 +122,9 @@ Use --global to restrict output to the global config (~/.config/start/) or
 --local to restrict to the local config (./.start/). These flags are mutually
 exclusive; omitting both shows the effective merged configuration.
 
-Auto-installed assets always land in global config; the post-install lookup
-widens to merged scope so a --local invocation can still see the new asset.
-To inspect strictly within --local, ensure the asset is already installed.`,
+Auto-installed modules always land in global config; the post-install lookup
+widens to merged scope so a --local invocation can still see the new module.
+To inspect strictly within --local, ensure the module is already installed.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runShow,
 	}
@@ -306,8 +306,8 @@ func runShowSearch(cmd *cobra.Command, name string) error {
 	// effectiveScope widens to merged after auto-install regardless of the
 	// user's original --local/--global flag. autoInstall always writes to
 	// global config (resolve.go's autoInstall), so merged is the smallest
-	// scope guaranteed to see the new asset. Under --global the lookup
-	// result is identical (asset only exists in global, merged is a
+	// scope guaranteed to see the new module. Under --global the lookup
+	// result is identical (module only exists in global, merged is a
 	// superset); under --local the widening is required for the lookup to
 	// succeed and is signalled to the user via notifyScopeWidenedIfLocal.
 	effectiveScope := scope
@@ -406,7 +406,7 @@ func prepareShow(name string, scope config.Scope, cueKey, itemType string) (Show
 // auto-install during resolution silently widened --local resolution to
 // merged scope. Auto-installs always land in global config (resolve.go's
 // autoInstall), so a --local invocation that triggers an install will then
-// look the asset up against merged config — the user's literal --local
+// look the module up against merged config — the user's literal --local
 // contract is bypassed. The notice gives scripted callers a grep-able
 // signal; no-op when --local was not set or when --quiet is in effect.
 // Called from runRead and runShowSearch after the post-install reload.
@@ -415,7 +415,7 @@ func prepareShow(name string, scope config.Scope, cueKey, itemType string) (Show
 // notice fires for --global by design: the install lands in global config
 // (matching the user's requested scope), so the widened lookup is a no-op
 // in the common case. The corner case where it matters — a same-named
-// local asset whose fields unify with the freshly installed global one —
+// local module whose fields unify with the freshly installed global one —
 // is narrow enough that routine notices on every --global install would
 // trade silent surprise for routine noise. If that edge case becomes a
 // real problem, narrow r.reloadConfig to honour the original scope.

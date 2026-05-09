@@ -109,7 +109,7 @@ func TestCheckVersion_WithCustomIndexPath(t *testing.T) {
 		GoVersion:    "go1.23.0",
 		Platform:     "linux/amd64",
 		IndexVersion: "v0.3.2",
-		IndexPath:    "github.com/example/custom-assets/index@v0",
+		IndexPath:    "github.com/example/custom-library/index@v0",
 	}
 
 	section := CheckVersion(info)
@@ -125,8 +125,8 @@ func TestCheckVersion_WithCustomIndexPath(t *testing.T) {
 		t.Fatal("CheckVersion() missing 'Index Source' result")
 		return
 	}
-	if sourceResult.Message != "github.com/example/custom-assets/index@v0" {
-		t.Errorf("Index Source message = %q, want %q", sourceResult.Message, "github.com/example/custom-assets/index@v0")
+	if sourceResult.Message != "github.com/example/custom-library/index@v0" {
+		t.Errorf("Index Source message = %q, want %q", sourceResult.Message, "github.com/example/custom-library/index@v0")
 	}
 	if sourceResult.Status != StatusInfo {
 		t.Errorf("Index Source status = %v, want StatusInfo", sourceResult.Status)

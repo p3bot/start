@@ -309,7 +309,7 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		return err
 	}
 
-	// Phase 2: Resolve asset flags
+	// Phase 2: Resolve module flags
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
 
 	// Resolve --agent flag

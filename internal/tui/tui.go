@@ -22,7 +22,7 @@ var (
 	ColorBlue      = color.New(color.FgBlue)
 	ColorHiYellow  = color.New(color.FgHiYellow)
 
-	// Asset category colours
+	// Module category colours
 	ColorAgents    = color.New(color.FgBlue)
 	ColorRoles     = color.New(color.FgGreen)
 	ColorContexts  = color.New(color.FgCyan)
@@ -34,7 +34,7 @@ var (
 	ColorRegistry  = color.New(color.FgYellow)
 )
 
-// CategoryColor returns the colour for an asset category.
+// CategoryColor returns the colour for a module category.
 // Matching is case-insensitive.
 func CategoryColor(category string) *color.Color {
 	switch strings.ToLower(category) {

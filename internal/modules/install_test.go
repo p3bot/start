@@ -1,4 +1,4 @@
-package assets
+package modules
 
 import (
 	"os"
@@ -35,14 +35,14 @@ func parseCUEStruct(t *testing.T, src string) ast.Expr {
 	return f.Decls[0].(*ast.Field).Value
 }
 
-// TestAssetExists tests the AssetExists function.
-func TestAssetExists(t *testing.T) {
+// TestModuleExists tests the ModuleExists function.
+func TestModuleExists(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary config directory
 	configDir := t.TempDir()
 
-	// Write a contexts.cue file with an existing asset
+	// Write a contexts.cue file with an existing module
 	contextsFile := filepath.Join(configDir, "contexts.cue")
 	existingContent := `// start configuration
 contexts: {
@@ -67,44 +67,44 @@ contexts: {
 	}
 
 	tests := []struct {
-		name      string
-		category  string
-		assetName string
-		want      bool
+		name       string
+		category   string
+		moduleName string
+		want       bool
 	}{
 		{
-			name:      "existing asset with quotes",
-			category:  "contexts",
-			assetName: "cwd/agents-md",
-			want:      true,
+			name:       "existing module with quotes",
+			category:   "contexts",
+			moduleName: "cwd/agents-md",
+			want:       true,
 		},
 		{
-			name:      "non-existent asset",
-			category:  "contexts",
-			assetName: "cwd/other",
-			want:      false,
+			name:       "non-existent module",
+			category:   "contexts",
+			moduleName: "cwd/other",
+			want:       false,
 		},
 		{
-			name:      "different category not found",
-			category:  "roles",
-			assetName: "cwd/agents-md",
-			want:      false,
+			name:       "different category not found",
+			category:   "roles",
+			moduleName: "cwd/agents-md",
+			want:       false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := AssetExists(cfg, tt.category, tt.assetName)
+			got := ModuleExists(cfg, tt.category, tt.moduleName)
 			if got != tt.want {
-				t.Errorf("AssetExists() = %v, want %v", got, tt.want)
+				t.Errorf("ModuleExists() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestWriteAssetToConfig_NewCategory tests adding an asset with a category
+// TestWriteModuleToConfig_NewCategory tests adding a module with a category
 // that doesn't exist yet in an existing file.
-func TestWriteAssetToConfig_NewCategory(t *testing.T) {
+func TestWriteModuleToConfig_NewCategory(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "tasks.cue")
@@ -120,19 +120,19 @@ contexts: {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "tasks",
 		Name:     "new/task",
 		Entry:    registry.IndexEntry{Module: "github.com/test/tasks/new/task@v0"},
 	}
-	assetContent := parseCUEStruct(t, `{
+	moduleContent := parseCUEStruct(t, `{
 	origin: "github.com/test/tasks/new/task@v0.1.0"
 	description: "A new task"
 }`)
 
-	err := writeAssetToConfig(configPath, asset, assetContent, asset.Entry.Module)
+	err := writeModuleToConfig(configPath, module, moduleContent, module.Entry.Module)
 	if err != nil {
-		t.Fatalf("writeAssetToConfig() error: %v", err)
+		t.Fatalf("writeModuleToConfig() error: %v", err)
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -146,19 +146,19 @@ contexts: {
 		t.Error("result missing existing contexts block")
 	}
 	if !strings.Contains(result, "existing:") {
-		t.Error("result missing existing asset")
+		t.Error("result missing existing module")
 	}
 	// Should have the new tasks block
 	if !strings.Contains(result, "tasks:") {
 		t.Error("result missing new tasks category")
 	}
 	if !strings.Contains(result, `"new/task":`) {
-		t.Error("result missing new task asset")
+		t.Error("result missing new task module")
 	}
 }
 
-// TestUpdateAssetInConfig tests the UpdateAssetInConfig function.
-func TestUpdateAssetInConfig(t *testing.T) {
+// TestUpdateModuleInConfig tests the UpdateModuleInConfig function.
+func TestUpdateModuleInConfig(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary directory
@@ -186,10 +186,10 @@ contexts: {
 	required: true
 }`)
 
-	// Update the asset
-	err := UpdateAssetInConfig(configPath, "contexts", "cwd/agents-md", newContent)
+	// Update the module
+	err := UpdateModuleInConfig(configPath, "contexts", "cwd/agents-md", newContent)
 	if err != nil {
-		t.Fatalf("UpdateAssetInConfig() error: %v", err)
+		t.Fatalf("UpdateModuleInConfig() error: %v", err)
 	}
 
 	// Read back and verify
@@ -220,9 +220,9 @@ contexts: {
 	}
 }
 
-// TestUpdateAssetInConfig_CategoryNotFound tests that updating an asset
+// TestUpdateModuleInConfig_CategoryNotFound tests that updating a module
 // in a non-existent category returns an error.
-func TestUpdateAssetInConfig_CategoryNotFound(t *testing.T) {
+func TestUpdateModuleInConfig_CategoryNotFound(t *testing.T) {
 	t.Parallel()
 
 	configPath := filepath.Join(t.TempDir(), "contexts.cue")
@@ -237,7 +237,7 @@ func TestUpdateAssetInConfig_CategoryNotFound(t *testing.T) {
 	}
 
 	newContent := parseCUEStruct(t, `{origin: "new"}`)
-	err := UpdateAssetInConfig(configPath, "roles", "existing", newContent)
+	err := UpdateModuleInConfig(configPath, "roles", "existing", newContent)
 	if err == nil {
 		t.Fatal("expected error for non-existent category, got nil")
 	}
@@ -246,15 +246,15 @@ func TestUpdateAssetInConfig_CategoryNotFound(t *testing.T) {
 	}
 }
 
-// TestWriteAssetToConfig_RoundTrip verifies that written config files have
+// TestWriteModuleToConfig_RoundTrip verifies that written config files have
 // correct CUE structure by parsing the output back and checking paths.
-func TestWriteAssetToConfig_RoundTrip(t *testing.T) {
+func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 	t.Parallel()
 
 	ctx := cuecontext.New()
 	configPath := filepath.Join(t.TempDir(), "contexts.cue")
 
-	// Write first asset to new file
+	// Write first module to new file
 	first := SearchResult{
 		Category: "contexts",
 		Name:     "cwd/agents-md",
@@ -266,11 +266,11 @@ func TestWriteAssetToConfig_RoundTrip(t *testing.T) {
 	tags: ["agents", "cwd"]
 	default: true
 }`)
-	if err := writeAssetToConfig(configPath, first, firstContent, first.Entry.Module); err != nil {
+	if err := writeModuleToConfig(configPath, first, firstContent, first.Entry.Module); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
-	// Write second asset to same file
+	// Write second module to same file
 	second := SearchResult{
 		Category: "contexts",
 		Name:     "cwd/project",
@@ -281,7 +281,7 @@ func TestWriteAssetToConfig_RoundTrip(t *testing.T) {
 	description: "Project context"
 	required: false
 }`)
-	if err := writeAssetToConfig(configPath, second, secondContent, second.Entry.Module); err != nil {
+	if err := writeModuleToConfig(configPath, second, secondContent, second.Entry.Module); err != nil {
 		t.Fatalf("second write: %v", err)
 	}
 
@@ -295,37 +295,37 @@ func TestWriteAssetToConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("output is not valid CUE: %v", v.Err())
 	}
 
-	// Verify first asset at correct path
+	// Verify first module at correct path
 	origin1, err := v.LookupPath(cue.ParsePath(`contexts."cwd/agents-md".origin`)).String()
 	if err != nil {
-		t.Fatalf("looking up first asset origin: %v", err)
+		t.Fatalf("looking up first module origin: %v", err)
 	}
 	if origin1 != "github.com/test/contexts/cwd/agents-md@v0.1.0" {
-		t.Errorf("first asset origin = %q, want v0.1.0 path", origin1)
+		t.Errorf("first module origin = %q, want v0.1.0 path", origin1)
 	}
 
 	desc1, _ := v.LookupPath(cue.ParsePath(`contexts."cwd/agents-md".description`)).String()
 	if desc1 != "AGENTS.md context" {
-		t.Errorf("first asset description = %q", desc1)
+		t.Errorf("first module description = %q", desc1)
 	}
 
 	default1, _ := v.LookupPath(cue.ParsePath(`contexts."cwd/agents-md".default`)).Bool()
 	if !default1 {
-		t.Error("first asset default should be true")
+		t.Error("first module default should be true")
 	}
 
-	// Verify second asset at correct path
+	// Verify second module at correct path
 	origin2, err := v.LookupPath(cue.ParsePath(`contexts."cwd/project".origin`)).String()
 	if err != nil {
-		t.Fatalf("looking up second asset origin: %v", err)
+		t.Fatalf("looking up second module origin: %v", err)
 	}
 	if origin2 != "github.com/test/contexts/cwd/project@v0.2.0" {
-		t.Errorf("second asset origin = %q, want v0.2.0 path", origin2)
+		t.Errorf("second module origin = %q, want v0.2.0 path", origin2)
 	}
 
 	required2, _ := v.LookupPath(cue.ParsePath(`contexts."cwd/project".required`)).Bool()
 	if required2 {
-		t.Error("second asset required should be false")
+		t.Error("second module required should be false")
 	}
 
 	// Verify tags list round-trips correctly
@@ -344,8 +344,8 @@ func TestWriteAssetToConfig_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestWriteAssetToConfig tests the writeAssetToConfig function.
-func TestWriteAssetToConfig(t *testing.T) {
+// TestWriteModuleToConfig tests the writeModuleToConfig function.
+func TestWriteModuleToConfig(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -354,8 +354,8 @@ func TestWriteAssetToConfig(t *testing.T) {
 		name            string
 		existingFile    string
 		existingContent string
-		asset           SearchResult
-		assetContent    string
+		module          SearchResult
+		moduleContent   string
 		wantErr         bool
 		wantContains    []string
 		wantExcludes    []string
@@ -363,14 +363,14 @@ func TestWriteAssetToConfig(t *testing.T) {
 		{
 			name:         "new file",
 			existingFile: "",
-			asset: SearchResult{
+			module: SearchResult{
 				Category: "contexts",
 				Name:     "cwd/agents-md",
 				Entry: registry.IndexEntry{
 					Module: "github.com/test/contexts/cwd/agents-md@v0",
 				},
 			},
-			assetContent: `{
+			moduleContent: `{
 	origin: "github.com/test/contexts/cwd/agents-md@v0.1.0"
 	description: "Test context"
 	file: "AGENTS.md"
@@ -378,7 +378,7 @@ func TestWriteAssetToConfig(t *testing.T) {
 			wantErr: false,
 			wantContains: []string{
 				"// start configuration",
-				"// Managed by 'start assets add'",
+				"// Managed by 'start modules add'",
 				"contexts:",
 				`"cwd/agents-md":`,
 				"origin:",
@@ -389,28 +389,28 @@ func TestWriteAssetToConfig(t *testing.T) {
 			name:         "append to existing file",
 			existingFile: "contexts.cue",
 			existingContent: `// start configuration
-// Managed by 'start assets add'
+// Managed by 'start modules add'
 contexts: {
 	"other": {
 		origin: "test"
 	}
 }
 `,
-			asset: SearchResult{
+			module: SearchResult{
 				Category: "contexts",
 				Name:     "cwd/agents-md",
 				Entry: registry.IndexEntry{
 					Module: "github.com/test/contexts/cwd/agents-md@v0",
 				},
 			},
-			assetContent: `{
+			moduleContent: `{
 	origin: "github.com/test/contexts/cwd/agents-md@v0.1.0"
 	description: "Test context"
 }`,
 			wantErr: false,
 			wantContains: []string{
 				"// start configuration",
-				"// Managed by 'start assets add'",
+				"// Managed by 'start modules add'",
 				"contexts:",
 				"other:",
 				`"cwd/agents-md":`,
@@ -421,28 +421,28 @@ contexts: {
 			name:            "empty existing file",
 			existingFile:    "contexts.cue",
 			existingContent: "",
-			asset: SearchResult{
+			module: SearchResult{
 				Category: "contexts",
 				Name:     "cwd/agents-md",
 				Entry: registry.IndexEntry{
 					Module: "github.com/test/contexts/cwd/agents-md@v0",
 				},
 			},
-			assetContent: `{
+			moduleContent: `{
 	origin: "github.com/test/contexts/cwd/agents-md@v0.1.0"
 	description: "Test context"
 }`,
 			wantErr: false,
 			wantContains: []string{
 				"// start configuration",
-				"// Managed by 'start assets add'",
+				"// Managed by 'start modules add'",
 				"contexts:",
 				`"cwd/agents-md":`,
 				"v0.1.0",
 			},
 		},
 		{
-			name:         "duplicate asset updates in place",
+			name:         "duplicate module updates in place",
 			existingFile: "contexts.cue",
 			existingContent: `contexts: {
 	"cwd/agents-md": {
@@ -451,11 +451,11 @@ contexts: {
 	}
 }
 `,
-			asset: SearchResult{
+			module: SearchResult{
 				Category: "contexts",
 				Name:     "cwd/agents-md",
 			},
-			assetContent: `{
+			moduleContent: `{
 	origin: "new-origin"
 	description: "New description"
 }`,
@@ -485,7 +485,7 @@ contexts: {
 					t.Fatalf("Failed to write existing file: %v", err)
 				}
 			} else {
-				configFileName, ok := internalcue.ConfigFiles[tt.asset.Category]
+				configFileName, ok := internalcue.ConfigFiles[tt.module.Category]
 				if !ok {
 					configFileName = internalcue.ConfigFiles[internalcue.KeySettings]
 				}
@@ -495,18 +495,18 @@ contexts: {
 				}
 			}
 
-			content := parseCUEStruct(t, tt.assetContent)
-			err := writeAssetToConfig(configPath, tt.asset, content, tt.asset.Entry.Module)
+			content := parseCUEStruct(t, tt.moduleContent)
+			err := writeModuleToConfig(configPath, tt.module, content, tt.module.Entry.Module)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Error("writeAssetToConfig() expected error, got nil")
+					t.Error("writeModuleToConfig() expected error, got nil")
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("writeAssetToConfig() unexpected error: %v", err)
+				t.Errorf("writeModuleToConfig() unexpected error: %v", err)
 				return
 			}
 
@@ -519,21 +519,21 @@ contexts: {
 			result := string(data)
 			for _, want := range tt.wantContains {
 				if !strings.Contains(result, want) {
-					t.Errorf("writeAssetToConfig() result missing %q\nGot:\n%s", want, result)
+					t.Errorf("writeModuleToConfig() result missing %q\nGot:\n%s", want, result)
 				}
 			}
 			for _, exclude := range tt.wantExcludes {
 				if strings.Contains(result, exclude) {
-					t.Errorf("writeAssetToConfig() result should not contain %q\nGot:\n%s", exclude, result)
+					t.Errorf("writeModuleToConfig() result should not contain %q\nGot:\n%s", exclude, result)
 				}
 			}
 		})
 	}
 }
 
-// TestWriteAssetToConfig_BracesInStringValues verifies that assets are inserted
+// TestWriteModuleToConfig_BracesInStringValues verifies that modules are inserted
 // into the correct category block when multiple top-level categories exist.
-func TestWriteAssetToConfig_BracesInStringValues(t *testing.T) {
+func TestWriteModuleToConfig_BracesInStringValues(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "contexts.cue")
@@ -553,21 +553,21 @@ settings: {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "contexts",
-		Name:     "new-asset",
+		Name:     "new-module",
 		Entry: registry.IndexEntry{
-			Module: "github.com/test/contexts/new-asset@v0",
+			Module: "github.com/test/contexts/new-module@v0",
 		},
 	}
-	assetContent := parseCUEStruct(t, `{
-	origin: "github.com/test/contexts/new-asset@v0.1.0"
-	description: "New asset"
+	moduleContent := parseCUEStruct(t, `{
+	origin: "github.com/test/contexts/new-module@v0.1.0"
+	description: "New module"
 }`)
 
-	err := writeAssetToConfig(configPath, asset, assetContent, asset.Entry.Module)
+	err := writeModuleToConfig(configPath, module, moduleContent, module.Entry.Module)
 	if err != nil {
-		t.Fatalf("writeAssetToConfig() error: %v", err)
+		t.Fatalf("writeModuleToConfig() error: %v", err)
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -577,24 +577,24 @@ settings: {
 
 	result := string(data)
 
-	// The result should contain both the existing and new assets
+	// The result should contain both the existing and new modules
 	if !strings.Contains(result, "existing:") {
-		t.Error("result missing existing asset")
+		t.Error("result missing existing module")
 	}
-	if !strings.Contains(result, `"new-asset":`) {
-		t.Error("result missing new asset")
+	if !strings.Contains(result, `"new-module":`) {
+		t.Error("result missing new module")
 	}
 
-	// Verify the new asset appears inside contexts: {} block, not settings: {} block.
+	// Verify the new module appears inside contexts: {} block, not settings: {} block.
 	settingsPos := strings.Index(result, "settings:")
-	newAssetPos := strings.Index(result, `"new-asset":`)
-	if settingsPos == -1 || newAssetPos == -1 {
-		t.Fatal("cannot find settings or new-asset in result")
+	newModulePos := strings.Index(result, `"new-module":`)
+	if settingsPos == -1 || newModulePos == -1 {
+		t.Fatal("cannot find settings or new-module in result")
 	}
-	if newAssetPos > settingsPos {
-		t.Errorf("BUG: new asset was inserted into settings block instead of contexts block\n"+
-			"new-asset at pos %d, settings at pos %d\nResult:\n%s",
-			newAssetPos, settingsPos, result)
+	if newModulePos > settingsPos {
+		t.Errorf("BUG: new module was inserted into settings block instead of contexts block\n"+
+			"new-module at pos %d, settings at pos %d\nResult:\n%s",
+			newModulePos, settingsPos, result)
 	}
 }
 
@@ -767,9 +767,9 @@ func TestResolveRoleName(t *testing.T) {
 	}
 }
 
-// TestFormatAssetStruct_RoleNameOverride tests that formatAssetStruct replaces
+// TestFormatModuleStruct_RoleNameOverride tests that formatModuleStruct replaces
 // an inline role struct with a string reference when roleName is provided.
-func TestFormatAssetStruct_RoleNameOverride(t *testing.T) {
+func TestFormatModuleStruct_RoleNameOverride(t *testing.T) {
 	t.Parallel()
 
 	// Build a CUE value with a struct role field
@@ -821,9 +821,9 @@ func TestFormatAssetStruct_RoleNameOverride(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			astResult, err := formatAssetStruct(v, "tasks", "github.com/test@v0.1.0", tt.roleName)
+			astResult, err := formatModuleStruct(v, "tasks", "github.com/test@v0.1.0", tt.roleName)
 			if err != nil {
-				t.Fatalf("formatAssetStruct() error: %v", err)
+				t.Fatalf("formatModuleStruct() error: %v", err)
 			}
 			result := formatAST(t, astResult)
 
@@ -852,14 +852,14 @@ func createTestModule(t *testing.T, pkgName, cueContent string) string {
 	if err := os.MkdirAll(modDir, 0755); err != nil {
 		t.Fatalf("creating cue.mod dir: %v", err)
 	}
-	moduleCue := `module: "test.example/asset@v0"
+	moduleCue := `module: "test.example/module@v0"
 language: version: "v0.15.1"
 `
 	if err := os.WriteFile(filepath.Join(modDir, "module.cue"), []byte(moduleCue), 0644); err != nil {
 		t.Fatalf("writing module.cue: %v", err)
 	}
 
-	// Create the asset definition file
+	// Create the module definition file
 	cueFile := filepath.Join(moduleDir, pkgName+".cue")
 	if err := os.WriteFile(cueFile, []byte(cueContent), 0644); err != nil {
 		t.Fatalf("writing %s.cue: %v", pkgName, err)
@@ -868,7 +868,7 @@ language: version: "v0.15.1"
 	return moduleDir
 }
 
-func TestExtractAssetContent_Task(t *testing.T) {
+func TestExtractModuleContent_Task(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "task", `package task
@@ -880,19 +880,19 @@ task: {
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "tasks",
 		Name:     "golang/debug",
 	}
 
-	astResult, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/asset@v0.1.0", "")
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/module@v0.1.0", "")
 	if err != nil {
-		t.Fatalf("ExtractAssetContent() error: %v", err)
+		t.Fatalf("ExtractModuleContent() error: %v", err)
 	}
 	result := formatAST(t, astResult)
 
 	// Should contain origin from originPath
-	if !strings.Contains(result, "origin:") || !strings.Contains(result, `"test.example/asset@v0.1.0"`) {
+	if !strings.Contains(result, "origin:") || !strings.Contains(result, `"test.example/module@v0.1.0"`) {
 		t.Errorf("missing origin field\nGot:\n%s", result)
 	}
 	// Should contain description
@@ -909,7 +909,7 @@ task: {
 	}
 }
 
-func TestExtractAssetContent_Role(t *testing.T) {
+func TestExtractModuleContent_Role(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "role", `package role
@@ -921,14 +921,14 @@ role: {
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "roles",
 		Name:     "golang/expert",
 	}
 
-	astResult, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/role@v0.2.0", "")
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/role@v0.2.0", "")
 	if err != nil {
-		t.Fatalf("ExtractAssetContent() error: %v", err)
+		t.Fatalf("ExtractModuleContent() error: %v", err)
 	}
 	result := formatAST(t, astResult)
 
@@ -943,7 +943,7 @@ role: {
 	}
 }
 
-func TestExtractAssetContent_Agent(t *testing.T) {
+func TestExtractModuleContent_Agent(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "agent", `package agent
@@ -960,14 +960,14 @@ agent: {
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "agents",
 		Name:     "claude",
 	}
 
-	astResult, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/agent@v0.1.0", "")
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/agent@v0.1.0", "")
 	if err != nil {
-		t.Fatalf("ExtractAssetContent() error: %v", err)
+		t.Fatalf("ExtractModuleContent() error: %v", err)
 	}
 	result := formatAST(t, astResult)
 
@@ -982,7 +982,7 @@ agent: {
 	}
 }
 
-func TestExtractAssetContent_RoleNameOverride(t *testing.T) {
+func TestExtractModuleContent_RoleNameOverride(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "task", `package task
@@ -997,14 +997,14 @@ task: {
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "tasks",
 		Name:     "review",
 	}
 
-	astResult, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/task@v0.1.0", "golang/reviewer")
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/task@v0.1.0", "golang/reviewer")
 	if err != nil {
-		t.Fatalf("ExtractAssetContent() error: %v", err)
+		t.Fatalf("ExtractModuleContent() error: %v", err)
 	}
 	result := formatAST(t, astResult)
 
@@ -1018,31 +1018,31 @@ task: {
 	}
 }
 
-func TestExtractAssetContent_NoAssetDefinition(t *testing.T) {
+func TestExtractModuleContent_NoModuleDefinition(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "other", `package other
 
 something: {
-	description: "Not an asset"
+	description: "Not a module"
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "tasks",
 		Name:     "missing",
 	}
 
-	_, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/bad@v0", "")
+	_, err := ExtractModuleContent(moduleDir, module, nil, "test.example/bad@v0", "")
 	if err == nil {
-		t.Fatal("expected error for missing asset definition")
+		t.Fatal("expected error for missing module definition")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' in error, got: %v", err)
 	}
 }
 
-func TestExtractAssetContent_MultilinePrompt(t *testing.T) {
+func TestExtractModuleContent_MultilinePrompt(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "task", `package task
@@ -1057,14 +1057,14 @@ task: {
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "tasks",
 		Name:     "multiline",
 	}
 
-	astResult, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/task@v0.1.0", "")
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/task@v0.1.0", "")
 	if err != nil {
-		t.Fatalf("ExtractAssetContent() error: %v", err)
+		t.Fatalf("ExtractModuleContent() error: %v", err)
 	}
 	result := formatAST(t, astResult)
 
@@ -1076,7 +1076,7 @@ task: {
 	}
 }
 
-func TestExtractAssetContent_OptionalRoleField(t *testing.T) {
+func TestExtractModuleContent_OptionalRoleField(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "role", `package role
@@ -1088,14 +1088,14 @@ role: {
 }
 `)
 
-	asset := SearchResult{
+	module := SearchResult{
 		Category: "roles",
 		Name:     "optional-role",
 	}
 
-	astResult, err := ExtractAssetContent(moduleDir, asset, nil, "test.example/role@v0.1.0", "")
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/role@v0.1.0", "")
 	if err != nil {
-		t.Fatalf("ExtractAssetContent() error: %v", err)
+		t.Fatalf("ExtractModuleContent() error: %v", err)
 	}
 	result := formatAST(t, astResult)
 
@@ -1110,7 +1110,7 @@ func TestGetInstalledOrigin(t *testing.T) {
 
 	configDir := t.TempDir()
 
-	// Write a contexts.cue file with an asset that has an origin
+	// Write a contexts.cue file with a module that has an origin
 	contextsFile := filepath.Join(configDir, "contexts.cue")
 	content := `// start configuration
 contexts: {
@@ -1137,40 +1137,40 @@ contexts: {
 	}
 
 	tests := []struct {
-		name      string
-		category  string
-		assetName string
-		want      string
+		name       string
+		category   string
+		moduleName string
+		want       string
 	}{
 		{
-			name:      "asset with origin",
-			category:  "contexts",
-			assetName: "cwd/agents-md",
-			want:      "github.com/test/contexts/cwd/agents-md@v0.1.0",
+			name:       "module with origin",
+			category:   "contexts",
+			moduleName: "cwd/agents-md",
+			want:       "github.com/test/contexts/cwd/agents-md@v0.1.0",
 		},
 		{
-			name:      "asset without origin",
-			category:  "contexts",
-			assetName: "cwd/env",
-			want:      "",
+			name:       "module without origin",
+			category:   "contexts",
+			moduleName: "cwd/env",
+			want:       "",
 		},
 		{
-			name:      "non-existent asset",
-			category:  "contexts",
-			assetName: "does/not-exist",
-			want:      "",
+			name:       "non-existent module",
+			category:   "contexts",
+			moduleName: "does/not-exist",
+			want:       "",
 		},
 		{
-			name:      "non-existent category",
-			category:  "roles",
-			assetName: "cwd/agents-md",
-			want:      "",
+			name:       "non-existent category",
+			category:   "roles",
+			moduleName: "cwd/agents-md",
+			want:       "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetInstalledOrigin(cfg, tt.category, tt.assetName)
+			got := GetInstalledOrigin(cfg, tt.category, tt.moduleName)
 			if got != tt.want {
 				t.Errorf("GetInstalledOrigin() = %q, want %q", got, tt.want)
 			}
@@ -1305,8 +1305,8 @@ func TestVersionFromOrigin(t *testing.T) {
 		origin string
 		want   string
 	}{
-		{"github.com/test/asset@v0.1.1", "v0.1.1"},
-		{"github.com/test/asset@v0", "v0"},
+		{"github.com/test/module@v0.1.1", "v0.1.1"},
+		{"github.com/test/module@v0", "v0"},
 		{"no-version", ""},
 		{"", ""},
 	}
@@ -1328,8 +1328,8 @@ func TestModuleFromOrigin(t *testing.T) {
 		origin string
 		want   string
 	}{
-		{"github.com/test/asset@v0.1.1", "github.com/test/asset"},
-		{"github.com/test/asset@v0", "github.com/test/asset"},
+		{"github.com/test/module@v0.1.1", "github.com/test/module"},
+		{"github.com/test/module@v0", "github.com/test/module"},
 		{"no-version", "no-version"},
 		{"", ""},
 	}

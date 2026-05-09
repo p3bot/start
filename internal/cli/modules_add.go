@@ -11,47 +11,47 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 	"golang.org/x/mod/semver"
 )
 
-// errNoAssets is returned by installAsset when no matching assets are found.
-var errNoAssets = errors.New("no assets found")
+// errNoModules is returned by installModule when no matching modules are found.
+var errNoModules = errors.New("no modules found")
 
 // NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with assets_list.go, assets_search.go, assets_update.go, and
-// assets_index.go. This duplication is accepted - each command uses the results
+// loading patterns with modules_list.go, modules_search.go, modules_update.go, and
+// modules_index.go. This duplication is accepted - each command uses the results
 // differently and a shared helper would couple them for modest line savings.
 
-// addAssetsAddCommand adds the add subcommand to the assets command.
-func addAssetsAddCommand(parent *cobra.Command) {
+// addModulesAddCommand adds the add subcommand to the modules command.
+func addModulesAddCommand(parent *cobra.Command) {
 	addCmd := &cobra.Command{
 		Use:     "add [query]...",
 		Aliases: []string{"install"},
-		Short:   "Install assets from registry",
-		Long: `Install one or more assets from the CUE registry to your configuration.
+		Short:   "Install modules from registry",
+		Long: `Install one or more modules from the CUE registry to your configuration.
 
-Searches the registry index for matching assets. If multiple matches are found,
+Searches the registry index for matching modules. If multiple matches are found,
 prompts for selection. Use a direct path (e.g., "golang/code-review") for exact match.
 
-Multiple queries can be provided to install several assets at once.
+Multiple queries can be provided to install several modules at once.
 
 By default, installs to global config (~/.config/start/).
 Use --local to install to project config (./.start/).`,
 		Args: cobra.MinimumNArgs(0),
-		RunE: runAssetsAdd,
+		RunE: runModulesAdd,
 	}
 
 	parent.AddCommand(addCmd)
 }
 
-// runAssetsAdd searches for and installs one or more assets.
-func runAssetsAdd(cmd *cobra.Command, args []string) error {
+// runModulesAdd searches for and installs one or more modules.
+func runModulesAdd(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func runAssetsAdd(cmd *cobra.Command, args []string) error {
 
 	// Fetch index
 	prog.Update("Fetching index...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveAssetsIndexPath())
+	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
 	if err != nil {
 		return fmt.Errorf("fetching index: %w", err)
 	}
@@ -128,7 +128,7 @@ func runAssetsAdd(cmd *cobra.Command, args []string) error {
 
 	// Load CUE config once for existence checks across all queries.
 	// On error with no CUE files (fresh install), cfg is a zero-value cue.Value;
-	// LookupPath on it returns non-existent, so AssetExists correctly returns false.
+	// LookupPath on it returns non-existent, so ModuleExists correctly returns false.
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {
@@ -138,12 +138,12 @@ func runAssetsAdd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Install each queried asset
+	// Install each queried module
 	var errs []error
 	for _, query := range args {
-		if err := installAsset(ctx, cmd, prog, client, index, query, configDir, scopeName, flags, cfg); err != nil {
-			if prompted && len(args) == 1 && errors.Is(err, errNoAssets) {
-				_, _ = fmt.Fprintf(w, "No assets found matching %q\n", query)
+		if err := installModule(ctx, cmd, prog, client, index, query, configDir, scopeName, flags, cfg); err != nil {
+			if prompted && len(args) == 1 && errors.Is(err, errNoModules) {
+				_, _ = fmt.Fprintf(w, "No modules found matching %q\n", query)
 				return nil
 			}
 			errs = append(errs, fmt.Errorf("%s: %w", query, err))
@@ -156,26 +156,26 @@ func runAssetsAdd(cmd *cobra.Command, args []string) error {
 	return errors.Join(errs...)
 }
 
-// installAsset searches for, selects, and installs a single asset.
-func installAsset(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, client *registry.Client, index *registry.Index, query, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
+// installModule searches for, selects, and installs a single module.
+func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, client *registry.Client, index *registry.Index, query, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
 	w := cmd.OutOrStdout()
 
-	// Search for matching assets
-	results, err := assets.SearchIndex(index, query, nil)
+	// Search for matching modules
+	results, err := modules.SearchIndex(index, query, nil)
 	if err != nil {
 		return err
 	}
 	if len(results) == 0 {
-		return fmt.Errorf("%w matching %q", errNoAssets, query)
+		return fmt.Errorf("%w matching %q", errNoModules, query)
 	}
 
-	// Select asset(s)
-	var selections []assets.SearchResult
+	// Select module(s)
+	var selections []modules.SearchResult
 	if len(results) == 1 {
 		selections = results
 	} else {
 		var err error
-		selections, err = promptAssetSelection(w, cmd.InOrStdin(), results, cfg)
+		selections, err = promptModuleSelection(w, cmd.InOrStdin(), results, cfg)
 		if err != nil {
 			return err
 		}
@@ -184,10 +184,10 @@ func installAsset(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, c
 		}
 	}
 
-	// Install each selected asset
+	// Install each selected module
 	var errs []error
 	for _, selected := range selections {
-		if err := installSingleAsset(ctx, w, prog, client, index, selected, configDir, scopeName, flags, cfg); err != nil {
+		if err := installSingleModule(ctx, w, prog, client, index, selected, configDir, scopeName, flags, cfg); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", formatAddress(selected.Category, selected.Name), err))
 			_, _ = fmt.Fprintf(w, "Error installing %s: %v\n", formatAddress(selected.Category, selected.Name), err)
 		}
@@ -196,13 +196,13 @@ func installAsset(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, c
 	return errors.Join(errs...)
 }
 
-// installSingleAsset checks and installs a single selected asset.
-func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, client *registry.Client, index *registry.Index, selected assets.SearchResult, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
+// installSingleModule checks and installs a single selected module.
+func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, client *registry.Client, index *registry.Index, selected modules.SearchResult, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
 	// Check if already installed
-	if assets.AssetExists(cfg, selected.Category, selected.Name) {
-		origin := assets.GetInstalledOrigin(cfg, selected.Category, selected.Name)
+	if modules.ModuleExists(cfg, selected.Category, selected.Name) {
+		origin := modules.GetInstalledOrigin(cfg, selected.Category, selected.Name)
 
-		// Manually-added asset (no origin) — warn and proceed with install
+		// Manually-added module (no origin) — warn and proceed with install
 		if origin == "" {
 			if !flags.Quiet {
 				printWarning(w, "replacing manually-added %s with registry version",
@@ -210,7 +210,7 @@ func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, cl
 			}
 		} else {
 			if !flags.Quiet {
-				installedVer := assets.VersionFromOrigin(origin)
+				installedVer := modules.VersionFromOrigin(origin)
 				latestVer := selected.Entry.Version
 				outdated := latestVer != "" && installedVer != "" && semver.Compare(latestVer, installedVer) > 0
 
@@ -243,9 +243,9 @@ func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, cl
 		}
 	}
 
-	// Install the asset
-	prog.Update("Fetching asset...")
-	version, err := assets.InstallAsset(ctx, client, index, selected, configDir)
+	// Install the module
+	prog.Update("Fetching module...")
+	version, err := modules.InstallModule(ctx, client, index, selected, configDir)
 	if err != nil {
 		return err
 	}
@@ -272,10 +272,10 @@ func installSingleAsset(ctx context.Context, w io.Writer, prog *tui.Progress, cl
 	return nil
 }
 
-// promptAssetSelection prompts the user to select one or more assets from multiple matches.
+// promptModuleSelection prompts the user to select one or more modules from multiple matches.
 // Supports single numbers, CSV (1,3,5), ranges (1-3), "all", or name matching.
 // Returns nil and nil if the user cancels (empty input).
-func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResult, cfg cue.Value) ([]assets.SearchResult, error) {
+func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchResult, cfg cue.Value) ([]modules.SearchResult, error) {
 	// Check if stdin is a TTY
 	isTTY := isTerminal(r)
 
@@ -285,7 +285,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 			names = append(names, formatAddress(res.Category, res.Name))
 		}
 		return nil, fmt.Errorf(
-			"multiple assets found: %s\nSpecify exact path or run interactively",
+			"multiple modules found: %s\nSpecify exact path or run interactively",
 			strings.Join(names, ", "),
 		)
 	}
@@ -294,7 +294,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 
 	for i, res := range results {
 		marker := "  "
-		if assets.AssetExists(cfg, res.Category, res.Name) {
+		if modules.ModuleExists(cfg, res.Category, res.Name) {
 			marker = tui.ColorInstalled.Sprint("★") + " "
 		}
 		_, _ = fmt.Fprintf(w, "  %s%d. ", marker, i+1)
@@ -330,7 +330,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 	for _, res := range results {
 		fullPath := formatAddress(res.Category, res.Name)
 		if strings.ToLower(res.Name) == inputLower || strings.ToLower(fullPath) == inputLower {
-			return []assets.SearchResult{res}, nil
+			return []modules.SearchResult{res}, nil
 		}
 	}
 
@@ -343,7 +343,7 @@ func promptAssetSelection(w io.Writer, r io.Reader, results []assets.SearchResul
 		_, _ = fmt.Fprintln(w, "Cancelled.")
 		return nil, nil
 	}
-	selected := make([]assets.SearchResult, len(indices))
+	selected := make([]modules.SearchResult, len(indices))
 	for i, idx := range indices {
 		selected[i] = results[idx]
 	}

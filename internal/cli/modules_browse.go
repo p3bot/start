@@ -8,26 +8,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// addAssetsBrowseCommand adds the browse subcommand to the assets command.
-func addAssetsBrowseCommand(parent *cobra.Command) {
+// addModulesBrowseCommand adds the browse subcommand to the modules command.
+func addModulesBrowseCommand(parent *cobra.Command) {
 	browseCmd := &cobra.Command{
 		Use:     "browse",
 		Aliases: []string{"open"},
-		Short:   "Open asset repository in browser",
-		Long:    `Open the GitHub asset repository in your default web browser for visual exploration.`,
+		Short:   "Open library repository in browser",
+		Long:    `Open the GitHub library repository in your default web browser for visual exploration.`,
 		Args:    noArgsOrHelp,
-		RunE:    runAssetsBrowse,
+		RunE:    runModulesBrowse,
 	}
 
 	parent.AddCommand(browseCmd)
 }
 
-// runAssetsBrowse opens the asset repository URL in the default browser.
-func runAssetsBrowse(cmd *cobra.Command, args []string) error {
+// runModulesBrowse opens the library repository URL in the default browser.
+func runModulesBrowse(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
-	url := DefaultAssetRepoURL
+	url := DefaultLibraryRepoURL
 	flags := getFlags(cmd)
 
 	if !flags.Quiet {

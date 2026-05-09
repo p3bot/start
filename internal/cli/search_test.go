@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/assets"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 )
 
 func TestPrintSearchSections(t *testing.T) {
 	t.Parallel()
 
-	results := []assets.SearchResult{
+	results := []modules.SearchResult{
 		{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go programming expert"}, MatchScore: 5},
 		{Category: "tasks", Name: "pre-commit-review", Entry: registry.IndexEntry{Description: "Review staged changes"}, MatchScore: 3},
 	}
@@ -121,7 +121,7 @@ func TestPrintSearchSections(t *testing.T) {
 
 	t.Run("verbose shows tags and module paths", func(t *testing.T) {
 		t.Parallel()
-		verboseResults := []assets.SearchResult{
+		verboseResults := []modules.SearchResult{
 			{
 				Category:   "roles",
 				Name:       "golang",
@@ -152,7 +152,7 @@ func TestPrintSearchSections(t *testing.T) {
 
 	t.Run("non-verbose hides tags and module paths", func(t *testing.T) {
 		t.Parallel()
-		verboseResults := []assets.SearchResult{
+		verboseResults := []modules.SearchResult{
 			{
 				Category:   "roles",
 				Name:       "golang",
@@ -177,7 +177,7 @@ func TestPrintSearchSections(t *testing.T) {
 
 	t.Run("category order is agents roles contexts tasks", func(t *testing.T) {
 		t.Parallel()
-		allCatResults := []assets.SearchResult{
+		allCatResults := []modules.SearchResult{
 			{Category: "contexts", Name: "env", Entry: registry.IndexEntry{Description: "Environment"}, MatchScore: 3},
 			{Category: "agents", Name: "claude", Entry: registry.IndexEntry{Description: "Claude AI"}, MatchScore: 3},
 			{Category: "tasks", Name: "review", Entry: registry.IndexEntry{Description: "Code review"}, MatchScore: 3},
@@ -205,7 +205,7 @@ func TestPrintSearchSections(t *testing.T) {
 		t.Parallel()
 		var buf bytes.Buffer
 		sections := []searchSection{
-			{Label: "test", Results: []assets.SearchResult{
+			{Label: "test", Results: []modules.SearchResult{
 				{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go expert"}, MatchScore: 3},
 			}},
 		}

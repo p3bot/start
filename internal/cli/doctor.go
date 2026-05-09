@@ -7,11 +7,11 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/doctor"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 )
 
@@ -96,7 +96,7 @@ func prepareDoctor() (doctor.Report, error) {
 	report.Sections = append(report.Sections, doctor.CheckIntro())
 
 	// Version section
-	indexPath := resolveAssetsIndexPath()
+	indexPath := resolveLibraryIndexPath()
 	buildInfo := doctor.BuildInfo{
 		Version:      cliVersion,
 		Commit:       commit,
@@ -260,7 +260,7 @@ func resolveIndexVersion(indexPath string) string {
 	// Try cache first to avoid a network call.
 	cached, err := cache.ReadIndex()
 	if err == nil && cached.Version != "" {
-		return assets.VersionFromOrigin(cached.Version)
+		return modules.VersionFromOrigin(cached.Version)
 	}
 
 	// Fall back to registry query.
@@ -277,5 +277,5 @@ func resolveIndexVersion(indexPath string) string {
 		return ""
 	}
 
-	return assets.VersionFromOrigin(resolved)
+	return modules.VersionFromOrigin(resolved)
 }

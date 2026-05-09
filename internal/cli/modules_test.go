@@ -13,7 +13,7 @@ import (
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/parser"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 )
 
@@ -27,7 +27,7 @@ func parseCUEStruct(t *testing.T, src string) ast.Expr {
 	return f.Decls[0].(*ast.Field).Value
 }
 
-// TestSearchIndex tests the assets.SearchIndex function.
+// TestSearchIndex tests the modules.SearchIndex function.
 func TestSearchIndex(t *testing.T) {
 	t.Parallel()
 	index := &registry.Index{
@@ -105,13 +105,13 @@ func TestSearchIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := assets.SearchIndex(index, tt.query, nil)
+			results, err := modules.SearchIndex(index, tt.query, nil)
 			if err != nil {
-				t.Fatalf("assets.SearchIndex() error: %v", err)
+				t.Fatalf("modules.SearchIndex() error: %v", err)
 			}
 
 			if len(results) != tt.wantCount {
-				t.Errorf("assets.SearchIndex() returned %d results, want %d", len(results), tt.wantCount)
+				t.Errorf("modules.SearchIndex() returned %d results, want %d", len(results), tt.wantCount)
 			}
 
 			if tt.wantFirst != "" && len(results) > 0 {
@@ -126,7 +126,7 @@ func TestSearchIndex(t *testing.T) {
 // TestPrintSearchResults tests the printSearchResults function.
 func TestPrintSearchResults(t *testing.T) {
 	t.Parallel()
-	results := []assets.SearchResult{
+	results := []modules.SearchResult{
 		{
 			Category: "agents",
 			Name:     "ai/claude",
@@ -193,29 +193,29 @@ func TestPrintSearchResults(t *testing.T) {
 	})
 }
 
-// TestAssetsCommandExists tests that the assets command is registered.
-func TestAssetsCommandExists(t *testing.T) {
+// TestModulesCommandExists tests that the modules command is registered.
+func TestModulesCommandExists(t *testing.T) {
 	t.Parallel()
 	cmd := NewRootCmd()
 
-	// Find assets command
-	var assetsCmd *cobra.Command
+	// Find modules command
+	var modulesCmd *cobra.Command
 	for _, c := range cmd.Commands() {
-		if c.Use == "assets" {
-			assetsCmd = c
+		if c.Use == "modules" {
+			modulesCmd = c
 			break
 		}
 	}
 
-	if assetsCmd == nil {
-		t.Fatal("assets command not found")
+	if modulesCmd == nil {
+		t.Fatal("modules command not found")
 	}
 
 	// Check subcommands
 	subcommands := []string{"browse", "index", "search", "add", "list", "info", "update"}
 	for _, name := range subcommands {
 		found := false
-		for _, c := range assetsCmd.Commands() {
+		for _, c := range modulesCmd.Commands() {
 			if strings.HasPrefix(c.Use, name) {
 				found = true
 				break
@@ -259,7 +259,7 @@ func TestPrintIndex(t *testing.T) {
 		printIndex(&buf, index, "v0.2.3", false, nil, "")
 		output := buf.String()
 
-		if !strings.Contains(output, "Index: v0.2.3 (3 assets)") {
+		if !strings.Contains(output, "Index: v0.2.3 (3 modules)") {
 			t.Errorf("output missing header, got: %s", output)
 		}
 		if !strings.Contains(output, "agents/") {
@@ -345,33 +345,33 @@ func TestPrintIndex(t *testing.T) {
 		printIndex(&buf, index, "v0.2.3", false, nil, "agents")
 		output := buf.String()
 
-		// Header should show all 3 assets, not just agents
-		if !strings.Contains(output, "(3 assets)") {
+		// Header should show all 3 modules, not just agents
+		if !strings.Contains(output, "(3 modules)") {
 			t.Errorf("header should show full total even when filtered, got: %s", output)
 		}
 	})
 }
 
-// TestAssetsIndexCommandExists tests that the index command is properly registered.
-func TestAssetsIndexCommandExists(t *testing.T) {
+// TestModulesIndexCommandExists tests that the index command is properly registered.
+func TestModulesIndexCommandExists(t *testing.T) {
 	t.Parallel()
 	cmd := NewRootCmd()
 
-	// Find assets command
-	var assetsCmd *cobra.Command
+	// Find modules command
+	var modulesCmd *cobra.Command
 	for _, c := range cmd.Commands() {
-		if c.Use == "assets" {
-			assetsCmd = c
+		if c.Use == "modules" {
+			modulesCmd = c
 			break
 		}
 	}
-	if assetsCmd == nil {
-		t.Fatal("assets command not found")
+	if modulesCmd == nil {
+		t.Fatal("modules command not found")
 	}
 
 	// Find index subcommand
 	var indexCmd *cobra.Command
-	for _, c := range assetsCmd.Commands() {
+	for _, c := range modulesCmd.Commands() {
 		if strings.HasPrefix(c.Use, "index") {
 			indexCmd = c
 			break
@@ -398,21 +398,21 @@ func TestAssetsIndexCommandExists(t *testing.T) {
 	}
 }
 
-// TestUpdateAssetInConfig tests the assets.UpdateAssetInConfig function.
-func TestUpdateAssetInConfig(t *testing.T) {
+// TestUpdateModuleInConfig tests the modules.UpdateModuleInConfig function.
+func TestUpdateModuleInConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name        string
 		initial     string
 		category    string
-		assetName   string
+		moduleName  string
 		newContent  string
 		wantContain []string
 		wantErr     bool
 	}{
 		{
-			name: "update simple asset",
+			name: "update simple module",
 			initial: `tasks: {
 	"my/task": {
 		origin: "old/origin"
@@ -421,8 +421,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "my/task",
+			category:   "tasks",
+			moduleName: "my/task",
 			newContent: `{
 	origin: "new/origin"
 	description: "new description"
@@ -436,7 +436,7 @@ func TestUpdateAssetInConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "update asset with template braces",
+			name: "update module with template braces",
 			initial: `tasks: {
 	"project/start": {
 		origin: "old/origin"
@@ -446,8 +446,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "project/start",
+			category:   "tasks",
+			moduleName: "project/start",
 			newContent: `{
 	origin: "new/origin"
 	prompt: """
@@ -465,7 +465,7 @@ func TestUpdateAssetInConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "update preserves other assets",
+			name: "update preserves other modules",
 			initial: `tasks: {
 	"first/task": {
 		origin: "first/origin"
@@ -477,8 +477,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "first/task",
+			category:   "tasks",
+			moduleName: "first/task",
 			newContent: `{
 	origin: "updated/origin"
 	prompt: "updated"
@@ -500,8 +500,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "my/task",
+			category:   "tasks",
+			moduleName: "my/task",
 			newContent: `{
 	origin: "new/origin"
 	description: "Updated: { and } are important"
@@ -525,8 +525,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "my/task",
+			category:   "tasks",
+			moduleName: "my/task",
 			newContent: `{
 	origin: "new/origin"
 	description: "new description"
@@ -548,8 +548,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "my/task",
+			category:   "tasks",
+			moduleName: "my/task",
 			newContent: `{
 	origin: "new/origin"
 	description: "updated"
@@ -571,8 +571,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "my/task",
+			category:   "tasks",
+			moduleName: "my/task",
 			newContent: `{
 	origin: "new/origin"
 	description: "updated"
@@ -597,8 +597,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 `,
-			category:  "tasks",
-			assetName: "my/task",
+			category:   "tasks",
+			moduleName: "my/task",
 			newContent: `{
 	origin: "new/origin"
 	description: "updated"
@@ -611,7 +611,7 @@ func TestUpdateAssetInConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "asset not found",
+			name: "module not found",
 			initial: `tasks: {
 	"existing/task": {
 		origin: "origin"
@@ -619,7 +619,7 @@ func TestUpdateAssetInConfig(t *testing.T) {
 }
 `,
 			category:   "tasks",
-			assetName:  "nonexistent/task",
+			moduleName: "nonexistent/task",
 			newContent: `{}`,
 			wantErr:    true,
 		},
@@ -635,7 +635,7 @@ func TestUpdateAssetInConfig(t *testing.T) {
 			}
 
 			content := parseCUEStruct(t, tt.newContent)
-			err := assets.UpdateAssetInConfig(configPath, tt.category, tt.assetName, content)
+			err := modules.UpdateModuleInConfig(configPath, tt.category, tt.moduleName, content)
 
 			if tt.wantErr {
 				if err == nil {
@@ -662,8 +662,8 @@ func TestUpdateAssetInConfig(t *testing.T) {
 	}
 }
 
-// TestAssetsListCategoryValidation tests that invalid category args are rejected early.
-func TestAssetsListCategoryValidation(t *testing.T) {
+// TestModulesListCategoryValidation tests that invalid category args are rejected early.
+func TestModulesListCategoryValidation(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name    string
@@ -672,22 +672,22 @@ func TestAssetsListCategoryValidation(t *testing.T) {
 	}{
 		{
 			name:    "invalid category",
-			args:    []string{"assets", "list", "invalid"},
+			args:    []string{"modules", "list", "invalid"},
 			wantErr: `unknown category "invalid"`,
 		},
 		{
 			name:    "valid category agents - no error from validation",
-			args:    []string{"assets", "list", "agents"},
+			args:    []string{"modules", "list", "agents"},
 			wantErr: "", // fails later on config, not on category validation
 		},
 		{
 			name:    "valid category plural",
-			args:    []string{"assets", "list", "tasks"},
+			args:    []string{"modules", "list", "tasks"},
 			wantErr: "",
 		},
 		{
 			name:    "valid category singular",
-			args:    []string{"assets", "list", "task"},
+			args:    []string{"modules", "list", "task"},
 			wantErr: "",
 		},
 	}
@@ -715,16 +715,16 @@ func TestAssetsListCategoryValidation(t *testing.T) {
 	}
 }
 
-// TestAssetsIndexCategoryValidation tests that invalid category args are rejected before network I/O,
+// TestModulesIndexCategoryValidation tests that invalid category args are rejected before network I/O,
 // and that --export rejects a category arg since the index is a single file.
-func TestAssetsIndexCategoryValidation(t *testing.T) {
+func TestModulesIndexCategoryValidation(t *testing.T) {
 	t.Parallel()
 
 	t.Run("invalid category", func(t *testing.T) {
 		cmd := NewRootCmd()
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"assets", "index", "invalid"})
+		cmd.SetArgs([]string{"modules", "index", "invalid"})
 		err := cmd.Execute()
 
 		if err == nil || !strings.Contains(err.Error(), `unknown category "invalid"`) {
@@ -736,7 +736,7 @@ func TestAssetsIndexCategoryValidation(t *testing.T) {
 		cmd := NewRootCmd()
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"assets", "index", "agents", "--export"})
+		cmd.SetArgs([]string{"modules", "index", "agents", "--export"})
 		err := cmd.Execute()
 
 		if err == nil || !strings.Contains(err.Error(), "cannot be used with --export") {
@@ -745,10 +745,10 @@ func TestAssetsIndexCategoryValidation(t *testing.T) {
 	})
 }
 
-// TestPrintInstalledAssetsJSON tests that installed assets marshal to valid JSON.
-func TestPrintInstalledAssetsJSON(t *testing.T) {
+// TestPrintInstalledModulesJSON tests that installed modules marshal to valid JSON.
+func TestPrintInstalledModulesJSON(t *testing.T) {
 	t.Parallel()
-	installed := []InstalledAsset{
+	installed := []InstalledModule{
 		{
 			Category:     "agents",
 			Name:         "ai/claude",
@@ -804,17 +804,17 @@ func TestPrintInstalledAssetsJSON(t *testing.T) {
 	}
 }
 
-// TestInstalledAssetJSONOmitsEmptyOptionalFields verifies omitempty suppresses nil slices.
-func TestInstalledAssetJSONOmitsEmptyOptionalFields(t *testing.T) {
+// TestInstalledModuleJSONOmitsEmptyOptionalFields verifies omitempty suppresses nil slices.
+func TestInstalledModuleJSONOmitsEmptyOptionalFields(t *testing.T) {
 	t.Parallel()
-	asset := InstalledAsset{
+	module := InstalledModule{
 		Category: "roles",
 		Name:     "test",
 		Scope:    "global",
 		Origin:   "github.com/test/roles/test@v0.1.0",
 	}
 
-	data, err := json.MarshalIndent(asset, "", "  ")
+	data, err := json.MarshalIndent(module, "", "  ")
 	if err != nil {
 		t.Fatalf("MarshalIndent failed: %v", err)
 	}
@@ -834,7 +834,7 @@ func TestInstalledAssetJSONOmitsEmptyOptionalFields(t *testing.T) {
 // TestSearchResultJSON tests that SearchResult marshals to valid JSON with correct field names.
 func TestSearchResultJSON(t *testing.T) {
 	t.Parallel()
-	results := []assets.SearchResult{
+	results := []modules.SearchResult{
 		{
 			Category: "agents",
 			Name:     "ai/claude",
@@ -873,13 +873,13 @@ func TestUpdateResultJSON(t *testing.T) {
 	t.Parallel()
 	results := []UpdateResult{
 		{
-			Asset:      InstalledAsset{Category: "agents", Name: "ai/claude", Scope: "global", Origin: "test"},
+			Module:     InstalledModule{Category: "agents", Name: "ai/claude", Scope: "global", Origin: "test"},
 			OldVersion: "v0.1.0",
 			NewVersion: "v0.2.0",
 			Updated:    true,
 		},
 		{
-			Asset:        InstalledAsset{Category: "roles", Name: "golang", Scope: "global", Origin: "test"},
+			Module:       InstalledModule{Category: "roles", Name: "golang", Scope: "global", Origin: "test"},
 			OldVersion:   "v0.1.0",
 			Updated:      false,
 			Error:        fmt.Errorf("network timeout"),
@@ -921,10 +921,10 @@ func TestUpdateResultJSON(t *testing.T) {
 	}
 }
 
-// TestAssetInfoResultJSON tests that AssetInfoResult marshals correctly.
-func TestAssetInfoResultJSON(t *testing.T) {
+// TestModuleInfoResultJSON tests that ModuleInfoResult marshals correctly.
+func TestModuleInfoResultJSON(t *testing.T) {
 	t.Parallel()
-	results := []AssetInfoResult{
+	results := []ModuleInfoResult{
 		{
 			Category: "agents",
 			Name:     "ai/claude",
@@ -970,7 +970,7 @@ func TestAssetInfoResultJSON(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 	if _, ok := decoded[1]["installedScope"]; ok {
-		t.Errorf("installedScope should be omitted for non-installed asset")
+		t.Errorf("installedScope should be omitted for non-installed module")
 	}
 }
 
@@ -1019,8 +1019,8 @@ func TestFilterIndexByCategory(t *testing.T) {
 	}
 }
 
-// TestAssetsSearchValidation tests search command argument validation.
-func TestAssetsSearchValidation(t *testing.T) {
+// TestModulesSearchValidation tests search command argument validation.
+func TestModulesSearchValidation(t *testing.T) {
 	t.Parallel()
 	// We can't easily test the full search without network,
 	// but we can test the query length validation

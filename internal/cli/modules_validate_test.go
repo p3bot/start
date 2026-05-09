@@ -36,8 +36,8 @@ func TestValidateDeriveRepoURL(t *testing.T) {
 		},
 		{
 			name:  "custom org",
-			input: "github.com/example/custom-assets/index@v0",
-			want:  "https://github.com/example/custom-assets",
+			input: "github.com/example/custom-library/index@v0",
+			want:  "https://github.com/example/custom-library",
 		},
 		{
 			name:    "non-index subpath rejected",
@@ -73,8 +73,8 @@ func TestValidateCacheDirName(t *testing.T) {
 		want  string
 	}{
 		{"https://github.com/start-cli/library", "start-cli-library"},
-		{"https://github.com/example/custom-assets", "example-custom-assets"},
-		{"https://github.com/myorg/my-assets", "myorg-my-assets"},
+		{"https://github.com/example/custom-library", "example-custom-library"},
+		{"https://github.com/myorg/my-modules", "myorg-my-modules"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

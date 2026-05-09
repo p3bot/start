@@ -158,7 +158,7 @@ func TestAutoSetup_NewAutoSetup(t *testing.T) {
 // TestGenerateConfig_SlashKeyLabelAlignment verifies that when auto-setup uses
 // the registry key as the agent name, the agents.cue label and the settings.cue
 // default_agent value are byte-for-byte identical. This is the alignment
-// requirement that lets auto-setup and 'start assets add' coexist without drift.
+// requirement that lets auto-setup and 'start modules add' coexist without drift.
 func TestGenerateConfig_SlashKeyLabelAlignment(t *testing.T) {
 	const key = "claude/interactive"
 	agent := Agent{

@@ -40,10 +40,10 @@ start config settings default_agent claude
 start config settings timeout 120
 start search golang
 start search --tag review
-start assets search golang
-start assets add golang/code-review
-start assets list
-start assets update
+start modules search golang
+start modules add golang/code-review
+start modules list
+start modules update
 start doctor
 ```
 

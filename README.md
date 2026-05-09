@@ -7,7 +7,7 @@
 
 Context-aware AI agent launcher powered by CUE.
 
-A future project will revisit the asset/module terminology and the command tree.
+A future project will flatten the command tree.
 
 ## Why start?
 
@@ -115,8 +115,8 @@ start --role ./prompts/senior-reviewer.md
 Roles are installed from the registry:
 
 ```bash
-start assets add golang/teacher
-start assets add git/agent
+start modules add golang/teacher
+start modules add git/agent
 ```
 
 Roles come in three modes:
@@ -141,7 +141,7 @@ Your project's context files (like `AGENTS.md`, `README.md`, or `PROJECT.md`) ar
 
 ```bash
 # Add the ./AGENTS.md context
-start assets add contexts:cwd/agents-md
+start modules add contexts:cwd/agents-md
 
 # Use the ./AGENTS.md context (it is a required context)
 start
@@ -165,8 +165,8 @@ start task ./tasks/my-review.md
 Tasks only include required contexts by default, keeping prompts focused. Tasks are also available from the registry:
 
 ```bash
-start assets add review/git-diff
-start assets add jira/item/research
+start modules add review/git-diff
+start modules add jira/item/research
 ```
 
 ### Configuration
@@ -260,33 +260,33 @@ start show
 start show <name>
 ```
 
-### Assets Management
+### Modules Management
 
 ```bash
 # Browse available registry packages
-start assets browse
+start modules browse
 
 # Show the full registry catalog
-start assets index
+start modules index
 
 # Search for packages
-start assets search go
+start modules search go
 
-# Show details for a specific asset
-start assets info golang/assistant
+# Show details for a specific module
+start modules info golang/assistant
 
 # Install a package
-start assets add golang/teacher
-start assets add review/git-diff
+start modules add golang/teacher
+start modules add review/git-diff
 
-# List installed assets
-start assets list
+# List installed modules
+start modules list
 
 # Update installed packages
-start assets update
+start modules update
 
 # Validate index and module version consistency (maintainer tool)
-start assets validate --yes
+start modules validate --yes
 ```
 
 ### Configuration
@@ -342,12 +342,12 @@ start config settings default_agent claude
 ### Search and Discovery
 
 ```bash
-# Search across all installed and registry assets
+# Search across all installed and registry modules
 start search go
 
-start search <query>        # search global and local config, and assets index
+start search <query>        # search global and local config, and modules index
 start config search <query> # search global and local config
-start assets search <query> # search installable assets
+start modules search <query> # search installable modules
 ```
 
 ### Diagnostics

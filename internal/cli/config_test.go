@@ -974,7 +974,7 @@ func TestValidSettingsKeysString(t *testing.T) {
 	}
 }
 
-func TestConfigSettingsSet_AssetsIndex(t *testing.T) {
+func TestConfigSettingsSet_LibraryIndex(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -1002,7 +1002,7 @@ func TestConfigSettingsSet_AssetsIndex(t *testing.T) {
 	}
 }
 
-func TestResolveAssetsIndexPath(t *testing.T) {
+func TestResolveLibraryIndexPath(t *testing.T) {
 	t.Run("returns configured value when set", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
@@ -1018,9 +1018,9 @@ func TestResolveAssetsIndexPath(t *testing.T) {
 			t.Fatalf("set failed: %v", err)
 		}
 
-		got := resolveAssetsIndexPath()
+		got := resolveLibraryIndexPath()
 		if got != "github.com/example/custom/index@v0" {
-			t.Errorf("resolveAssetsIndexPath() = %q, want %q", got, "github.com/example/custom/index@v0")
+			t.Errorf("resolveLibraryIndexPath() = %q, want %q", got, "github.com/example/custom/index@v0")
 		}
 	})
 
@@ -1030,9 +1030,9 @@ func TestResolveAssetsIndexPath(t *testing.T) {
 
 		chdir(t, tmpDir)
 
-		got := resolveAssetsIndexPath()
+		got := resolveLibraryIndexPath()
 		if got != "" {
-			t.Errorf("resolveAssetsIndexPath() = %q, want empty string", got)
+			t.Errorf("resolveLibraryIndexPath() = %q, want empty string", got)
 		}
 	})
 }

@@ -8,28 +8,28 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
 // NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with assets_add.go, assets_list.go, assets_update.go, and
-// assets_index.go. This duplication is accepted - each command uses the results
+// loading patterns with modules_add.go, modules_list.go, modules_update.go, and
+// modules_index.go. This duplication is accepted - each command uses the results
 // differently and a shared helper would couple them for modest line savings.
 
-// addAssetsSearchCommand adds the search subcommand to the assets command.
-func addAssetsSearchCommand(parent *cobra.Command) {
+// addModulesSearchCommand adds the search subcommand to the modules command.
+func addModulesSearchCommand(parent *cobra.Command) {
 	searchCmd := &cobra.Command{
 		Use:     "search [query]...",
 		Aliases: []string{"find"},
-		Short:   "Search registry for assets",
-		Long: `Search the asset registry index by keyword.
+		Short:   "Search registry for modules",
+		Long: `Search the module registry index by keyword.
 
-Searches asset names, descriptions, and tags. Multiple words are combined
+Searches module names, descriptions, and tags. Multiple words are combined
 with AND logic - all terms must match. Terms can be space-separated or
 comma-separated. Total query must be at least 3 characters.
 Terms support regex patterns (e.g. '^home', 'expert$', 'go.*review').
@@ -39,7 +39,7 @@ Use --tag to filter by tags. Tags can be used alone or combined with a query.
 
 Use 'start search' to also include local and global config in results.`,
 		Args: cobra.MinimumNArgs(0),
-		RunE: runAssetsSearch,
+		RunE: runModulesSearch,
 	}
 	searchCmd.Flags().StringSlice("tag", nil, "Filter by tags (comma-separated)")
 	searchCmd.Flags().Bool("json", false, "Output as JSON")
@@ -47,8 +47,8 @@ Use 'start search' to also include local and global config in results.`,
 	parent.AddCommand(searchCmd)
 }
 
-// runAssetsSearch searches the registry index for matching assets.
-func runAssetsSearch(cmd *cobra.Command, args []string) error {
+// runModulesSearch searches the registry index for matching modules.
+func runModulesSearch(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -56,10 +56,10 @@ func runAssetsSearch(cmd *cobra.Command, args []string) error {
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
 	tagFlags, _ := cmd.Flags().GetStringSlice("tag")
-	tags := assets.ParseSearchTerms(strings.Join(tagFlags, ","))
+	tags := modules.ParseSearchTerms(strings.Join(tagFlags, ","))
 
-	terms := assets.ParseSearchPatterns(query)
-	if err := assets.ValidateSearchQuery(terms, tags); err != nil {
+	terms := modules.ParseSearchPatterns(query)
+	if err := modules.ValidateSearchQuery(terms, tags); err != nil {
 		if jsonFlag {
 			return err
 		}
@@ -94,7 +94,7 @@ func runAssetsSearch(cmd *cobra.Command, args []string) error {
 	defer prog.Done()
 
 	prog.Update("Fetching index...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveAssetsIndexPath())
+	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
 	if err != nil {
 		return fmt.Errorf("fetching index: %w", err)
 	}
@@ -104,7 +104,7 @@ func runAssetsSearch(cmd *cobra.Command, args []string) error {
 	prog.Done()
 
 	// Search index
-	results, err := assets.SearchIndex(index, query, tags)
+	results, err := modules.SearchIndex(index, query, tags)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func runAssetsSearch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Collect installed asset names for marking in output
+	// Collect installed module names for marking in output
 	installed := collectInstalledNames()
 
 	// Print results
@@ -139,7 +139,7 @@ func runAssetsSearch(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// collectInstalledNames returns a set of "category/name" keys for installed assets.
+// collectInstalledNames returns a set of "category/name" keys for installed modules.
 func collectInstalledNames() map[string]bool {
 	scopes := collectInstalledScopes()
 	if scopes == nil {
@@ -152,7 +152,7 @@ func collectInstalledNames() map[string]bool {
 	return names
 }
 
-// collectInstalledScopes returns a map of "category/name" to scope for installed assets.
+// collectInstalledScopes returns a map of "category/name" to scope for installed modules.
 func collectInstalledScopes() map[string]string {
 	paths, err := config.ResolvePaths("")
 	if err != nil || !paths.AnyExists() {
@@ -173,21 +173,21 @@ func collectInstalledScopes() map[string]string {
 		}
 	}
 
-	installedAssets := collectInstalledAssets(cfg.Value, paths, localCfg)
-	scopes := make(map[string]string, len(installedAssets))
-	for _, a := range installedAssets {
+	installedModules := collectInstalledModules(cfg.Value, paths, localCfg)
+	scopes := make(map[string]string, len(installedModules))
+	for _, a := range installedModules {
 		scopes[a.Category+"/"+a.Name] = a.Scope
 	}
 	return scopes
 }
 
 // printSearchResults prints search results grouped by category.
-// installed is an optional set of "category/name" keys for marking installed assets.
-func printSearchResults(w io.Writer, results []assets.SearchResult, verbose bool, installed map[string]bool) {
+// installed is an optional set of "category/name" keys for marking installed modules.
+func printSearchResults(w io.Writer, results []modules.SearchResult, verbose bool, installed map[string]bool) {
 	_, _ = fmt.Fprintf(w, "\nFound %d matches:\n\n", len(results))
 
 	// Group by category for display
-	grouped := make(map[string][]assets.SearchResult)
+	grouped := make(map[string][]modules.SearchResult)
 	for _, r := range results {
 		grouped[r.Category] = append(grouped[r.Category], r)
 	}

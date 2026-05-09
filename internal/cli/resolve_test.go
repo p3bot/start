@@ -61,11 +61,11 @@ func TestFindExactInstalledName(t *testing.T) {
 	}`)
 
 	tests := []struct {
-		name     string
-		cueKey   string
-		assetKey string
-		wantName string
-		wantErr  bool
+		name      string
+		cueKey    string
+		moduleKey string
+		wantName  string
+		wantErr   bool
 	}{
 		{"exact agent match", internalcue.KeyAgents, "claude", "claude", false},
 		{"exact agent with hyphen", internalcue.KeyAgents, "gemini-non-interactive", "gemini-non-interactive", false},
@@ -83,18 +83,18 @@ func TestFindExactInstalledName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := findExactInstalledName(cfg.Value, tt.cueKey, tt.assetKey)
+			got, err := findExactInstalledName(cfg.Value, tt.cueKey, tt.moduleKey)
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("findExactInstalledName(%q, %q) expected error, got nil", tt.cueKey, tt.assetKey)
+					t.Errorf("findExactInstalledName(%q, %q) expected error, got nil", tt.cueKey, tt.moduleKey)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("findExactInstalledName(%q, %q) unexpected error: %v", tt.cueKey, tt.assetKey, err)
+				t.Fatalf("findExactInstalledName(%q, %q) unexpected error: %v", tt.cueKey, tt.moduleKey, err)
 			}
 			if got != tt.wantName {
-				t.Errorf("findExactInstalledName(%q, %q) = %q, want %q", tt.cueKey, tt.assetKey, got, tt.wantName)
+				t.Errorf("findExactInstalledName(%q, %q) = %q, want %q", tt.cueKey, tt.moduleKey, got, tt.wantName)
 			}
 		})
 	}
@@ -205,29 +205,29 @@ func TestFindExactInRegistryAmbiguous(t *testing.T) {
 	}
 }
 
-func TestMergeAssetMatches(t *testing.T) {
+func TestMergeModuleMatches(t *testing.T) {
 	t.Parallel()
 
-	installed := []AssetMatch{
-		{Name: "claude", Category: "agents", Source: AssetSourceInstalled, Score: 3},
-		{Name: "gemini", Category: "agents", Source: AssetSourceInstalled, Score: 3},
+	installed := []ModuleMatch{
+		{Name: "claude", Category: "agents", Source: ModuleSourceInstalled, Score: 3},
+		{Name: "gemini", Category: "agents", Source: ModuleSourceInstalled, Score: 3},
 	}
-	reg := []AssetMatch{
-		{Name: "claude", Category: "agents", Source: AssetSourceRegistry, Score: 5},  // dup
-		{Name: "openai", Category: "agents", Source: AssetSourceRegistry, Score: 3},  // new
-		{Name: "copilot", Category: "agents", Source: AssetSourceRegistry, Score: 1}, // new, low score
+	reg := []ModuleMatch{
+		{Name: "claude", Category: "agents", Source: ModuleSourceRegistry, Score: 5},  // dup
+		{Name: "openai", Category: "agents", Source: ModuleSourceRegistry, Score: 3},  // new
+		{Name: "copilot", Category: "agents", Source: ModuleSourceRegistry, Score: 1}, // new, low score
 	}
 
-	merged := mergeAssetMatches(installed, reg)
+	merged := mergeModuleMatches(installed, reg)
 
 	// Should have 4 unique entries (claude deduplicated)
 	if len(merged) != 4 {
-		t.Fatalf("mergeAssetMatches returned %d results, want 4", len(merged))
+		t.Fatalf("mergeModuleMatches returned %d results, want 4", len(merged))
 	}
 
 	// Claude should be from installed (installed wins)
 	for _, m := range merged {
-		if m.Name == "claude" && m.Source != AssetSourceInstalled {
+		if m.Name == "claude" && m.Source != ModuleSourceInstalled {
 			t.Errorf("claude should be from installed, got %q", m.Source)
 		}
 	}
@@ -241,10 +241,10 @@ func TestMergeAssetMatches(t *testing.T) {
 	}
 }
 
-func TestMergeAssetMatches_Empty(t *testing.T) {
+func TestMergeModuleMatches_Empty(t *testing.T) {
 	t.Parallel()
 
-	merged := mergeAssetMatches(nil, nil)
+	merged := mergeModuleMatches(nil, nil)
 	if len(merged) != 0 {
 		t.Errorf("expected 0 results for empty inputs, got %d", len(merged))
 	}
@@ -680,7 +680,7 @@ func TestSelectSingleMatch_Zero(t *testing.T) {
 func TestSelectSingleMatch_Single(t *testing.T) {
 	t.Parallel()
 
-	matches := []AssetMatch{{Name: "claude", Source: AssetSourceInstalled, Score: 3}}
+	matches := []ModuleMatch{{Name: "claude", Source: ModuleSourceInstalled, Score: 3}}
 	r := newTestResolver(internalcue.LoadResult{})
 	selected, err := r.selectSingleMatch(matches, "agent", "clau")
 	if err != nil {
@@ -691,16 +691,16 @@ func TestSelectSingleMatch_Single(t *testing.T) {
 	}
 }
 
-func TestPromptAssetSelection_NonTTY(t *testing.T) {
+func TestPromptModuleSelection_NonTTY(t *testing.T) {
 	t.Parallel()
 
-	matches := []AssetMatch{
-		{Name: "claude-code", Source: AssetSourceInstalled, Score: 3},
-		{Name: "claude-chat", Source: AssetSourceRegistry, Score: 3},
+	matches := []ModuleMatch{
+		{Name: "claude-code", Source: ModuleSourceInstalled, Score: 3},
+		{Name: "claude-chat", Source: ModuleSourceRegistry, Score: 3},
 	}
 
 	r := newTestResolver(internalcue.LoadResult{})
-	_, err := r.promptAssetSelection(matches, "agent", "claude")
+	_, err := r.promptModuleSelection(matches, "agent", "claude")
 	if err == nil {
 		t.Fatal("expected error for non-TTY")
 	}
@@ -731,8 +731,8 @@ func TestSearchInstalled(t *testing.T) {
 	if matches[0].Name != "claude" {
 		t.Errorf("match.Name = %q, want %q", matches[0].Name, "claude")
 	}
-	if matches[0].Source != AssetSourceInstalled {
-		t.Errorf("match.Source = %q, want %q", matches[0].Source, AssetSourceInstalled)
+	if matches[0].Source != ModuleSourceInstalled {
+		t.Errorf("match.Source = %q, want %q", matches[0].Source, ModuleSourceInstalled)
 	}
 }
 
@@ -757,16 +757,16 @@ func TestSearchRegistryCategory(t *testing.T) {
 	if matches[0].Name != "claude" {
 		t.Errorf("match.Name = %q, want %q", matches[0].Name, "claude")
 	}
-	if matches[0].Source != AssetSourceRegistry {
-		t.Errorf("match.Source = %q, want %q", matches[0].Source, AssetSourceRegistry)
+	if matches[0].Source != ModuleSourceRegistry {
+		t.Errorf("match.Source = %q, want %q", matches[0].Source, ModuleSourceRegistry)
 	}
 }
 
-// TestResolveAsset_SingleInstalledPlusRegistryMatch verifies that when a single
-// installed substring match exists and the registry also has a matching asset,
+// TestResolveModule_SingleInstalledPlusRegistryMatch verifies that when a single
+// installed substring match exists and the registry also has a matching module,
 // both are presented for selection (error in non-TTY) rather than silently
 // returning the installed match. This covers the structural bug fixed in p-041.
-func TestResolveAsset_SingleInstalledPlusRegistryMatch(t *testing.T) {
+func TestResolveModule_SingleInstalledPlusRegistryMatch(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{
@@ -790,7 +790,7 @@ func TestResolveAsset_SingleInstalledPlusRegistryMatch(t *testing.T) {
 		},
 	}
 
-	_, err := r.resolveAsset("assistant", internalcue.KeyRoles, "roles", "Role", true)
+	_, err := r.resolveModule("assistant", internalcue.KeyRoles, "roles", "Role", true)
 	if err == nil {
 		t.Fatal("expected ambiguous error for multiple matches, got nil")
 	}
@@ -805,9 +805,9 @@ func TestResolveAsset_SingleInstalledPlusRegistryMatch(t *testing.T) {
 	}
 }
 
-// TestResolveAsset_SingleInstalledNoRegistryMatch verifies that a single
+// TestResolveModule_SingleInstalledNoRegistryMatch verifies that a single
 // installed substring match resolves directly when the registry has no match.
-func TestResolveAsset_SingleInstalledNoRegistryMatch(t *testing.T) {
+func TestResolveModule_SingleInstalledNoRegistryMatch(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{
@@ -831,18 +831,18 @@ func TestResolveAsset_SingleInstalledNoRegistryMatch(t *testing.T) {
 		},
 	}
 
-	name, err := r.resolveAsset("assistant", internalcue.KeyRoles, "roles", "Role", true)
+	name, err := r.resolveModule("assistant", internalcue.KeyRoles, "roles", "Role", true)
 	if err != nil {
-		t.Fatalf("resolveAsset() error = %v", err)
+		t.Fatalf("resolveModule() error = %v", err)
 	}
 	if name != "golang/assistant" {
-		t.Errorf("resolveAsset() = %q, want %q", name, "golang/assistant")
+		t.Errorf("resolveModule() = %q, want %q", name, "golang/assistant")
 	}
 }
 
-// TestResolveAsset_ExactFullNameSkipsRegistry verifies that an exact full name
+// TestResolveModule_ExactFullNameSkipsRegistry verifies that an exact full name
 // match in installed config resolves via Phase 1 without touching the registry.
-func TestResolveAsset_ExactFullNameSkipsRegistry(t *testing.T) {
+func TestResolveModule_ExactFullNameSkipsRegistry(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{
@@ -855,18 +855,18 @@ func TestResolveAsset_ExactFullNameSkipsRegistry(t *testing.T) {
 
 	// skipRegistry=true: any registry call would return nil. Phase 1 must catch it.
 	r := newTestResolver(cfg)
-	name, err := r.resolveAsset("golang/assistant", internalcue.KeyRoles, "roles", "Role", true)
+	name, err := r.resolveModule("golang/assistant", internalcue.KeyRoles, "roles", "Role", true)
 	if err != nil {
-		t.Fatalf("resolveAsset() error = %v", err)
+		t.Fatalf("resolveModule() error = %v", err)
 	}
 	if name != "golang/assistant" {
-		t.Errorf("resolveAsset() = %q, want %q", name, "golang/assistant")
+		t.Errorf("resolveModule() = %q, want %q", name, "golang/assistant")
 	}
 }
 
-// TestResolveAsset_AgentSingleInstalledPlusRegistryMatch verifies the same
+// TestResolveModule_AgentSingleInstalledPlusRegistryMatch verifies the same
 // fix applies for agent resolution via resolveAgent.
-func TestResolveAsset_AgentSingleInstalledPlusRegistryMatch(t *testing.T) {
+func TestResolveModule_AgentSingleInstalledPlusRegistryMatch(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{

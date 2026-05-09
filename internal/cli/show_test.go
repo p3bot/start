@@ -163,7 +163,7 @@ tasks: {
 }
 
 // setupTestConfigWithOrigin creates a test config with origin fields for testing
-// verbose dump of registry-installed assets.
+// verbose dump of registry-installed modules.
 func setupTestConfigWithOrigin(t *testing.T) string {
 	t.Helper()
 
@@ -700,7 +700,7 @@ func TestVerboseDumpConfigSource(t *testing.T) {
 	}
 }
 
-// TestVerboseDumpOriginCache verifies origin and cache display for registry assets.
+// TestVerboseDumpOriginCache verifies origin and cache display for registry modules.
 func TestVerboseDumpOriginCache(t *testing.T) {
 	setupTestConfigWithOrigin(t)
 

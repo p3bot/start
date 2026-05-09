@@ -1,4 +1,4 @@
-package assets
+package modules
 
 import (
 	"regexp"
@@ -86,40 +86,40 @@ func TestMatchScorePatterns(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		assetName string
-		terms     []string
-		wantScore int
+		name       string
+		moduleName string
+		terms      []string
+		wantScore  int
 	}{
 		{
-			name:      "single term backward compat",
-			assetName: "golang",
-			terms:     []string{"golang"},
-			wantScore: 4, // name(3) + tag(1)
+			name:       "single term backward compat",
+			moduleName: "golang",
+			terms:      []string{"golang"},
+			wantScore:  4, // name(3) + tag(1)
 		},
 		{
-			name:      "two terms both match",
-			assetName: "golang",
-			terms:     []string{"golang", "expert"},
-			wantScore: 6, // golang: name(3)+tag(1)=4, expert: desc(1)+tag(1)=2
+			name:       "two terms both match",
+			moduleName: "golang",
+			terms:      []string{"golang", "expert"},
+			wantScore:  6, // golang: name(3)+tag(1)=4, expert: desc(1)+tag(1)=2
 		},
 		{
-			name:      "two terms one fails",
-			assetName: "golang",
-			terms:     []string{"golang", "python"},
-			wantScore: 0,
+			name:       "two terms one fails",
+			moduleName: "golang",
+			terms:      []string{"golang", "python"},
+			wantScore:  0,
 		},
 		{
-			name:      "empty terms",
-			assetName: "golang",
-			terms:     nil,
-			wantScore: 0,
+			name:       "empty terms",
+			moduleName: "golang",
+			terms:      nil,
+			wantScore:  0,
 		},
 		{
-			name:      "three terms all match",
-			assetName: "golang",
-			terms:     []string{"golang", "programming", "code"},
-			wantScore: 7, // golang: name(3)+tag(1)=4, programming: desc(1)+tag(1)=2, code: desc(1)=1
+			name:       "three terms all match",
+			moduleName: "golang",
+			terms:      []string{"golang", "programming", "code"},
+			wantScore:  7, // golang: name(3)+tag(1)=4, programming: desc(1)+tag(1)=2, code: desc(1)=1
 		},
 	}
 
@@ -133,7 +133,7 @@ func TestMatchScorePatterns(t *testing.T) {
 					t.Fatalf("CompileSearchTerms() error: %v", err)
 				}
 			}
-			score := matchScorePatterns(tt.assetName, entry, patterns)
+			score := matchScorePatterns(tt.moduleName, entry, patterns)
 			if score != tt.wantScore {
 				t.Errorf("matchScorePatterns() = %d, want %d", score, tt.wantScore)
 			}

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/start-cli/start/internal/assets"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/tui"
 )
 
-// resolveCrossCategory resolves an asset query across all categories via
+// resolveCrossCategory resolves a module query across all categories via
 // three-tier search (exact installed → substring installed → registry) with
 // interactive selection on ambiguity. Auto-installs registry matches and
 // sets r.didInstall = true when an install occurs.
@@ -26,15 +26,15 @@ import (
 // the resolver with stderr in the stdout slot: newResolver(cfg, flags, stderr, stderr, stdin).
 //
 // Post-call contract: if r.didInstall is true and the caller subsequently reads
-// r.cfg.Value (e.g. to look up the resolved asset's CUE value), the caller must
-// first call r.reloadConfig(workingDir) — the installed asset is written to disk
+// r.cfg.Value (e.g. to look up the resolved module's CUE value), the caller must
+// first call r.reloadConfig(workingDir) — the installed module is written to disk
 // but r.cfg is not refreshed in place. See runStart and runTask for the
 // established reload-after-install pattern. show is exempt because
 // showVerboseItem loads config independently via prepareShow.
-func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
+func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	addr, err := parseAddress(query)
 	if err != nil {
-		return AssetMatch{}, err
+		return ModuleMatch{}, err
 	}
 
 	// When the address carries a category prefix, every per-category loop
@@ -49,8 +49,8 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 	name := addr.Name
 
 	// Step 1: Exact match in installed config across the scoped categories.
-	var exactMatches []AssetMatch
-	var ambiguousMatches []AssetMatch
+	var exactMatches []ModuleMatch
+	var ambiguousMatches []ModuleMatch
 	for _, cat := range cats {
 		resolved, err := findExactInstalledName(r.cfg.Value, cat.key, name)
 		if err != nil {
@@ -58,16 +58,16 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 			// for interactive selection instead of erroring out.
 			matches, searchErr := searchInstalled(r.cfg.Value, cat.key, cat.category, name)
 			if searchErr != nil {
-				return AssetMatch{}, searchErr
+				return ModuleMatch{}, searchErr
 			}
 			ambiguousMatches = append(ambiguousMatches, matches...)
 			continue
 		}
 		if resolved != "" {
-			exactMatches = append(exactMatches, AssetMatch{
+			exactMatches = append(exactMatches, ModuleMatch{
 				Name:     resolved,
 				Category: cat.category,
-				Source:   AssetSourceInstalled,
+				Source:   ModuleSourceInstalled,
 				Score:    100,
 			})
 		}
@@ -77,12 +77,12 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 		// exactMatches and ambiguousMatches are installed-only by construction
 		// (Step 1 only). No installIfRegistry call is needed; if a future change
 		// mixes registry hits into either slice, restore the auto-install here.
-		allMatches := make([]AssetMatch, 0, len(exactMatches)+len(ambiguousMatches))
+		allMatches := make([]ModuleMatch, 0, len(exactMatches)+len(ambiguousMatches))
 		allMatches = append(allMatches, exactMatches...)
 		allMatches = append(allMatches, ambiguousMatches...)
 		selected, err := promptCrossCategorySelection(r, allMatches, query)
 		if err != nil {
-			return AssetMatch{}, err
+			return ModuleMatch{}, err
 		}
 		return selected, nil
 	}
@@ -93,7 +93,7 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 		// hits into this slice, restore the auto-install here.
 		selected, err := promptCrossCategorySelection(r, exactMatches, query)
 		if err != nil {
-			return AssetMatch{}, err
+			return ModuleMatch{}, err
 		}
 		return selected, nil
 	}
@@ -103,7 +103,7 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 	// combined-search path further down. The exact match from Step 1, if any,
 	// also appears here as a self-substring — len(installedMatches) <= 1
 	// therefore means "no neighbours alongside the exact match".
-	var installedMatches []AssetMatch
+	var installedMatches []ModuleMatch
 	for _, cat := range cats {
 		matches, err := searchInstalled(r.cfg.Value, cat.key, cat.category, name)
 		if err != nil {
@@ -138,18 +138,18 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 			}
 			result, err := findExactInRegistry(entries, cat.category, name)
 			if err != nil {
-				return AssetMatch{}, err
+				return ModuleMatch{}, err
 			}
 			if result != nil {
-				match := AssetMatch{
+				match := ModuleMatch{
 					Name:     result.Name,
 					Category: cat.category,
-					Source:   AssetSourceRegistry,
+					Source:   ModuleSourceRegistry,
 					Entry:    result.Entry,
 					Score:    100,
 				}
 				if err := r.installIfRegistry(match); err != nil {
-					return AssetMatch{}, err
+					return ModuleMatch{}, err
 				}
 				return match, nil
 			}
@@ -157,7 +157,7 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 	}
 
 	// Combined search across installed + registry.
-	var registryMatches []AssetMatch
+	var registryMatches []ModuleMatch
 	if index != nil {
 		for _, cat := range cats {
 			entries := registryEntries(index, cat.category)
@@ -172,23 +172,23 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 		}
 	}
 
-	allMatches := mergeAssetMatches(installedMatches, registryMatches)
+	allMatches := mergeModuleMatches(installedMatches, registryMatches)
 
 	switch len(allMatches) {
 	case 0:
-		return AssetMatch{}, fmt.Errorf("no matches found for %q", query)
+		return ModuleMatch{}, fmt.Errorf("no matches found for %q", query)
 	case 1:
 		if err := r.installIfRegistry(allMatches[0]); err != nil {
-			return AssetMatch{}, err
+			return ModuleMatch{}, err
 		}
 		return allMatches[0], nil
 	default:
 		selected, err := promptCrossCategorySelection(r, allMatches, query)
 		if err != nil {
-			return AssetMatch{}, err
+			return ModuleMatch{}, err
 		}
 		if err := r.installIfRegistry(selected); err != nil {
-			return AssetMatch{}, err
+			return ModuleMatch{}, err
 		}
 		return selected, nil
 	}
@@ -196,12 +196,12 @@ func resolveCrossCategory(query string, r *resolver) (AssetMatch, error) {
 
 // installIfRegistry auto-installs the match when it originates from the
 // registry. On success r.autoInstall sets r.didInstall = true (resolve.go:631),
-// and callers flip their scope to config.ScopeMerged to see the new asset.
-func (r *resolver) installIfRegistry(match AssetMatch) error {
-	if match.Source != AssetSourceRegistry {
+// and callers flip their scope to config.ScopeMerged to see the new module.
+func (r *resolver) installIfRegistry(match ModuleMatch) error {
+	if match.Source != ModuleSourceRegistry {
 		return nil
 	}
-	return r.autoInstall(r.client, assets.SearchResult{
+	return r.autoInstall(r.client, modules.SearchResult{
 		Category: match.Category,
 		Name:     match.Name,
 		Entry:    match.Entry,
@@ -213,7 +213,7 @@ func (r *resolver) installIfRegistry(match AssetMatch) error {
 // returns an ambiguity error listing all matches as "category:name". Each
 // candidate string round-trips: pasting it back as the command argument
 // resolves to that exact match.
-func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query string) (AssetMatch, error) {
+func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query string) (ModuleMatch, error) {
 	sort.SliceStable(matches, func(i, j int) bool {
 		return formatAddress(matches[i].Category, matches[i].Name) < formatAddress(matches[j].Category, matches[j].Name)
 	})
@@ -225,8 +225,8 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 	if !isTTY {
 		shown := matches
 		truncated := false
-		if len(shown) > maxAssetResults {
-			shown = shown[:maxAssetResults]
+		if len(shown) > maxModuleResults {
+			shown = shown[:maxModuleResults]
 			truncated = true
 		}
 		var b strings.Builder
@@ -238,10 +238,10 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 			fmt.Fprintf(&b, "\n(showing %d of %d; refine search for more specific results)", len(shown), len(matches))
 		}
 		b.WriteString("\nSpecify exact name or run interactively")
-		return AssetMatch{}, errors.New(b.String())
+		return ModuleMatch{}, errors.New(b.String())
 	}
 
-	displayCount := min(len(matches), maxAssetResults)
+	displayCount := min(len(matches), maxModuleResults)
 
 	_, _ = fmt.Fprintf(w, "Found %d matches for %q:\n\n", len(matches), query)
 
@@ -258,7 +258,7 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 		display := formatAddress(m.Category, m.Name)
 		padding := strings.Repeat(" ", maxDisplayLen-len(display)+2)
 		var sourceLabel string
-		if m.Source == AssetSourceInstalled {
+		if m.Source == ModuleSourceInstalled {
 			sourceLabel = tui.ColorInstalled.Sprint(m.Source)
 		} else {
 			sourceLabel = tui.ColorRegistry.Sprint(m.Source)
@@ -277,7 +277,7 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 	reader := bufio.NewReader(stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
-		return AssetMatch{}, fmt.Errorf("reading input: %w", err)
+		return ModuleMatch{}, fmt.Errorf("reading input: %w", err)
 	}
 	input = strings.TrimSpace(input)
 
@@ -285,8 +285,8 @@ func promptCrossCategorySelection(r *resolver, matches []AssetMatch, query strin
 		if choice >= 1 && choice <= displayCount {
 			return matches[choice-1], nil
 		}
-		return AssetMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
+		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
 	}
 
-	return AssetMatch{}, fmt.Errorf("invalid selection: %s", input)
+	return ModuleMatch{}, fmt.Errorf("invalid selection: %s", input)
 }

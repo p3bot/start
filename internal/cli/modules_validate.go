@@ -43,7 +43,7 @@ type validateCatResult struct {
 	modules []validateModuleResult
 }
 
-// ValidateResult is the top-level JSON output for assets validate.
+// ValidateResult is the top-level JSON output for modules validate.
 type ValidateResult struct {
 	Index      ValidateIndexResult      `json:"index"`
 	Categories []ValidateCategoryResult `json:"categories"`
@@ -89,8 +89,8 @@ type validateError struct{}
 func (e *validateError) Error() string { return "validation issues found" }
 func (e *validateError) Silent() bool  { return true }
 
-// addAssetsValidateCommand registers the validate subcommand.
-func addAssetsValidateCommand(parent *cobra.Command) {
+// addModulesValidateCommand registers the validate subcommand.
+func addModulesValidateCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "validate",
 		Aliases: []string{"verify", "check"},
@@ -98,7 +98,7 @@ func addAssetsValidateCommand(parent *cobra.Command) {
 		Long: `Check that git tags, CUE registry published versions, and index version
 fields are consistent with each other.
 
-Clones the assets repository to cache and checks each module for:
+Clones the modules repository to cache and checks each module for:
   - Version drift between index, registry, and git tags
   - Modules in the filesystem with no index entry
   - Content changes since the last published tag
@@ -107,7 +107,7 @@ Exit codes:
   0 - All checks passed
   1 - Issues found`,
 		Args: noArgsOrHelp,
-		RunE: runAssetsValidate,
+		RunE: runModulesValidate,
 	}
 	cmd.Flags().Bool("yes", false, "Confirm intent to run network checks")
 	_ = cmd.Flags().MarkHidden("yes")
@@ -115,8 +115,8 @@ Exit codes:
 	parent.AddCommand(cmd)
 }
 
-// runAssetsValidate executes the validate command.
-func runAssetsValidate(cmd *cobra.Command, args []string) error {
+// runModulesValidate executes the validate command.
+func runModulesValidate(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -130,12 +130,12 @@ func runAssetsValidate(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 	if !yes {
 		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, "The 'start assets validate' command is a maintainer tool for checking")
-		_, _ = fmt.Fprintln(w, "consistency between git tags, the CUE registry, and the assets index.")
+		_, _ = fmt.Fprintln(w, "The 'start modules validate' command is a maintainer tool for checking")
+		_, _ = fmt.Fprintln(w, "consistency between git tags, the CUE registry, and the modules index.")
 		_, _ = fmt.Fprintln(w, "It makes significant network requests against public infrastructure.")
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "Running it will:")
-		_, _ = fmt.Fprintln(w, "  - Clone or pull the assets repository from GitHub")
+		_, _ = fmt.Fprintln(w, "  - Clone or pull the modules repository from GitHub")
 		_, _ = fmt.Fprintln(w, "  - Fetch all git tags from origin")
 		_, _ = fmt.Fprintln(w, "  - Query the CUE registry for each published module")
 		_, _ = fmt.Fprintln(w)
@@ -151,7 +151,7 @@ func runAssetsValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Prerequisite 2: read library_index setting
-	indexPath := registry.EffectiveIndexPath(resolveAssetsIndexPath())
+	indexPath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
 
 	// Prerequisite 3: derive git repo URL
 	cloneURL, err := validateDeriveRepoURL(indexPath)
@@ -275,7 +275,7 @@ func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	}
 	// Require and strip /index suffix
 	if !strings.HasSuffix(path, "/index") {
-		return "", fmt.Errorf("assets validate requires an index path ending with /index (got %q); custom subpaths are not supported", path)
+		return "", fmt.Errorf("modules validate requires an index path ending with /index (got %q); custom subpaths are not supported", path)
 	}
 	path = strings.TrimSuffix(path, "/index")
 	return "https://" + path, nil
@@ -297,7 +297,7 @@ func validateCheckNetwork(repoURL string) error {
 	return nil
 }
 
-// validateCacheDir returns the path for the assets git clone cache.
+// validateCacheDir returns the path for the modules git clone cache.
 // The directory name is derived from the repo URL so different index sources
 // get separate cache directories.
 func validateCacheDir(repoURL string) (string, error) {
@@ -322,12 +322,12 @@ func validateCacheDirName(repoURL string) string {
 	if len(parts) == 1 && parts[0] != "" {
 		return parts[0]
 	}
-	return "assets-cache"
+	return "modules-cache"
 }
 
-// defaultAssetsBranch is the expected default branch of the assets repository.
-// Custom assets repositories on a different default branch are not supported.
-const defaultAssetsBranch = "main"
+// defaultLibraryBranch is the expected default branch of the modules repository.
+// Custom modules repositories on a different default branch are not supported.
+const defaultLibraryBranch = "main"
 
 // validateEnsureRepo clones the repo if absent, otherwise fetches and resets to
 // origin/main. Using fetch+reset instead of pull avoids divergent branch errors
@@ -361,14 +361,14 @@ func validateEnsureRepo(repoURL, cacheDir string) error {
 	// Already cloned — reset to match remote default branch.
 	// Using fetch + reset avoids merge strategy issues (divergent branches)
 	// that occur with "git pull" on a validation cache.
-	if out, err := exec.Command("git", "-C", cacheDir, "checkout", defaultAssetsBranch).CombinedOutput(); err != nil {
-		return fmt.Errorf("checking out %s in %s: %s", defaultAssetsBranch, cacheDir, strings.TrimSpace(string(out)))
+	if out, err := exec.Command("git", "-C", cacheDir, "checkout", defaultLibraryBranch).CombinedOutput(); err != nil {
+		return fmt.Errorf("checking out %s in %s: %s", defaultLibraryBranch, cacheDir, strings.TrimSpace(string(out)))
 	}
-	if out, err := exec.Command("git", "-C", cacheDir, "fetch", "origin", defaultAssetsBranch).CombinedOutput(); err != nil {
-		return fmt.Errorf("fetching %s from %s (cache: %s): %s", defaultAssetsBranch, repoURL, cacheDir, strings.TrimSpace(string(out)))
+	if out, err := exec.Command("git", "-C", cacheDir, "fetch", "origin", defaultLibraryBranch).CombinedOutput(); err != nil {
+		return fmt.Errorf("fetching %s from %s (cache: %s): %s", defaultLibraryBranch, repoURL, cacheDir, strings.TrimSpace(string(out)))
 	}
-	if out, err := exec.Command("git", "-C", cacheDir, "reset", "--hard", "origin/"+defaultAssetsBranch).CombinedOutput(); err != nil {
-		return fmt.Errorf("resetting to origin/%s in %s: %s", defaultAssetsBranch, cacheDir, strings.TrimSpace(string(out)))
+	if out, err := exec.Command("git", "-C", cacheDir, "reset", "--hard", "origin/"+defaultLibraryBranch).CombinedOutput(); err != nil {
+		return fmt.Errorf("resetting to origin/%s in %s: %s", defaultLibraryBranch, cacheDir, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -380,8 +380,8 @@ func validateVerifyRepo(cacheDir string) error {
 	if err != nil {
 		return fmt.Errorf("checking current branch: %w", err)
 	}
-	if branch := strings.TrimSpace(string(out)); branch != defaultAssetsBranch {
-		return fmt.Errorf("expected branch %s, got %q", defaultAssetsBranch, branch)
+	if branch := strings.TrimSpace(string(out)); branch != defaultLibraryBranch {
+		return fmt.Errorf("expected branch %s, got %q", defaultLibraryBranch, branch)
 	}
 
 	// Must have no uncommitted changes
@@ -841,7 +841,7 @@ func validateHasFailure(cats []validateCatResult) bool {
 
 // printValidateIndexSection prints the index validation result (Section 1).
 // Uses the doctor CheckResult types for status icons but without the full doctor
-// reporter header or summary — this is assets validate, not doctor.
+// reporter header or summary — this is modules validate, not doctor.
 func printValidateIndexSection(w io.Writer, section doctor.SectionResult) {
 	_, _ = tui.ColorHeader.Fprintln(w, section.Name)
 	for _, result := range section.Results {

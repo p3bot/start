@@ -1822,7 +1822,7 @@ func TestComposer_ModulePathResolutionError(t *testing.T) {
 		if !strings.Contains(ctx.Error, "resolving module path") {
 			t.Errorf("context error = %q, want it to contain %q", ctx.Error, "resolving module path")
 		}
-		if !strings.Contains(ctx.Error, "start assets add") {
+		if !strings.Contains(ctx.Error, "start modules add") {
 			t.Errorf("context error = %q, want it to contain actionable hint", ctx.Error)
 		}
 	})
@@ -1847,7 +1847,7 @@ func TestComposer_ModulePathResolutionError(t *testing.T) {
 		if !strings.Contains(err.Error(), "resolving module path") {
 			t.Errorf("error = %q, want it to contain %q", err.Error(), "resolving module path")
 		}
-		if !strings.Contains(err.Error(), "start assets add") {
+		if !strings.Contains(err.Error(), "start modules add") {
 			t.Errorf("error = %q, want it to contain actionable hint", err.Error())
 		}
 	})
@@ -1872,7 +1872,7 @@ func TestComposer_ModulePathResolutionError(t *testing.T) {
 		if !strings.Contains(err.Error(), "resolving module path") {
 			t.Errorf("error = %q, want it to contain %q", err.Error(), "resolving module path")
 		}
-		if !strings.Contains(err.Error(), "start assets add") {
+		if !strings.Contains(err.Error(), "start modules add") {
 			t.Errorf("error = %q, want it to contain actionable hint", err.Error())
 		}
 	})

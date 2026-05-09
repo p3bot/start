@@ -147,74 +147,74 @@ trap cleanup EXIT
 cleanup 2>/dev/null || true
 
 echo "========================================"
-echo "1. Assets Commands"
+echo "1. Modules Commands"
 echo "========================================"
 echo
 
-run_test_show "1.1 assets search" \
-    "./start assets search role"
+run_test_show "1.1 modules search" \
+    "./start modules search role"
 
-run_test_show "1.1b assets search (golang)" \
-    "./start assets search golang"
+run_test_show "1.1b modules search (golang)" \
+    "./start modules search golang"
 
-run_test_show "1.2 assets search --verbose" \
-    "./start assets search role --verbose"
+run_test_show "1.2 modules search --verbose" \
+    "./start modules search role --verbose"
 
-run_test_expect_fail "1.3 assets search (Minimum 3 chars)" \
-    "./start assets search ab"
+run_test_expect_fail "1.3 modules search (Minimum 3 chars)" \
+    "./start modules search ab"
 
-run_test_show "1.4 assets search (No Results)" \
-    "./start assets search xyznonexistent123"
+run_test_show "1.4 modules search (No Results)" \
+    "./start modules search xyznonexistent123"
 
-skip_test "1.5 assets add" \
+skip_test "1.5 modules add" \
     "Interactive - requires TTY for selection"
 
-skip_test "1.6 assets add --local" \
+skip_test "1.6 modules add --local" \
     "Interactive - requires TTY for selection"
 
-run_test_show "1.7 assets add (Direct Path)" \
-    "./start assets add golang/code-review 2>&1 || echo '(may already exist)'"
+run_test_show "1.7 modules add (Direct Path)" \
+    "./start modules add golang/code-review 2>&1 || echo '(may already exist)'"
 
-run_test_show "1.8 assets list" \
-    "./start assets list"
+run_test_show "1.8 modules list" \
+    "./start modules list"
 
-run_test_show "1.9 assets list roles" \
-    "./start assets list roles"
+run_test_show "1.9 modules list roles" \
+    "./start modules list roles"
 
-run_test_show "1.9b assets list tasks" \
-    "./start assets list tasks"
+run_test_show "1.9b modules list tasks" \
+    "./start modules list tasks"
 
-run_test_show "1.10 assets info" \
-    "./start assets info golang/code-review"
+run_test_show "1.10 modules info" \
+    "./start modules info golang/code-review"
 
-run_test_show "1.11 assets info (Search then Show)" \
-    "./start assets info 'code review' 2>&1 | head -20"
+run_test_show "1.11 modules info (Search then Show)" \
+    "./start modules info 'code review' 2>&1 | head -20"
 
-run_test_show "1.12 assets update" \
-    "./start assets update"
+run_test_show "1.12 modules update" \
+    "./start modules update"
 
-run_test_show "1.13 assets update (Specific)" \
-    "./start assets update golang"
+run_test_show "1.13 modules update (Specific)" \
+    "./start modules update golang"
 
-run_test_show "1.14 assets update --dry-run" \
-    "./start assets update --dry-run"
+run_test_show "1.14 modules update --dry-run" \
+    "./start modules update --dry-run"
 
-run_test_show "1.15 assets update --force" \
-    "./start assets update --force"
+run_test_show "1.15 modules update --force" \
+    "./start modules update --force"
 
-skip_test "1.16 assets browse" \
+skip_test "1.16 modules browse" \
     "Opens browser - manual test only"
 
-skip_test "1.17 assets browse (Specific)" \
+skip_test "1.17 modules browse (Specific)" \
     "Opens browser - manual test only"
 
-run_test_show "1.18 assets index (Not Asset Repo)" \
-    "./start assets index 2>&1 || echo '(expected error - not in asset repo)'"
+run_test_show "1.18 modules index (Not Module Repo)" \
+    "./start modules index 2>&1 || echo '(expected error - not in library repo)'"
 
 # Use subshell to avoid changing directory in main shell
 START_BIN="$(pwd)/start"
-run_test_expect_fail "1.19 assets index (Not Asset Repo - verify error)" \
-    "(cd /tmp && $START_BIN assets index)"
+run_test_expect_fail "1.19 modules index (Not Module Repo - verify error)" \
+    "(cd /tmp && $START_BIN modules index)"
 
 echo "========================================"
 echo "2. Doctor Command"
@@ -351,8 +351,8 @@ echo "4. Help and Discoverability"
 echo "========================================"
 echo
 
-run_test_show "4.1 assets --help" \
-    "./start assets --help"
+run_test_show "4.1 modules --help" \
+    "./start modules --help"
 
 run_test_show "4.2 doctor --help" \
     "./start doctor --help"

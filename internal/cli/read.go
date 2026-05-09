@@ -17,29 +17,29 @@ func addReadCommand(parent *cobra.Command) {
 	readCmd := &cobra.Command{
 		Use:     "read [name]",
 		GroupID: "commands",
-		Short:   "Output asset content to stdout",
-		Long: `Output the resolved content of an asset to stdout for piping or preview.
+		Short:   "Output module content to stdout",
+		Long: `Output the resolved content of a module to stdout for piping or preview.
 
 Searches across all categories (agents, roles, contexts, tasks) and writes the
-asset's content to stdout. Names may be bare (e.g. "agents-md") or fully
+module's content to stdout. Names may be bare (e.g. "agents-md") or fully
 qualified as "category:name" (e.g. "contexts:cwd/agents-md"); the category
-prefix scopes the search to a single category. UTD assets (roles, contexts,
+prefix scopes the search to a single category. UTD modules (roles, contexts,
 tasks) are template-resolved: file contents are read, prompts are rendered,
-and commands are executed. Agent assets emit the command template with static
+and commands are executed. Agent modules emit the command template with static
 placeholders ({{.bin}}, {{.model}}) substituted while runtime placeholders
 ({{.prompt}}, {{.role}}, {{.role_file}}, {{.datetime}}) are left intact. The
 --model flag, when set, overrides the agent's default_model in the
 {{.model}} substitution.
 
-Source priority for UTD assets is file > prompt > command. When a UTD asset
+Source priority for UTD modules is file > prompt > command. When a UTD module
 defines both file and prompt, read outputs the file. During role/task/context
 rendering by 'start' or 'start task', behaviour differs: the prompt is rendered
 and file contents are injected via {{.file_contents}}, command output via
-{{.command_output}}. So for mixed-field assets, read's output will not match
+{{.command_output}}. So for mixed-field modules, read's output will not match
 what 'start' renders into the agent prompt — use 'start show' to inspect the
 prompt.
 
-Stdout receives only the asset content. Selection menus, registry progress,
+Stdout receives only the module content. Selection menus, registry progress,
 auto-install notices, and --verbose metadata are written to stderr so the
 output remains pipe-clean.
 
@@ -47,9 +47,9 @@ Use --global to restrict resolution to the global config (~/.config/start/) or
 --local to restrict to the local config (./.start/). These flags are mutually
 exclusive; omitting both resolves against the merged configuration.
 
-Auto-installed assets always land in global config; the post-install lookup
-widens to merged scope so a --local invocation can still see the new asset.
-To inspect strictly within --local, ensure the asset is already installed.`,
+Auto-installed modules always land in global config; the post-install lookup
+widens to merged scope so a --local invocation can still see the new module.
+To inspect strictly within --local, ensure the module is already installed.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runRead,
 	}
@@ -59,7 +59,7 @@ To inspect strictly within --local, ensure the asset is already installed.`,
 	parent.AddCommand(readCmd)
 }
 
-// runRead resolves an asset and writes its content to stdout.
+// runRead resolves a module and writes its content to stdout.
 func runRead(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -97,13 +97,13 @@ func runRead(cmd *cobra.Command, args []string) error {
 	}
 
 	// Refresh the in-memory config after an auto-install so the freshly
-	// installed asset's CUE value is visible. Same pattern as start and task.
+	// installed module's CUE value is visible. Same pattern as start and task.
 	//
 	// reloadConfig always reloads in merged scope regardless of the user's
 	// original --local/--global flag. This is deliberate: autoInstall always
 	// writes to global config (resolve.go's autoInstall), so merged is the
-	// smallest scope guaranteed to see the new asset for any original scope.
-	// Under --global the result is identical (asset only exists in global,
+	// smallest scope guaranteed to see the new module for any original scope.
+	// Under --global the result is identical (module only exists in global,
 	// merged is a superset); under --local the widening is required for the
 	// lookup to succeed and is signalled to the user via
 	// notifyScopeWidenedIfLocal. A scope-aware reload would be a no-op
@@ -137,9 +137,9 @@ func runRead(cmd *cobra.Command, args []string) error {
 	return readUTD(stdout, stderr, flags, match.Name, cat.itemType, item)
 }
 
-// readResolveQuery returns the asset query, prompting interactively when no
+// readResolveQuery returns the module query, prompting interactively when no
 // argument was supplied. All prompts and warnings go to stderr to keep stdout
-// reserved for asset content (Requirement 5).
+// reserved for module content (Requirement 5).
 func readResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, error) {
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
@@ -193,16 +193,16 @@ func readAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string,
 	return nil
 }
 
-// readUTD resolves a UTD asset and writes its content to stdout. Source
+// readUTD resolves a UTD module and writes its content to stdout. Source
 // priority is file > prompt > command. The TemplateProcessor's intrinsic
 // priority is the inverse (prompt > file > command, see template.go); the
 // trim block below flips it by clearing higher-priority sources before Process
 // runs. Shell and Timeout are execution config and pass through untouched so a
-// command-source asset still honours its declared shell and timeout.
+// command-source module still honours its declared shell and timeout.
 func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item cue.Value) error {
 	fields := orchestration.ExtractUTDFields(item)
 	if !orchestration.IsUTDValid(fields) {
-		return fmt.Errorf("asset %q has no content fields (expected one of: file, prompt, command)", name)
+		return fmt.Errorf("module %q has no content fields (expected one of: file, prompt, command)", name)
 	}
 
 	resolvedFile := ""
@@ -212,7 +212,7 @@ func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item
 			fromModuleCache = true
 			origin := orchestration.ExtractOrigin(item)
 			if origin == "" {
-				return fmt.Errorf("asset %q has @module/ file path but no origin field", name)
+				return fmt.Errorf("module %q has @module/ file path but no origin field", name)
 			}
 			resolved, err := orchestration.ResolveModulePath(fields.File, origin)
 			if err != nil {
@@ -275,12 +275,12 @@ func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item
 	return nil
 }
 
-// printReadVerbose writes asset metadata to stderr ahead of the content. Used
-// when --verbose is set; stdout remains reserved for the asset content itself.
+// printReadVerbose writes module metadata to stderr ahead of the content. Used
+// when --verbose is set; stdout remains reserved for the module content itself.
 // command is set only when command is the active source — readUTD passes the
 // post-trim fields.Command, which is non-empty exactly when command was chosen.
 // fromModuleCache labels the file location as `Cache:` (matching `start show`)
-// so users aren't misled into editing the CUE module cache; local-file assets
+// so users aren't misled into editing the CUE module cache; local-file modules
 // keep the `Path:` label so the user knows where the editable source lives.
 func printReadVerbose(stderr io.Writer, itemType, name string, item cue.Value, resolvedFile, command string, fromModuleCache bool) {
 	_, _ = fmt.Fprintf(stderr, "Type: %s\n", itemType)
@@ -302,7 +302,7 @@ func printReadVerbose(stderr io.Writer, itemType, name string, item cue.Value, r
 
 // ensureTrailingNewline returns s with exactly one trailing newline. Empty
 // strings pass through. Used at every read write site so stdout is line-aligned
-// regardless of which asset source produced the content.
+// regardless of which module source produced the content.
 func ensureTrailingNewline(s string) string {
 	if s == "" || strings.HasSuffix(s, "\n") {
 		return s

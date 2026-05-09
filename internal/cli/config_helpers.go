@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/config"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -668,12 +668,12 @@ func resolveAllMatchingNames[T any](items map[string]T, typeName, query string) 
 		// Has siblings — fall through so the regex search returns all matches.
 	}
 
-	terms := assets.ParseSearchPatterns(query)
+	terms := modules.ParseSearchPatterns(query)
 	if len(terms) == 0 {
 		return nil, fmt.Errorf("%s %q not found", typeName, query)
 	}
 
-	patterns, err := assets.CompileSearchTerms(terms)
+	patterns, err := modules.CompileSearchTerms(terms)
 	if err != nil {
 		return nil, fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err)
 	}
@@ -1028,12 +1028,12 @@ func resolveInstalledName[T any](items map[string]T, typeName, query string) (st
 	}
 
 	// Regex-based search across map keys
-	terms := assets.ParseSearchPatterns(query)
+	terms := modules.ParseSearchPatterns(query)
 	if len(terms) == 0 {
 		return "", zero, fmt.Errorf("%s %q not found", typeName, query)
 	}
 
-	patterns, err := assets.CompileSearchTerms(terms)
+	patterns, err := modules.CompileSearchTerms(terms)
 	if err != nil {
 		return "", zero, fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err)
 	}

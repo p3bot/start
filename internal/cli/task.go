@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/temp"
@@ -70,7 +70,7 @@ func runTask(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nRun %s to search and run a task.\n", tui.Annotate("start task <name>"))
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run %s to search all configuration and assets.\n", tui.Annotate("start search <name>"))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run %s to search all configuration and modules.\n", tui.Annotate("start search <name>"))
 		return nil
 	}
 
@@ -81,7 +81,7 @@ func runTask(cmd *cobra.Command, args []string) error {
 	}
 
 	tagFlags, _ := cmd.Flags().GetStringSlice("tag")
-	tags := assets.ParseSearchTerms(strings.Join(tagFlags, ","))
+	tags := modules.ParseSearchTerms(strings.Join(tagFlags, ","))
 
 	flags := getFlags(cmd)
 	return executeTask(cmd.OutOrStdout(), cmd.ErrOrStderr(), cmd.InOrStdin(), flags, taskName, instructions, tags)
@@ -95,7 +95,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		return err
 	}
 
-	// Phase 2: Resolve asset flags (agent, role, context)
+	// Phase 2: Resolve module flags (agent, role, context)
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
 
 	agentName := flags.Agent
@@ -128,7 +128,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	// Track if we need a config reload (from flag resolution installs)
 	flagInstalled := r.didInstall
 
-	// If flag resolution installed assets, reload config
+	// If flag resolution installed modules, reload config
 	if flagInstalled {
 		debugf(stderr, flags, dbgConfig, "Reloading config after registry installs")
 		if err := r.reloadConfig(workingDir); err != nil {
@@ -222,7 +222,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 					if !flags.Quiet {
 						_, _ = fmt.Fprintf(stdout, "Installing %s from registry...\n", match.Name)
 					}
-					result := assets.SearchResult{
+					result := modules.SearchResult{
 						Category: "tasks",
 						Name:     match.Name,
 						Entry:    match.Entry,
@@ -253,7 +253,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 					if !flags.Quiet {
 						_, _ = fmt.Fprintf(stdout, "Installing %s from registry...\n", selected.Name)
 					}
-					result := assets.SearchResult{
+					result := modules.SearchResult{
 						Category: "tasks",
 						Name:     selected.Name,
 						Entry:    selected.Entry,
@@ -513,7 +513,7 @@ func taskInMatches(name string, matches []TaskMatch) bool {
 // Multiple terms (space or comma separated) use AND logic - all must match.
 // When tags is non-empty, entries must also match at least one tag.
 func findInstalledTasks(cfg internalcue.LoadResult, searchTerm string, tags []string) ([]TaskMatch, error) {
-	results, err := assets.SearchInstalledConfig(cfg.Value, internalcue.KeyTasks, "tasks", searchTerm, tags)
+	results, err := modules.SearchInstalledConfig(cfg.Value, internalcue.KeyTasks, "tasks", searchTerm, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +532,7 @@ func findInstalledTasks(cfg internalcue.LoadResult, searchTerm string, tags []st
 // Multiple terms (space or comma separated) use AND logic - all must match.
 // When tags is non-empty, entries must also match at least one tag.
 func findRegistryTasks(index *registry.Index, searchTerm string, tags []string) ([]TaskMatch, error) {
-	results, err := assets.SearchCategoryEntries("tasks", index.Tasks, searchTerm, tags)
+	results, err := modules.SearchCategoryEntries("tasks", index.Tasks, searchTerm, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +655,7 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 	return TaskMatch{}, fmt.Errorf("invalid selection: %s", input)
 }
 
-// reloadEnv reloads configuration and rebuilds the execution environment after an asset install.
+// reloadEnv reloads configuration and rebuilds the execution environment after a module install.
 func reloadEnv(workingDir, agentName string, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) (*ExecutionEnv, error) {
 	reloadedCfg, err := loadMergedConfigFromDirWithDebug(stdout, stderr, stdin, workingDir, flags)
 	if err != nil {
@@ -665,7 +665,7 @@ func reloadEnv(workingDir, agentName string, flags *Flags, stdout, stderr io.Wri
 }
 
 // installTaskAndReloadEnv installs a task from the registry and reloads the execution environment.
-func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, client *registry.Client, index *registry.Index, result assets.SearchResult, workingDir, agentName string) (*ExecutionEnv, error) {
+func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, client *registry.Client, index *registry.Index, result modules.SearchResult, workingDir, agentName string) (*ExecutionEnv, error) {
 	if err := installTaskFromRegistry(stdout, flags, client, index, result); err != nil {
 		return nil, err
 	}
@@ -673,10 +673,10 @@ func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *F
 }
 
 // installTaskFromRegistry installs a task from the registry using a pre-fetched client and result.
-func installTaskFromRegistry(stdout io.Writer, flags *Flags, client *registry.Client, index *registry.Index, result assets.SearchResult) error {
+func installTaskFromRegistry(stdout io.Writer, flags *Flags, client *registry.Client, index *registry.Index, result modules.SearchResult) error {
 	ctx := context.Background()
 
-	// Install the task using the assets package
+	// Install the task using the modules package
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -685,8 +685,8 @@ func installTaskFromRegistry(stdout io.Writer, flags *Flags, client *registry.Cl
 	// Always install to global config for auto-install
 	configDir := paths.Global
 
-	// Install the asset
-	version, err := assets.InstallAsset(ctx, client, index, result, configDir)
+	// Install the module
+	version, err := modules.InstallModule(ctx, client, index, result, configDir)
 	if err != nil {
 		return err
 	}

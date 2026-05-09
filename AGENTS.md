@@ -4,7 +4,7 @@
 
 ## Project Status
 
-Active development. The CLI is fully implemented with commands for agent launching, config management, asset installation, and diagnostics. Built on CUE for type-safe, order-preserving configuration.
+Active development. The CLI is fully implemented with commands for agent launching, config management, module installation, and diagnostics. Built on CUE for type-safe, order-preserving configuration.
 
 ### Active Project
 
@@ -41,10 +41,10 @@ start show agents               # Show installed agents
 start show roles                # Show installed roles
 start show tasks                # Show installed tasks
 start show contexts             # Show installed contexts
-start read <name>               # Output asset content to stdout (pipe-clean)
-start assets install <pkg>      # Install an asset package
+start read <name>               # Output module content to stdout (pipe-clean)
+start modules add <pkg>         # Install a module from the library
 start config list               # List configuration entries
-start search <term>             # Search installed assets
+start search <term>             # Search installed modules
 start doctor                    # Diagnose installation and configuration
 start prompt                    # Compose and preview a prompt
 ```
@@ -73,7 +73,7 @@ start prompt                    # Compose and preview a prompt
 | ------- | ---- | ------- |
 | cli | `internal/cli/` | Command implementations (cobra) |
 | orchestration | `internal/orchestration/` | Prompt composition and agent execution |
-| assets | `internal/assets/` | Asset search and installation |
+| modules | `internal/modules/` | Module search and installation |
 | cue | `internal/cue/` | CUE configuration loading and validation |
 | registry | `internal/registry/` | CUE Central Registry client |
 | config | `internal/config/` | Configuration path and settings management |
@@ -86,7 +86,7 @@ start prompt                    # Compose and preview a prompt
 
 | File | Purpose |
 | ---- | ------- |
-| `internal/cli/resolve.go` | Three-tier asset resolution (exact config → registry → substring) |
+| `internal/cli/resolve.go` | Three-tier module resolution (exact config → registry → substring) |
 | `internal/cli/root.go` | Root command factory with all subcommands registered |
 | `internal/cli/start.go` | Main `start` command: config loading and execution env setup |
 | `internal/cli/task.go` | Task execution command |
@@ -96,11 +96,11 @@ start prompt                    # Compose and preview a prompt
 
 ### Resolution Logic
 
-Asset resolution follows a three-tier strategy:
+Module resolution follows a three-tier strategy:
 
 1. Exact match against installed config names
 2. Exact match against CUE Central Registry index
-3. Substring search across installed assets
+3. Substring search across installed modules
 
 File paths (starting with `./`, `/`, or `~`) bypass search entirely.
 
@@ -140,7 +140,7 @@ CUE (Configure Unify Execute) provides:
 | Aspect | Prototype (TOML) | This Version (CUE) |
 | ------ | ---------------- | ------------------ |
 | Config format | TOML (unordered tables) | CUE (ordered, typed) |
-| Asset distribution | Custom GitHub API system | CUE Central Registry |
+| Module distribution | Custom GitHub API system | CUE Central Registry |
 | Validation | Custom Go code | CUE schemas |
 | Package management | Custom catalog/cache | CUE modules |
 | Schema definition | Documentation only | Enforced by CUE |
@@ -155,7 +155,7 @@ CUE (Configure Unify Execute) provides:
 
 The `./library/` directory contains the cloned [start-cli/library](https://github.com/start-cli/library) repository for local development and testing. This directory is git-ignored.
 
-Use for: Developing and testing new assets, schemas, and registry content before publishing.
+Use for: Developing and testing new modules, schemas, and registry content before publishing.
 
 ```
 library/
@@ -164,6 +164,6 @@ library/
 ├── docs/            # Library documentation
 ├── index/           # Registry index module
 ├── roles/           # Role definitions
-├── schemas/         # CUE schema definitions for all asset types
+├── schemas/         # CUE schema definitions for all module types
 └── tasks/           # Task definitions
 ```

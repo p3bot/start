@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 )
 
 // addConfigSearchCommand adds the search subcommand to the config command group.
@@ -16,10 +16,10 @@ func addConfigSearchCommand(parent *cobra.Command) {
 	searchCmd := &cobra.Command{
 		Use:     "search [query]...",
 		Aliases: []string{"find"},
-		Short:   "Search installed config for assets",
-		Long: `Search local and global config for installed assets by keyword.
+		Short:   "Search installed config for modules",
+		Long: `Search local and global config for installed modules by keyword.
 
-Searches asset names, descriptions, and tags. Multiple words are combined
+Searches module names, descriptions, and tags. Multiple words are combined
 with AND logic - all terms must match. Terms can be space-separated or
 comma-separated. Total query must be at least 3 characters.
 Terms support regex patterns (e.g. '^home', 'expert$', 'go.*review').
@@ -28,7 +28,7 @@ Results are grouped by scope (local, global) and category.
 Use --local to search only project-local config (./.start/).
 Use --tag to filter by tags. Tags can be used alone or combined with a query.
 
-Use 'start search' to also include the asset registry in results.`,
+Use 'start search' to also include the module registry in results.`,
 		Args: cobra.MinimumNArgs(0),
 		RunE: runConfigSearch,
 	}
@@ -47,10 +47,10 @@ func runConfigSearch(cmd *cobra.Command, args []string) error {
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
 	tagFlags, _ := cmd.Flags().GetStringSlice("tag")
-	tags := assets.ParseSearchTerms(strings.Join(tagFlags, ","))
+	tags := modules.ParseSearchTerms(strings.Join(tagFlags, ","))
 
-	terms := assets.ParseSearchPatterns(query)
-	if err := assets.ValidateSearchQuery(terms, tags); err != nil {
+	terms := modules.ParseSearchPatterns(query)
+	if err := modules.ValidateSearchQuery(terms, tags); err != nil {
 		if jsonFlag {
 			return err
 		}
@@ -70,11 +70,11 @@ func runConfigSearch(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		query = input
-		terms = assets.ParseSearchPatterns(query)
+		terms = modules.ParseSearchPatterns(query)
 	}
 
 	if len(terms) > 0 {
-		if _, err := assets.CompileSearchTerms(terms); err != nil {
+		if _, err := modules.CompileSearchTerms(terms); err != nil {
 			return err
 		}
 	}
@@ -105,9 +105,9 @@ func runConfigSearch(cmd *cobra.Command, args []string) error {
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
 			printWarning(stderr, "failed to load local config: %s", err)
 		} else if err == nil {
-			var results []assets.SearchResult
+			var results []modules.SearchResult
 			for _, cat := range categories {
-				catResults, err := assets.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
+				catResults, err := modules.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
 				if err != nil {
 					return err
 				}
@@ -129,9 +129,9 @@ func runConfigSearch(cmd *cobra.Command, args []string) error {
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
 			printWarning(stderr, "failed to load global config: %s", err)
 		} else if err == nil {
-			var results []assets.SearchResult
+			var results []modules.SearchResult
 			for _, cat := range categories {
-				catResults, err := assets.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
+				catResults, err := modules.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
 				if err != nil {
 					return err
 				}

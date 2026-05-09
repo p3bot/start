@@ -57,8 +57,8 @@ func TestResolveCrossCategory_SingleInstalledExact(t *testing.T) {
 	if match.Category != "agents" {
 		t.Errorf("match.Category = %q, want %q", match.Category, "agents")
 	}
-	if match.Source != AssetSourceInstalled {
-		t.Errorf("match.Source = %q, want %q", match.Source, AssetSourceInstalled)
+	if match.Source != ModuleSourceInstalled {
+		t.Errorf("match.Source = %q, want %q", match.Source, ModuleSourceInstalled)
 	}
 	if r.didInstall {
 		t.Error("didInstall should be false for an installed match")
@@ -227,7 +227,7 @@ func TestInstallIfRegistry_InstalledIsNoop(t *testing.T) {
 	t.Parallel()
 
 	r := newTestResolver(buildTestCfg(t, `{}`))
-	match := AssetMatch{Name: "foo", Category: "roles", Source: AssetSourceInstalled}
+	match := ModuleMatch{Name: "foo", Category: "roles", Source: ModuleSourceInstalled}
 
 	if err := r.installIfRegistry(match); err != nil {
 		t.Fatalf("installIfRegistry(installed) error = %v, want nil", err)
@@ -245,7 +245,7 @@ func TestInstallIfRegistry_RegistryWithoutClient(t *testing.T) {
 
 	r := newTestResolver(buildTestCfg(t, `{}`))
 	// r.client is nil by construction.
-	match := AssetMatch{Name: "foo", Category: "roles", Source: AssetSourceRegistry}
+	match := ModuleMatch{Name: "foo", Category: "roles", Source: ModuleSourceRegistry}
 
 	err := r.installIfRegistry(match)
 	if err == nil {

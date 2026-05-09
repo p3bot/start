@@ -10,15 +10,15 @@ import (
 	"cuelang.org/go/mod/modconfig"
 )
 
-// IndexModulePath is the CUE module path for the start assets index.
+// IndexModulePath is the CUE module path for the start library index.
 // Uses major version; resolved to latest canonical version at runtime.
 const IndexModulePath = "github.com/start-cli/library/index@v1"
 
-// SchemaModulePath is the CUE module path for the start asset schemas.
+// SchemaModulePath is the CUE module path for the start library schemas.
 // Used by doctor to validate configs against schema constraints.
 const SchemaModulePath = "github.com/start-cli/library/schemas@v1"
 
-// IndexEntry represents an entry in the asset index.
+// IndexEntry represents an entry in the library index.
 type IndexEntry struct {
 	Module      string   `json:"module"`
 	Description string   `json:"description,omitempty"`
@@ -27,7 +27,7 @@ type IndexEntry struct {
 	Bin         string   `json:"bin,omitempty"`
 }
 
-// Index represents the full asset discovery index.
+// Index represents the full library discovery index.
 type Index struct {
 	Agents   map[string]IndexEntry `json:"agents,omitempty"`
 	Roles    map[string]IndexEntry `json:"roles,omitempty"`

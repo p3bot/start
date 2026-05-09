@@ -9,45 +9,45 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/assets"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 	"golang.org/x/mod/semver"
 )
 
 // NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with assets_add.go, assets_list.go, assets_search.go, and
-// assets_index.go. This duplication is accepted - each command uses the results
+// loading patterns with modules_add.go, modules_list.go, modules_search.go, and
+// modules_index.go. This duplication is accepted - each command uses the results
 // differently and a shared helper would couple them for modest line savings.
 
 // UpdateResult tracks the result of an update operation.
 type UpdateResult struct {
-	Asset        InstalledAsset `json:"asset"`
-	OldVersion   string         `json:"oldVersion,omitempty"`
-	NewVersion   string         `json:"newVersion,omitempty"`
-	Updated      bool           `json:"updated"`
-	Error        error          `json:"-"`
-	ErrorMessage string         `json:"error,omitempty"`
+	Module       InstalledModule `json:"module"`
+	OldVersion   string          `json:"oldVersion,omitempty"`
+	NewVersion   string          `json:"newVersion,omitempty"`
+	Updated      bool            `json:"updated"`
+	Error        error           `json:"-"`
+	ErrorMessage string          `json:"error,omitempty"`
 }
 
-// addAssetsUpdateCommand adds the update subcommand to the assets command.
-func addAssetsUpdateCommand(parent *cobra.Command) {
+// addModulesUpdateCommand adds the update subcommand to the modules command.
+func addModulesUpdateCommand(parent *cobra.Command) {
 	updateCmd := &cobra.Command{
 		Use:     "update [query]",
 		Aliases: []string{"upgrade"},
-		Short:   "Update installed assets",
-		Long: `Update installed assets to their latest versions.
+		Short:   "Update installed modules",
+		Long: `Update installed modules to their latest versions.
 
-Without arguments, updates all installed assets.
-With a query, updates only matching assets.
+Without arguments, updates all installed modules.
+With a query, updates only matching modules.
 
 Use --dry-run to preview what would be updated without applying changes.
-Use --force to re-fetch and update assets even when already at the latest version.`,
+Use --force to re-fetch and update modules even when already at the latest version.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runAssetsUpdate,
+		RunE: runModulesUpdate,
 	}
 
 	updateCmd.Flags().Bool("force", false, "Re-fetch even if already at latest version")
@@ -56,8 +56,8 @@ Use --force to re-fetch and update assets even when already at the latest versio
 	parent.AddCommand(updateCmd)
 }
 
-// runAssetsUpdate updates installed assets.
-func runAssetsUpdate(cmd *cobra.Command, args []string) error {
+// runModulesUpdate updates installed modules.
+func runModulesUpdate(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -100,21 +100,21 @@ func runAssetsUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Collect installed assets
-	installed := collectInstalledAssets(cfg.Value, paths, localCfg)
+	// Collect installed modules
+	installed := collectInstalledModules(cfg.Value, paths, localCfg)
 
 	if len(installed) == 0 {
 		if jsonFlag {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
 			return nil
 		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No assets installed from registry.")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No modules installed from registry.")
 		return nil
 	}
 
 	// Filter by query if provided
 	if query != "" {
-		var filtered []InstalledAsset
+		var filtered []InstalledModule
 		queryLower := strings.ToLower(query)
 		for _, a := range installed {
 			if strings.Contains(strings.ToLower(a.Name), queryLower) ||
@@ -129,7 +129,7 @@ func runAssetsUpdate(cmd *cobra.Command, args []string) error {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
 				return nil
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No installed assets matching %q\n", query)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No installed modules matching %q\n", query)
 			return nil
 		}
 	}
@@ -146,7 +146,7 @@ func runAssetsUpdate(cmd *cobra.Command, args []string) error {
 	defer prog.Done()
 
 	prog.Update("Checking for updates...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveAssetsIndexPath())
+	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
 	if err != nil {
 		return fmt.Errorf("fetching index: %w", err)
 	}
@@ -155,14 +155,14 @@ func runAssetsUpdate(cmd *cobra.Command, args []string) error {
 	}
 	prog.Done()
 
-	// Check each asset for updates
+	// Check each module for updates
 	dryRun := getFlags(cmd).DryRun
 	force, _ := cmd.Flags().GetBool("force")
 	total := len(installed)
 	var results []UpdateResult
-	for i, asset := range installed {
-		prog.Update("Updating %d/%d %s...", i+1, total, formatAddress(asset.Category, asset.Name))
-		result := checkAndUpdate(ctx, client, paths, index, asset, dryRun, force)
+	for i, mod := range installed {
+		prog.Update("Updating %d/%d %s...", i+1, total, formatAddress(mod.Category, mod.Name))
+		result := checkAndUpdate(ctx, client, paths, index, mod, dryRun, force)
 		results = append(results, result)
 	}
 	prog.Done()
@@ -187,22 +187,18 @@ func runAssetsUpdate(cmd *cobra.Command, args []string) error {
 }
 
 // checkAndUpdate checks for updates and optionally applies them.
-func checkAndUpdate(ctx context.Context, client *registry.Client, paths config.Paths, index *registry.Index, asset InstalledAsset, dryRun, force bool) UpdateResult {
-	result := UpdateResult{Asset: asset}
+func checkAndUpdate(ctx context.Context, client *registry.Client, paths config.Paths, index *registry.Index, mod InstalledModule, dryRun, force bool) UpdateResult {
+	result := UpdateResult{Module: mod}
 
-	// Find asset in index
-	entry := findInIndex(index, asset.Category, asset.Name)
+	entry := findInIndex(index, mod.Category, mod.Name)
 	if entry == nil {
-		// Not in index, can't update
 		return result
 	}
 
-	// Get current and latest versions
-	result.OldVersion = asset.InstalledVer
+	result.OldVersion = mod.InstalledVer
 	result.NewVersion = entry.Version
 
-	// Check if update is needed (semver comparison detects upgrades only)
-	needsUpdate := force || (entry.Version != "" && (asset.InstalledVer == "" || semver.Compare(entry.Version, asset.InstalledVer) > 0))
+	needsUpdate := force || (entry.Version != "" && (mod.InstalledVer == "" || semver.Compare(entry.Version, mod.InstalledVer) > 0))
 
 	if !needsUpdate {
 		return result
@@ -213,19 +209,16 @@ func checkAndUpdate(ctx context.Context, client *registry.Client, paths config.P
 		return result
 	}
 
-	if asset.ConfigFile == "" {
-		result.Error = fmt.Errorf("no config file path for asset")
+	if mod.ConfigFile == "" {
+		result.Error = fmt.Errorf("no config file path for module")
 		return result
 	}
 
-	// Re-fetch the module to get latest version
-	// First resolve @v0 to canonical version (e.g., @v0.0.1)
 	modulePath := entry.Module
 	if !strings.Contains(modulePath, "@") {
 		modulePath += "@v0"
 	}
 
-	// Resolve to canonical version before fetching
 	resolvedPath, err := client.ResolveLatestVersion(ctx, modulePath)
 	if err != nil {
 		result.Error = err
@@ -238,34 +231,29 @@ func checkAndUpdate(ctx context.Context, client *registry.Client, paths config.P
 		return result
 	}
 
-	// Extract the new content from fetched module
-	searchResult := assets.SearchResult{
-		Category: asset.Category,
-		Name:     asset.Name,
+	searchResult := modules.SearchResult{
+		Category: mod.Category,
+		Name:     mod.Name,
 		Entry:    *entry,
 	}
 
-	// For tasks, detect and install role dependencies before extracting content
 	var roleName string
-	if asset.Category == "tasks" && index != nil {
-		configDir := filepath.Dir(asset.ConfigFile)
-		roleName, err = assets.InstallRoleDependency(ctx, client, index, fetchResult.SourceDir, configDir)
+	if mod.Category == "tasks" && index != nil {
+		configDir := filepath.Dir(mod.ConfigFile)
+		roleName, err = modules.InstallRoleDependency(ctx, client, index, fetchResult.SourceDir, configDir)
 		if err != nil {
 			result.Error = fmt.Errorf("installing role dependency: %w", err)
 			return result
 		}
 	}
 
-	// Use resolved path with version for origin field (e.g., "github.com/.../task@v0.1.1")
-	// This preserves full provenance information for future updates.
-	assetContent, err := assets.ExtractAssetContent(fetchResult.SourceDir, searchResult, client.Registry(), resolvedPath, roleName)
+	moduleContent, err := modules.ExtractModuleContent(fetchResult.SourceDir, searchResult, client.Registry(), resolvedPath, roleName)
 	if err != nil {
-		result.Error = fmt.Errorf("extracting asset content: %w", err)
+		result.Error = fmt.Errorf("extracting module content: %w", err)
 		return result
 	}
 
-	// Update the config file with new content
-	if err := assets.UpdateAssetInConfig(asset.ConfigFile, asset.Category, asset.Name, assetContent); err != nil {
+	if err := modules.UpdateModuleInConfig(mod.ConfigFile, mod.Category, mod.Name, moduleContent); err != nil {
 		result.Error = fmt.Errorf("updating config: %w", err)
 		return result
 	}
@@ -285,7 +273,7 @@ func printUpdateResults(w io.Writer, results []UpdateResult, dryRun bool) {
 	var updated, current, failed int
 
 	for _, r := range results {
-		name := formatAddress(r.Asset.Category, r.Asset.Name)
+		name := formatAddress(r.Module.Category, r.Module.Name)
 		_, _ = fmt.Fprintf(w, "  %s ", name)
 
 		if r.Error != nil {

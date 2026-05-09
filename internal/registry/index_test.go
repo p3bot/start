@@ -26,8 +26,8 @@ func TestEffectiveIndexPath(t *testing.T) {
 		},
 		{
 			name:       "non-empty string returns configured value",
-			configured: "github.com/example/custom-assets/index@v0",
-			want:       "github.com/example/custom-assets/index@v0",
+			configured: "github.com/example/custom-library/index@v0",
+			want:       "github.com/example/custom-library/index@v0",
 		},
 	}
 
