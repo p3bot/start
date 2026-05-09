@@ -66,7 +66,7 @@ The full surface (from `rg -i -. 'asset'`) covers:
 10. README.md, AGENTS.md, and `internal/cli/help/agents.md` updated so no `asset` wording remains; the README sentence acknowledging the upcoming terminology project is removed; the command-tree note may stay or be trimmed to reference only the upcoming flattening work, provided it contains no `asset` text.
 11. Workspace-level `../AGENTS.md` updated so no `asset` wording remains: the `internal/` package list, the helper-scripts line (with `validate-assets.sh` removed entirely per requirement 9), the library description, and the cross-repo workflow note are all rewritten in module/library terminology.
 12. The CUE settings schema key `library_index` is unchanged.
-13. Final verification: `rg -i -. 'asset'` from `start/` and from `../AGENTS.md` returns zero matches.
+13. Final verification: `rg -i -. 'asset'` from `start/` (excluding `project.md`) and from `../AGENTS.md` returns zero matches.
 
 ## Implementation Plan
 
@@ -92,7 +92,7 @@ The full surface (from `rg -i -. 'asset'`) covers:
    Edit README.md, AGENTS.md, `internal/cli/help/agents.md`, and `../AGENTS.md` (the workspace-level document). Replace `start assets …` with `start modules …`. Replace narrative mentions of asset with module (for unit references) or library (for collection references). Remove the README sentence acknowledging the upcoming asset/module terminology project. In `../AGENTS.md` specifically: update the `internal/` package list (`assets` → `modules`), drop `validate-assets.sh` from the helper-scripts line, and rewrite the library description and cross-repo workflow note in the new terminology.
 
 8. Final verification
-   Run `rg -i -. 'asset'` from `start/` and `rg -i 'asset' ../AGENTS.md`. Zero matches in both is the success condition. For any remaining match, decide whether the wording should become module, library, or category, and apply the change.
+   Run `rg -i -. --glob '!project.md' 'asset'` from `start/` and `rg -i 'asset' ../AGENTS.md`. Zero matches in both is the success condition. For any remaining match, decide whether the wording should become module, library, or category, and apply the change.
 
 9. Build and test sweep
    Run `gofmt -w .`, `go fix ./...`, `golangci-lint run`, and `scripts/invoke-tests` from `start/`.
@@ -116,7 +116,7 @@ The full surface (from `rg -i -. 'asset'`) covers:
 
 ## Acceptance Criteria
 
-- `rg -i -. 'asset'` from `start/` returns zero matches
+- `rg -i -. --glob '!project.md' 'asset'` from `start/` returns zero matches
 - `rg -i 'asset' ../AGENTS.md` returns zero matches
 - `start modules` and all eight subcommands run successfully and present module/library wording in help output
 - `module` and `modules` invoke the same group; `asset` and `assets` are not recognised
