@@ -69,7 +69,10 @@ func InstallAsset(ctx context.Context, client *registry.Client, index *registry.
 	}
 
 	// Determine the config file to write to based on asset type
-	configFile := assetTypeToConfigFile(selected.Category)
+	configFile, ok := internalcue.ConfigFiles[selected.Category]
+	if !ok {
+		configFile = internalcue.ConfigFiles[internalcue.KeySettings]
+	}
 	configPath := filepath.Join(configDir, configFile)
 
 	// Write the asset to config
@@ -122,14 +125,6 @@ func InstallRoleDependency(ctx context.Context, client *registry.Client, index *
 func AssetExists(cfg cue.Value, category, name string) bool {
 	return cfg.LookupPath(cue.ParsePath(category)).
 		LookupPath(cue.MakePath(cue.Str(name))).Exists()
-}
-
-// assetTypeToConfigFile returns the config file name for an asset type.
-func assetTypeToConfigFile(category string) string {
-	if f, ok := internalcue.ConfigFiles[category]; ok {
-		return f
-	}
-	return internalcue.ConfigFiles[internalcue.KeySettings]
 }
 
 // ExtractAssetContent loads the asset module and extracts its content as a CUE AST struct.

@@ -8,15 +8,11 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 ### Active Project
 
-Projects are stored in `.ai/projects/`. Continue by reading the active project.
+Continue by reading the active project.
 
 Active Project: None
 
-Project Workflow:
-- Active projects are in `.ai/projects/`
-- When a project is complete, move it to `.ai/projects/completed/`
-- Update this file to point to the next active project
-- Update the Development Status section above
+When a project is complete, update this file to point to the next active project
 
 ## Build & Test
 
@@ -28,7 +24,7 @@ go test ./internal/...          # Run all internal package tests
 go test ./internal/cli/...      # Run CLI tests only
 ```
 
-Testing guidelines are in `.ai/design/testing-strategy.md`. Key principles:
+Testing key principles:
 - Test real behaviour over mocks (use actual CUE validation, real files via `t.TempDir()`)
 - Design functions to accept interfaces/parameters rather than reaching for globals
 - Use table-driven tests for multiple cases
@@ -138,16 +134,6 @@ CUE (Configure Unify Execute) provides:
 - Packages and modules: CUE Central Registry provides proper package distribution
 - Templating: Native support for constraints, defaults, and composition
 - Data and logic together: Configuration can include validation rules and transformations
-
-## Documentation
-
-- `.ai/` - AI agent working files (projects, design, tasks)
-- `.ai/design/` - Technical standards and reference documents
-- `.ai/design/testing-strategy.md` - Testing approach and patterns
-- `.ai/design/cli-command-structure.md` - CLI command structure spec
-- `.ai/design/cli-flags.md` - Flag definitions and behaviour
-- `.ai/projects/` - Project documents (active and completed)
-- `.ai/tasks/` - Task prompts
 
 ## What Changed From Prototype
 

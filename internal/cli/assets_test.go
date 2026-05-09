@@ -193,30 +193,6 @@ func TestPrintSearchResults(t *testing.T) {
 	})
 }
 
-// TestAssetTypeToConfigFile tests the assetTypeToConfigFile function.
-func TestAssetTypeToConfigFile(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		category string
-		want     string
-	}{
-		{"agents", "agents.cue"},
-		{"roles", "roles.cue"},
-		{"tasks", "tasks.cue"},
-		{"contexts", "contexts.cue"},
-		{"unknown", "settings.cue"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.category, func(t *testing.T) {
-			got := assetTypeToConfigFile(tt.category)
-			if got != tt.want {
-				t.Errorf("assetTypeToConfigFile(%q) = %q, want %q", tt.category, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestAssetsCommandExists tests that the assets command is registered.
 func TestAssetsCommandExists(t *testing.T) {
 	t.Parallel()

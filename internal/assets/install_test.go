@@ -102,31 +102,6 @@ contexts: {
 	}
 }
 
-// TestAssetTypeToConfigFile tests the assetTypeToConfigFile function.
-func TestAssetTypeToConfigFile(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		category string
-		want     string
-	}{
-		{"agents", "agents.cue"},
-		{"roles", "roles.cue"},
-		{"tasks", "tasks.cue"},
-		{"contexts", "contexts.cue"},
-		{"unknown", "settings.cue"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.category, func(t *testing.T) {
-			got := assetTypeToConfigFile(tt.category)
-			if got != tt.want {
-				t.Errorf("assetTypeToConfigFile(%q) = %q, want %q", tt.category, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestWriteAssetToConfig_NewCategory tests adding an asset with a category
 // that doesn't exist yet in an existing file.
 func TestWriteAssetToConfig_NewCategory(t *testing.T) {
@@ -510,7 +485,11 @@ contexts: {
 					t.Fatalf("Failed to write existing file: %v", err)
 				}
 			} else {
-				configPath = filepath.Join(tempDir, tt.name, assetTypeToConfigFile(tt.asset.Category))
+				configFileName, ok := internalcue.ConfigFiles[tt.asset.Category]
+				if !ok {
+					configFileName = internalcue.ConfigFiles[internalcue.KeySettings]
+				}
+				configPath = filepath.Join(tempDir, tt.name, configFileName)
 				if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 					t.Fatalf("Failed to create directory: %v", err)
 				}

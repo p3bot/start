@@ -265,7 +265,10 @@ func collectInstalledAssets(v cue.Value, paths config.Paths, localCfg cue.Value)
 // determineScopeAndFile determines whether an asset is from global or local config
 // and returns the path to the config file.
 func determineScopeAndFile(localCfg cue.Value, paths config.Paths, category, name string) (scope, configFile string) {
-	configFileName := assetTypeToConfigFile(category)
+	configFileName, ok := internalcue.ConfigFiles[category]
+	if !ok {
+		configFileName = internalcue.ConfigFiles[internalcue.KeySettings]
+	}
 
 	// Check local first (takes precedence)
 	if paths.LocalExists && assets.AssetExists(localCfg, category, name) {
@@ -358,21 +361,5 @@ func printInstalledAssets(w io.Writer, installed []InstalledAsset, verbose bool)
 			}
 		}
 		_, _ = fmt.Fprintln(w)
-	}
-}
-
-// assetTypeToConfigFile returns the config file name for an asset type.
-func assetTypeToConfigFile(category string) string {
-	switch category {
-	case "agents":
-		return "agents.cue"
-	case "roles":
-		return "roles.cue"
-	case "tasks":
-		return "tasks.cue"
-	case "contexts":
-		return "contexts.cue"
-	default:
-		return "settings.cue"
 	}
 }
