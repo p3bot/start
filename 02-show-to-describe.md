@@ -74,6 +74,10 @@ Cross-file Go references to the renamed identifiers:
 - `internal/cli/cross_resolve.go` — uses `showCategories` and `showCategoryFor`; one comment paragraph names `show` and `showVerboseItem` / `prepareShow`
 - `internal/cli/read.go` — calls `showScopeFromCmd`, `showCategoryFor`, and `notifyScopeWidenedIfLocal`; one help-text sentence references `start show`; comments reference `runShowSearch` and `show.go`
 - `internal/cli/read_test.go` — comments reference `notifyScopeWidenedIfLocal (show.go)`, `TestShowGlobalFlag in show_test.go`, and `showScopeFromCmd`
+- `internal/cli/config_info.go` — the `Long:` help text reads `Use 'start show' to view resolved content after global/local merging.` Update the command-name reference. Project `04-extend-describe.md` deletes this file; this edit is only needed if project `02` ships before `04`.
+- `internal/cli/read_test.go` (or `get_test.go` after project 01) — additional sites beyond the comment references above:
+  - A test assertion on the get command's help output containing the literal string `"start show"` in a `[]string` slice. After the help-text update in requirement 7, this string must be `"start describe"` or the test fails.
+  - A comment on the mutual-exclusion test reading `as 'start show' and writes nothing to stdout`.
 
 If project `01-read-to-get.md` has completed before this project starts, `internal/cli/read.go` and `internal/cli/read_test.go` are named `get.go` and `get_test.go`. The implementer should locate the cross-file callers by searching for the renamed identifiers rather than relying on the original filenames; the verification commands below use `rg` for this reason.
 
@@ -122,12 +126,13 @@ Shell scripts:
    Set `Use: "describe [name]"`. Confirm no `Aliases:` field is present. Update the `Short:` and `Long:` strings so wording reflects the new command name.
 
 4. Cross-file Go references
-   Use `rg -n 'addShowCommand|showScopeFromCmd|showCategoryFor|showCategories|runShowSearch|ShowResult|ShowReason'` to locate every caller. Update each. Specifically:
+   Use `rg -n 'addShowCommand|showScopeFromCmd|showCategoryFor|showCategories|runShowSearch|ShowResult|ShowReason'` for identifier callers and `rg -n 'start show\b|start view\b'` for command-name references. Update each. Specifically:
    - `internal/cli/root.go` — registration call
    - `internal/cli/cross_resolve.go` — variable use, lookup call, and the comment paragraph that names `show`
    - The read/get command file (`read.go` or `get.go` after project 01) — three call sites and the comment references
-   - The read/get test file — three comment references
+   - The read/get test file — comment references plus the `[]string{..., "start show", ...}` assertion in the get-help test (must become `"start describe"`) and the `as 'start show' and` comment on the mutual-exclusion test
    - The read/get command's `Long:` help text — the sentence referencing `start show`
+   - `internal/cli/config_info.go` — the `Long:` help text sentence referencing `start show` (skip if project `04-extend-describe.md` has already deleted the file)
 
 5. Documentation
    Edit `README.md`, `AGENTS.md`, and `internal/cli/help/agents.md` per requirement 10. For `AGENTS.md` lines 40-43, perform the mechanical substitution only; do not rewrite the misleading per-line comments.
@@ -165,6 +170,16 @@ Shell scripts:
    The misleading documentation predates this project and is not introduced by the rename. Fixing it requires either splitting the overloaded command (so a true `list <category>` form exists) or correcting the documentation to describe the actual behaviour. Both options are out of scope for a pure rename.
 
    Resolution: substitute `start show` → `start describe` mechanically on these four lines and leave the `# Show installed …` comments untouched. Flag the underlying overload for a follow-up project that addresses the listing-vs-describe split.
+
+2. Current State omits `start show` references outside the enumerated files (gap) — Resolved: enumeration extended.
+
+   The Current State section enumerates cross-file callers in `internal/cli/root.go`, `internal/cli/cross_resolve.go`, the read/get command file, and the read/get test file. It misses three further sites that contain literal `start show` references and will fail the requirement-12 verification (`rg -n 'start show\b|start view\b' .`) if left untouched:
+
+   - `internal/cli/config_info.go:23` — the `Long:` help text reads `Use 'start show' to view resolved content after global/local merging.` This file is unrelated to the read/get command but cross-references the command being renamed. (Note: project `04-extend-describe.md` deletes this file entirely. If `04` runs after `02`, the line is removed by `04`; if `02` runs first standalone, the implementer must update this line.)
+   - `internal/cli/get_test.go:542` — a test assertion `[]string{"get", "stdout", "start show", "Auto-installed"}` that scans the get command's help output. After the help text update in requirement 7, this string must be `"start describe"` or the test fails.
+   - `internal/cli/get_test.go:1198` — comment `as 'start show' and writes nothing to stdout` referencing the renamed command.
+
+   Resolution: the Current State Cross-file Go references list and Implementation Plan step 4 have been extended to include these three sites. The verification command in requirement 12 already catches them, so no behaviour or scope change is needed; this is a documentation-accuracy fix so the implementer's enumeration matches the verification's scope.
 
 ## Acceptance Criteria
 
