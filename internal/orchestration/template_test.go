@@ -281,13 +281,13 @@ func TestTemplateProcessor_LazyEvaluation(t *testing.T) {
 }
 
 // TestTemplateProcessor_SourcePriorityContract pins the source-selection and
-// lazy-expansion behaviour that internal/cli/read.go's readUTD trim block
-// depends on. `start read` documents source priority as file > prompt >
-// command, but Process picks Prompt > File > Command. read.go flips the
+// lazy-expansion behaviour that internal/cli/get.go's getUTD trim block
+// depends on. `start get` documents source priority as file > prompt >
+// command, but Process picks Prompt > File > Command. get.go flips the
 // order by clearing higher-priority fields before calling Process. If
 // Process's source-selection or its lazy {{.command_output}} expansion ever
 // changes, this test fails — at which point the maintainer must also revisit
-// readUTD's trim block in read.go (it relies on the behaviour pinned here to
+// getUTD's trim block in get.go (it relies on the behaviour pinned here to
 // implement file > prompt > command without shelling out).
 func TestTemplateProcessor_SourcePriorityContract(t *testing.T) {
 	t.Parallel()
@@ -336,7 +336,7 @@ func TestTemplateProcessor_SourcePriorityContract(t *testing.T) {
 	})
 
 	t.Run("lazy command expansion fires for file source referencing command_output", func(t *testing.T) {
-		// readUTD's trim block (read.go: file != "" → fields.Command = "")
+		// getUTD's trim block (get.go: file != "" → fields.Command = "")
 		// deliberately neutralises this path. Pinning the underlying lazy
 		// expansion here means a refactor that removes it makes the trim
 		// block dead code and surfaces in this test.

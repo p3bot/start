@@ -22,7 +22,7 @@ import (
 //	r.stdout — registry fetch progress, install notices, interactive selection prompts
 //	r.stderr — debug output only
 //
-// Callers needing clean stdout (e.g. `start read` piping content) should construct
+// Callers needing clean stdout (e.g. `start get` piping content) should construct
 // the resolver with stderr in the stdout slot: newResolver(cfg, flags, stderr, stderr, stdin).
 //
 // Post-call contract: if r.didInstall is true and the caller subsequently reads

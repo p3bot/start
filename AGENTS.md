@@ -41,7 +41,7 @@ start show agents               # Show installed agents
 start show roles                # Show installed roles
 start show tasks                # Show installed tasks
 start show contexts             # Show installed contexts
-start read <name>               # Output module content to stdout (pipe-clean)
+start get <name>                # Output module content to stdout (pipe-clean)
 start modules add <pkg>         # Install a module from the library
 start config list               # List configuration entries
 start search <term>             # Search installed modules

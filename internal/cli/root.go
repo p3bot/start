@@ -107,7 +107,7 @@ Examples:
 
 	// Add subcommands
 	addShowCommand(cmd)
-	addReadCommand(cmd)
+	addGetCommand(cmd)
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)
 	addModulesCommand(cmd)

@@ -12,10 +12,10 @@ import (
 	"github.com/start-cli/start/internal/shell"
 )
 
-// addReadCommand registers the `start read` subcommand.
-func addReadCommand(parent *cobra.Command) {
-	readCmd := &cobra.Command{
-		Use:     "read [name]",
+// addGetCommand registers the `start get` subcommand.
+func addGetCommand(parent *cobra.Command) {
+	getCmd := &cobra.Command{
+		Use:     "get [name]",
 		GroupID: "commands",
 		Short:   "Output module content to stdout",
 		Long: `Output the resolved content of a module to stdout for piping or preview.
@@ -32,10 +32,10 @@ placeholders ({{.bin}}, {{.model}}) substituted while runtime placeholders
 {{.model}} substitution.
 
 Source priority for UTD modules is file > prompt > command. When a UTD module
-defines both file and prompt, read outputs the file. During role/task/context
+defines both file and prompt, get outputs the file. During role/task/context
 rendering by 'start' or 'start task', behaviour differs: the prompt is rendered
 and file contents are injected via {{.file_contents}}, command output via
-{{.command_output}}. So for mixed-field modules, read's output will not match
+{{.command_output}}. So for mixed-field modules, get's output will not match
 what 'start' renders into the agent prompt — use 'start show' to inspect the
 prompt.
 
@@ -51,16 +51,16 @@ Auto-installed modules always land in global config; the post-install lookup
 widens to merged scope so a --local invocation can still see the new module.
 To inspect strictly within --local, ensure the module is already installed.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runRead,
+		RunE: runGet,
 	}
 
-	readCmd.PersistentFlags().Bool("global", false, "Read from global scope only")
+	getCmd.PersistentFlags().Bool("global", false, "Get from global scope only")
 
-	parent.AddCommand(readCmd)
+	parent.AddCommand(getCmd)
 }
 
-// runRead resolves a module and writes its content to stdout.
-func runRead(cmd *cobra.Command, args []string) error {
+// runGet resolves a module and writes its content to stdout.
+func runGet(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func runRead(cmd *cobra.Command, args []string) error {
 	stderr := cmd.ErrOrStderr()
 	stdin := cmd.InOrStdin()
 
-	query, err := readResolveQuery(args, stderr, stdin)
+	query, err := getResolveQuery(args, stderr, stdin)
 	if err != nil {
 		return err
 	}
@@ -132,15 +132,15 @@ func runRead(cmd *cobra.Command, args []string) error {
 	}
 
 	if cat.itemType == "Agent" {
-		return readAgent(stdout, stderr, flags, r, match.Name, item)
+		return getAgent(stdout, stderr, flags, r, match.Name, item)
 	}
-	return readUTD(stdout, stderr, flags, match.Name, cat.itemType, item)
+	return getUTD(stdout, stderr, flags, match.Name, cat.itemType, item)
 }
 
-// readResolveQuery returns the module query, prompting interactively when no
+// getResolveQuery returns the module query, prompting interactively when no
 // argument was supplied. All prompts and warnings go to stderr to keep stdout
 // reserved for module content (Requirement 5).
-func readResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, error) {
+func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, error) {
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
 			return "", fmt.Errorf("name required in non-interactive mode")
@@ -159,13 +159,13 @@ func readResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string,
 	return promptSearchQuery(stderr, stdin)
 }
 
-// readAgent writes the agent's command template (with {{.bin}} and {{.model}}
+// getAgent writes the agent's command template (with {{.bin}} and {{.model}}
 // resolved) to stdout. Runtime placeholders are left intact.
 //
 // When --model is set, it is resolved via resolver.resolveModelName (exact,
-// then multi-term substring, then passthrough) to keep `read` consistent with
+// then multi-term substring, then passthrough) to keep `get` consistent with
 // `start`'s rendering of the same flag.
-func readAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, item cue.Value) error {
+func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, item cue.Value) error {
 	cmdField := item.LookupPath(cue.ParsePath("command"))
 	command := ""
 	if cmdField.Exists() {
@@ -176,7 +176,7 @@ func readAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string,
 	}
 
 	if flags.Verbose {
-		printReadVerbose(stderr, "Agent", name, item, "", "", false)
+		printGetVerbose(stderr, "Agent", name, item, "", "", false)
 	}
 
 	modelOverride := ""
@@ -193,13 +193,13 @@ func readAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string,
 	return nil
 }
 
-// readUTD resolves a UTD module and writes its content to stdout. Source
+// getUTD resolves a UTD module and writes its content to stdout. Source
 // priority is file > prompt > command. The TemplateProcessor's intrinsic
 // priority is the inverse (prompt > file > command, see template.go); the
 // trim block below flips it by clearing higher-priority sources before Process
 // runs. Shell and Timeout are execution config and pass through untouched so a
 // command-source module still honours its declared shell and timeout.
-func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item cue.Value) error {
+func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item cue.Value) error {
 	fields := orchestration.ExtractUTDFields(item)
 	if !orchestration.IsUTDValid(fields) {
 		return fmt.Errorf("module %q has no content fields (expected one of: file, prompt, command)", name)
@@ -235,11 +235,11 @@ func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item
 
 	// Source-priority dependency: see TemplateProcessor.Process in
 	// internal/orchestration/template.go. Process picks Prompt before File, so
-	// clearing Prompt when File is set is what makes read's file > prompt
+	// clearing Prompt when File is set is what makes get's file > prompt
 	// priority hold. Clearing Command in the file and prompt branches is
 	// deliberate side-effect suppression: it disables Process's lazy
 	// {{.command_output}} expansion (template.go: needsCommandOutput &&
-	// fields.Command != "") so `read` never shells out unless command is the
+	// fields.Command != "") so `get` never shells out unless command is the
 	// primary source. Do not extend this trim to Shell or Timeout — they
 	// configure command execution and apply regardless of which source wins.
 	if fields.File != "" {
@@ -259,7 +259,7 @@ func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item
 	// happens between the trim and here, so the verbose lines are still
 	// emitted before any read or shell-out.
 	if flags.Verbose {
-		printReadVerbose(stderr, itemType, name, item, resolvedFile, fields.Command, fromModuleCache)
+		printGetVerbose(stderr, itemType, name, item, resolvedFile, fields.Command, fromModuleCache)
 	}
 
 	fr := &orchestration.DefaultFileReader{}
@@ -275,14 +275,14 @@ func readUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item
 	return nil
 }
 
-// printReadVerbose writes module metadata to stderr ahead of the content. Used
+// printGetVerbose writes module metadata to stderr ahead of the content. Used
 // when --verbose is set; stdout remains reserved for the module content itself.
-// command is set only when command is the active source — readUTD passes the
+// command is set only when command is the active source — getUTD passes the
 // post-trim fields.Command, which is non-empty exactly when command was chosen.
 // fromModuleCache labels the file location as `Cache:` (matching `start show`)
 // so users aren't misled into editing the CUE module cache; local-file modules
 // keep the `Path:` label so the user knows where the editable source lives.
-func printReadVerbose(stderr io.Writer, itemType, name string, item cue.Value, resolvedFile, command string, fromModuleCache bool) {
+func printGetVerbose(stderr io.Writer, itemType, name string, item cue.Value, resolvedFile, command string, fromModuleCache bool) {
 	_, _ = fmt.Fprintf(stderr, "Type: %s\n", itemType)
 	_, _ = fmt.Fprintf(stderr, "Name: %s\n", name)
 	if origin := orchestration.ExtractOrigin(item); origin != "" {
@@ -301,7 +301,7 @@ func printReadVerbose(stderr io.Writer, itemType, name string, item cue.Value, r
 }
 
 // ensureTrailingNewline returns s with exactly one trailing newline. Empty
-// strings pass through. Used at every read write site so stdout is line-aligned
+// strings pass through. Used at every get write site so stdout is line-aligned
 // regardless of which module source produced the content.
 func ensureTrailingNewline(s string) string {
 	if s == "" || strings.HasSuffix(s, "\n") {

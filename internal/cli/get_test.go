@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// setupReadTestConfig writes a CUE config covering each read code path.
-func setupReadTestConfig(t *testing.T) string {
+// setupGetTestConfig writes a CUE config covering each get code path.
+func setupGetTestConfig(t *testing.T) string {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -44,7 +44,7 @@ func setupReadTestConfig(t *testing.T) string {
 		t.Fatalf("writing role file: %v", err)
 	}
 
-	// File+prompt UTD: file must win over prompt for read.
+	// File+prompt UTD: file must win over prompt for get.
 	mixedFile := filepath.Join(dir, "mixed.md")
 	if err := os.WriteFile(mixedFile, []byte("MIXED FILE CONTENT"), 0o644); err != nil {
 		t.Fatalf("writing mixed file: %v", err)
@@ -57,7 +57,7 @@ func setupReadTestConfig(t *testing.T) string {
 		t.Fatalf("writing tilde file: %v", err)
 	}
 
-	// Origin-bearing role: a fake origin string is fine — printReadVerbose only
+	// Origin-bearing role: a fake origin string is fine — printGetVerbose only
 	// reads the value from CUE; @module/ resolution is not triggered for an
 	// absolute file path.
 	tracedFile := filepath.Join(dir, "traced.md")
@@ -74,7 +74,7 @@ func setupReadTestConfig(t *testing.T) string {
 	}
 
 	// File whose content references {{.command_output}}, paired with a non-empty
-	// command in CUE. Used to assert readUTD's trim block suppresses
+	// command in CUE. Used to assert getUTD's trim block suppresses
 	// TemplateProcessor.Process's lazy command execution
 	// (template.go: needsCommandOutput && fields.Command != "").
 	fcCmdRefFile := filepath.Join(dir, "fc-cmd-ref.md")
@@ -180,9 +180,9 @@ tasks: {
 	return dir
 }
 
-// runReadCmd runs `start read` with the given args and a non-TTY stdin.
+// runGetCmd runs `start get` with the given args and a non-TTY stdin.
 // Returns stdout, stderr, and any error from cmd.Execute().
-func runReadCmd(t *testing.T, args ...string) (string, string, error) {
+func runGetCmd(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -190,17 +190,17 @@ func runReadCmd(t *testing.T, args ...string) (string, string, error) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs(append([]string{"read"}, args...))
+	cmd.SetArgs(append([]string{"get"}, args...))
 	err := cmd.Execute()
 	return stdout.String(), stderr.String(), err
 }
 
-// TestReadUTDPromptSource verifies read renders a prompt-source role and the
+// TestGetUTDPromptSource verifies get renders a prompt-source role and the
 // rendered template variables (e.g. {{.user}}) are substituted.
-func TestReadUTDPromptSource(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDPromptSource(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "role-prompt")
+	stdout, stderr, err := runGetCmd(t, "role-prompt")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -213,11 +213,11 @@ func TestReadUTDPromptSource(t *testing.T) {
 	}
 }
 
-// TestReadUTDFileSource verifies a file-source role outputs the file contents.
-func TestReadUTDFileSource(t *testing.T) {
-	setupReadTestConfig(t)
+// TestGetUTDFileSource verifies a file-source role outputs the file contents.
+func TestGetUTDFileSource(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "role-file")
+	stdout, stderr, err := runGetCmd(t, "role-file")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -227,12 +227,12 @@ func TestReadUTDFileSource(t *testing.T) {
 	}
 }
 
-// TestReadUTDFileWinsOverPrompt verifies the file > prompt > command priority:
-// when both file and prompt are defined, read outputs the file.
-func TestReadUTDFileWinsOverPrompt(t *testing.T) {
-	setupReadTestConfig(t)
+// TestGetUTDFileWinsOverPrompt verifies the file > prompt > command priority:
+// when both file and prompt are defined, get outputs the file.
+func TestGetUTDFileWinsOverPrompt(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "role-mixed")
+	stdout, stderr, err := runGetCmd(t, "role-mixed")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -245,14 +245,14 @@ func TestReadUTDFileWinsOverPrompt(t *testing.T) {
 	}
 }
 
-// TestReadUTDCommandSource verifies a command-source UTD module executes the
+// TestGetUTDCommandSource verifies a command-source UTD module executes the
 // command and that custom shell/timeout flow through to the runner. The trim
-// block in readUTD must preserve Shell and Timeout — they are execution
+// block in getUTD must preserve Shell and Timeout — they are execution
 // config, not source fields.
-func TestReadUTDCommandSourceWithShellTimeout(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDCommandSourceWithShellTimeout(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "ctx-cmd")
+	stdout, stderr, err := runGetCmd(t, "ctx-cmd")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -262,12 +262,12 @@ func TestReadUTDCommandSourceWithShellTimeout(t *testing.T) {
 	}
 }
 
-// TestReadAgent verifies an agent's command template is partially rendered:
+// TestGetAgent verifies an agent's command template is partially rendered:
 // {{.bin}} and {{.model}} are substituted; runtime placeholders remain.
-func TestReadAgent(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgent(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "claude")
+	stdout, stderr, err := runGetCmd(t, "claude")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -280,12 +280,12 @@ func TestReadAgent(t *testing.T) {
 	}
 }
 
-// TestReadAgentNoCommand verifies an agent with no command field returns a
+// TestGetAgentNoCommand verifies an agent with no command field returns a
 // configuration error naming the agent and leaves stdout empty.
-func TestReadAgentNoCommand(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgentNoCommand(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, _, err := runReadCmd(t, "bare")
+	stdout, _, err := runGetCmd(t, "bare")
 	if err == nil {
 		t.Fatal("expected error for agent with no command field")
 	}
@@ -300,13 +300,13 @@ func TestReadAgentNoCommand(t *testing.T) {
 	}
 }
 
-// TestReadUTDEmptyFields verifies a UTD module with no file, prompt, or command
+// TestGetUTDEmptyFields verifies a UTD module with no file, prompt, or command
 // returns a configuration error naming the module and listing the expected
 // fields. Stdout stays empty.
-func TestReadUTDEmptyFields(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDEmptyFields(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, _, err := runReadCmd(t, "role-empty")
+	stdout, _, err := runGetCmd(t, "role-empty")
 	if err == nil {
 		t.Fatal("expected error for UTD module with no source fields")
 	}
@@ -323,13 +323,13 @@ func TestReadUTDEmptyFields(t *testing.T) {
 	}
 }
 
-// TestReadNoArgNonTTY verifies that running `read` with no argument in a
+// TestGetNoArgNonTTY verifies that running `get` with no argument in a
 // non-interactive environment returns an error rather than blocking on a
 // prompt.
-func TestReadNoArgNonTTY(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetNoArgNonTTY(t *testing.T) {
+	setupGetTestConfig(t)
 
-	_, _, err := runReadCmd(t)
+	_, _, err := runGetCmd(t)
 	if err == nil {
 		t.Fatal("expected error for no argument in non-TTY mode")
 	}
@@ -338,9 +338,9 @@ func TestReadNoArgNonTTY(t *testing.T) {
 	}
 }
 
-// TestReadAmbiguousNonTTY verifies that an ambiguous name in non-TTY mode
+// TestGetAmbiguousNonTTY verifies that an ambiguous name in non-TTY mode
 // returns an error listing the candidate matches.
-func TestReadAmbiguousNonTTY(t *testing.T) {
+func TestGetAmbiguousNonTTY(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -379,7 +379,7 @@ tasks: {
 	}
 	chdir(t, dir)
 
-	_, _, err := runReadCmd(t, "helper")
+	_, _, err := runGetCmd(t, "helper")
 	if err == nil {
 		t.Fatal("expected ambiguity error in non-TTY mode")
 	}
@@ -393,12 +393,12 @@ tasks: {
 	}
 }
 
-// TestReadVerboseCommandSource verifies --verbose against a command-source
+// TestGetVerboseCommandSource verifies --verbose against a command-source
 // UTD module emits a "Command: ..." line on stderr alongside Type/Name.
-// Without this metadata, a user piping `start read --verbose ctx-cmd | ...`
+// Without this metadata, a user piping `start get --verbose ctx-cmd | ...`
 // has no visibility into the shell-out that produced stdout.
-func TestReadVerboseCommandSource(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetVerboseCommandSource(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -406,7 +406,7 @@ func TestReadVerboseCommandSource(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--verbose", "read", "ctx-cmd"})
+	cmd.SetArgs([]string{"--verbose", "get", "ctx-cmd"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -423,10 +423,10 @@ func TestReadVerboseCommandSource(t *testing.T) {
 	}
 }
 
-// TestReadVerboseToStderr verifies --verbose writes metadata to stderr without
+// TestGetVerboseToStderr verifies --verbose writes metadata to stderr without
 // polluting stdout.
-func TestReadVerboseToStderr(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetVerboseToStderr(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -434,7 +434,7 @@ func TestReadVerboseToStderr(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--verbose", "read", "role-prompt"})
+	cmd.SetArgs([]string{"--verbose", "get", "role-prompt"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -458,18 +458,18 @@ func TestReadVerboseToStderr(t *testing.T) {
 	}
 }
 
-// TestReadQuietSuppressesStderr verifies that --quiet leaves stdout holding
+// TestGetQuietSuppressesStderr verifies that --quiet leaves stdout holding
 // only the module content with stderr empty. Three independent stderr-write
-// paths converge in runRead and read* helpers — autoInstall progress
-// (resolve.go), notifyScopeWidenedIfLocal (show.go), and printReadVerbose
-// (read.go) — and a regression in any single Quiet/Verbose gate would leak
-// metadata into a `start read --quiet | bar` pipeline. The autoInstall arm
+// paths converge in runGet and get* helpers — autoInstall progress
+// (resolve.go), notifyScopeWidenedIfLocal (show.go), and printGetVerbose
+// (get.go) — and a regression in any single Quiet/Verbose gate would leak
+// metadata into a `start get --quiet | bar` pipeline. The autoInstall arm
 // of that contract is unit-tested in resolve.go's tests; the widen-notice
 // arm in TestNotifyScopeWidenedIfLocal. This test covers the verbose-path
 // gate and the integration shape (no flag combination produces stderr on the
 // happy path).
-func TestReadQuietSuppressesStderr(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetQuietSuppressesStderr(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -477,7 +477,7 @@ func TestReadQuietSuppressesStderr(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--quiet", "read", "role-prompt"})
+	cmd.SetArgs([]string{"--quiet", "get", "role-prompt"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -491,16 +491,16 @@ func TestReadQuietSuppressesStderr(t *testing.T) {
 	}
 }
 
-// TestReadResolveQueryRoutesToStderr asserts the wiring contract from the
-// implementation plan: `read` must invoke promptSearchQuery with stderr (not
-// stdout) and emit the short-query fallback to stderr. This keeps `start read
+// TestGetResolveQueryRoutesToStderr asserts the wiring contract from the
+// implementation plan: `get` must invoke promptSearchQuery with stderr (not
+// stdout) and emit the short-query fallback to stderr. This keeps `start get
 // | bar` pipe-clean when stdin is a TTY but stdout is piped.
-func TestReadResolveQueryRoutesToStderr(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetResolveQueryRoutesToStderr(t *testing.T) {
+	setupGetTestConfig(t)
 
 	t.Run("no-arg non-TTY surfaces error without writing stderr", func(t *testing.T) {
 		stderr := new(bytes.Buffer)
-		_, err := readResolveQuery(nil, stderr, strings.NewReader(""))
+		_, err := getResolveQuery(nil, stderr, strings.NewReader(""))
 		if err == nil {
 			t.Fatal("expected error for no-arg non-TTY")
 		}
@@ -511,7 +511,7 @@ func TestReadResolveQueryRoutesToStderr(t *testing.T) {
 
 	t.Run("short-query non-TTY surfaces error without writing stderr", func(t *testing.T) {
 		stderr := new(bytes.Buffer)
-		_, err := readResolveQuery([]string{"ab"}, stderr, strings.NewReader(""))
+		_, err := getResolveQuery([]string{"ab"}, stderr, strings.NewReader(""))
 		if err == nil {
 			t.Fatal("expected error for short query in non-TTY")
 		}
@@ -524,74 +524,74 @@ func TestReadResolveQueryRoutesToStderr(t *testing.T) {
 	})
 }
 
-// TestReadCommandHelp verifies `start read help` prints the command help and
-// that the read command registers --global plus inherits --local from root.
+// TestGetCommandHelp verifies `start get help` prints the command help and
+// that the get command registers --global plus inherits --local from root.
 // Help-string assertions are limited to text that only lives in help (the
 // stdout-routing contract, the start-show pointer, the auto-install widening
 // note); flag presence is asserted via direct flag lookup so cosmetic
 // help-formatter changes (heading order, line wrapping, colour) cannot
-// false-fail it. Source priority is pinned by TestReadUTDFileWinsOverPrompt
-// and TestReadUTDPromptWinsOverCommand, so help wording is not the place to
+// false-fail it. Source priority is pinned by TestGetUTDFileWinsOverPrompt
+// and TestGetUTDPromptWinsOverCommand, so help wording is not the place to
 // re-assert it. No config isolation is needed: `help` short-circuits in
 // checkHelpArg before any config is loaded.
-func TestReadCommandHelp(t *testing.T) {
-	stdout, _, err := runReadCmd(t, "help")
+func TestGetCommandHelp(t *testing.T) {
+	stdout, _, err := runGetCmd(t, "help")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"read", "stdout", "start show", "Auto-installed"} {
+	for _, want := range []string{"get", "stdout", "start show", "Auto-installed"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("help output missing %q\ngot: %s", want, stdout)
 		}
 	}
 
 	root := NewRootCmd()
-	var readCmd *cobra.Command
+	var getCmd *cobra.Command
 	for _, c := range root.Commands() {
-		if c.Name() == "read" {
-			readCmd = c
+		if c.Name() == "get" {
+			getCmd = c
 			break
 		}
 	}
-	if readCmd == nil {
-		t.Fatal("read command not registered on root")
+	if getCmd == nil {
+		t.Fatal("get command not registered on root")
 	}
-	if readCmd.Flag("global") == nil {
-		t.Error("read command missing --global flag")
+	if getCmd.Flag("global") == nil {
+		t.Error("get command missing --global flag")
 	}
-	if readCmd.Flag("local") == nil {
-		t.Error("read command missing inherited --local flag (expected via root persistent flags)")
+	if getCmd.Flag("local") == nil {
+		t.Error("get command missing inherited --local flag (expected via root persistent flags)")
 	}
 }
 
-// TestReadAppearsInRootHelp verifies the read command is registered on the
+// TestGetAppearsInRootHelp verifies the get command is registered on the
 // root with GroupID "commands" so it lands in the Commands section of help
 // output. Asserting the structural property avoids fragility against Cobra
 // help-formatter changes (heading order, colour codes, line wrapping).
-func TestReadAppearsInRootHelp(t *testing.T) {
+func TestGetAppearsInRootHelp(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	cmd := NewRootCmd()
 	for _, c := range cmd.Commands() {
-		if c.Name() == "read" {
+		if c.Name() == "get" {
 			if c.GroupID != "commands" {
-				t.Errorf("read.GroupID = %q, want %q", c.GroupID, "commands")
+				t.Errorf("get.GroupID = %q, want %q", c.GroupID, "commands")
 			}
 			return
 		}
 	}
-	t.Fatal("read command not registered on root")
+	t.Fatal("get command not registered on root")
 }
 
-// TestReadUnknownName verifies that a name with no installed or registry
+// TestGetUnknownName verifies that a name with no installed or registry
 // matches surfaces a clear error and leaves stdout empty. Acceptance criterion
 // "Unknown module names produce a clear error".
-func TestReadUnknownName(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUnknownName(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, _, err := runReadCmd(t, "definitely-not-a-real-module-zzz")
+	stdout, _, err := runGetCmd(t, "definitely-not-a-real-module-zzz")
 	if err == nil {
 		t.Fatal("expected error for unknown module name")
 	}
@@ -603,14 +603,14 @@ func TestReadUnknownName(t *testing.T) {
 	}
 }
 
-// TestReadUTDTildePath verifies that a UTD module whose `file` field uses a
+// TestGetUTDTildePath verifies that a UTD module whose `file` field uses a
 // `~/`-prefixed path resolves through DefaultFileReader's tilde expansion and
 // outputs the file's contents. Acceptance criterion: "UTD file resolution
 // succeeds for @module/, ~/, and relative paths".
-func TestReadUTDTildePath(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDTildePath(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "role-tilde")
+	stdout, stderr, err := runGetCmd(t, "role-tilde")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -619,11 +619,11 @@ func TestReadUTDTildePath(t *testing.T) {
 	}
 }
 
-// TestReadVerboseFileAndOrigin verifies that --verbose against a UTD module
+// TestGetVerboseFileAndOrigin verifies that --verbose against a UTD module
 // with both `file` and `origin` emits Type, Name, Origin, and Path metadata
 // lines to stderr, while stdout still receives the raw file contents.
-func TestReadVerboseFileAndOrigin(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetVerboseFileAndOrigin(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -631,7 +631,7 @@ func TestReadVerboseFileAndOrigin(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--verbose", "read", "role-traced"})
+	cmd.SetArgs([]string{"--verbose", "get", "role-traced"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -660,17 +660,17 @@ func TestReadVerboseFileAndOrigin(t *testing.T) {
 	}
 }
 
-// TestReadShortQueryNonTTYEndToEnd is the cobra-level counterpart to the
-// readResolveQuery unit test: a short query in a non-TTY environment must
+// TestGetShortQueryNonTTYEndToEnd is the cobra-level counterpart to the
+// getResolveQuery unit test: a short query in a non-TTY environment must
 // return the descriptive error and never write to stdout. Together with
-// TestReadResolveQueryRoutesToStderr this proves the runRead → readResolveQuery
+// TestGetResolveQueryRoutesToStderr this proves the runGet → getResolveQuery
 // wiring keeps stdout pipe-clean on the failure path. The TTY-mode re-prompt
 // on stderr is not covered here because the project has no pseudo-TTY helpers
 // (see project plan, Implementation Guidance).
-func TestReadShortQueryNonTTYEndToEnd(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetShortQueryNonTTYEndToEnd(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "ab")
+	stdout, stderr, err := runGetCmd(t, "ab")
 	if err == nil {
 		t.Fatal("expected error for short query in non-TTY")
 	}
@@ -689,27 +689,27 @@ func TestReadShortQueryNonTTYEndToEnd(t *testing.T) {
 	}
 }
 
-// TestReadUTDFileSourceSuppressesCommand pins the safety property of
-// readUTD's source-priority trim block for the file branch. With both `file`
+// TestGetUTDFileSourceSuppressesCommand pins the safety property of
+// getUTD's source-priority trim block for the file branch. With both `file`
 // and `command` set, and the file's content referencing {{.command_output}},
 // the module's command must not execute. TemplateProcessor.Process's lazy
 // {{.command_output}} expansion (template.go: needsCommandOutput &&
-// fields.Command != "") would otherwise shell out — readUTD's trim block
-// (read.go: file != "" → fields.Command = "") is what prevents it. If
+// fields.Command != "") would otherwise shell out — getUTD's trim block
+// (get.go: file != "" → fields.Command = "") is what prevents it. If
 // Process's source-selection or lazy-eval semantics ever change so the trim
 // block stops protecting against this, this test fails. The companion
-// TestReadUTDFileWinsOverPrompt covers the externally observable behaviour
+// TestGetUTDFileWinsOverPrompt covers the externally observable behaviour
 // (file content wins) but not the no-shell-out invariant.
-func TestReadUTDFileSourceSuppressesCommand(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDFileSourceSuppressesCommand(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "fc-cmd-ref")
+	stdout, stderr, err := runGetCmd(t, "fc-cmd-ref")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
 
 	if strings.Contains(stdout, "SHOULD-NOT-APPEAR") {
-		t.Errorf("command output leaked into file-source render — readUTD trim block did not suppress command execution\nstdout: %q\nstderr: %s", stdout, stderr)
+		t.Errorf("command output leaked into file-source render — getUTD trim block did not suppress command execution\nstdout: %q\nstderr: %s", stdout, stderr)
 	}
 	for _, marker := range []string{"before", "after"} {
 		if !strings.Contains(stdout, marker) {
@@ -718,22 +718,22 @@ func TestReadUTDFileSourceSuppressesCommand(t *testing.T) {
 	}
 }
 
-// TestReadUTDPromptSourceSuppressesCommand is the prompt-branch counterpart
-// to TestReadUTDFileSourceSuppressesCommand. With `prompt` set and the prompt
+// TestGetUTDPromptSourceSuppressesCommand is the prompt-branch counterpart
+// to TestGetUTDFileSourceSuppressesCommand. With `prompt` set and the prompt
 // referencing {{.command_output}} alongside a non-empty `command`, the
-// command must not execute. Guards the prompt-branch arm of readUTD's trim
-// block (read.go: prompt != "" → fields.Command = "") against the same
+// command must not execute. Guards the prompt-branch arm of getUTD's trim
+// block (get.go: prompt != "" → fields.Command = "") against the same
 // TemplateProcessor.Process lazy-eval regression.
-func TestReadUTDPromptSourceSuppressesCommand(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDPromptSourceSuppressesCommand(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "pc-cmd-ref")
+	stdout, stderr, err := runGetCmd(t, "pc-cmd-ref")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
 
 	if strings.Contains(stdout, "SHOULD-NOT-APPEAR") {
-		t.Errorf("command output leaked into prompt-source render — readUTD trim block did not suppress command execution\nstdout: %q\nstderr: %s", stdout, stderr)
+		t.Errorf("command output leaked into prompt-source render — getUTD trim block did not suppress command execution\nstdout: %q\nstderr: %s", stdout, stderr)
 	}
 	for _, marker := range []string{"before", "after"} {
 		if !strings.Contains(stdout, marker) {
@@ -742,14 +742,14 @@ func TestReadUTDPromptSourceSuppressesCommand(t *testing.T) {
 	}
 }
 
-// TestReadUTDPromptWinsOverCommand covers the second branch of readUTD's
+// TestGetUTDPromptWinsOverCommand covers the second branch of getUTD's
 // source-priority trim. With file empty and both prompt and command set, the
 // prompt must win (file > prompt > command). Without this test the
 // `else if fields.Prompt != ""` branch is uncovered.
-func TestReadUTDPromptWinsOverCommand(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDPromptWinsOverCommand(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "pc-priority")
+	stdout, stderr, err := runGetCmd(t, "pc-priority")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -761,14 +761,14 @@ func TestReadUTDPromptWinsOverCommand(t *testing.T) {
 	}
 }
 
-// TestReadUTDRelativePath verifies a UTD module whose `file` field is a
+// TestGetUTDRelativePath verifies a UTD module whose `file` field is a
 // relative path (e.g. "./role.md") resolves through ExpandFilePath's
 // filepath.Abs branch and outputs the file's contents. Acceptance criterion:
 // "UTD file resolution succeeds for @module/, ~/, and relative paths".
-func TestReadUTDRelativePath(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDRelativePath(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "role-relative")
+	stdout, stderr, err := runGetCmd(t, "role-relative")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -777,13 +777,13 @@ func TestReadUTDRelativePath(t *testing.T) {
 	}
 }
 
-// TestReadUTDModuleNoOrigin verifies the error guard in readUTD: a module
+// TestGetUTDModuleNoOrigin verifies the error guard in getUTD: a module
 // with an @module/ file path but no origin field returns a descriptive error
 // naming the module, and stdout stays empty.
-func TestReadUTDModuleNoOrigin(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDModuleNoOrigin(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, _, err := runReadCmd(t, "role-module-no-origin")
+	stdout, _, err := runGetCmd(t, "role-module-no-origin")
 	if err == nil {
 		t.Fatal("expected error for @module/ path without origin")
 	}
@@ -801,14 +801,14 @@ func TestReadUTDModuleNoOrigin(t *testing.T) {
 	}
 }
 
-// TestReadTooManyArgs verifies that more than one positional argument is
+// TestGetTooManyArgs verifies that more than one positional argument is
 // rejected (Requirement 5.1: "accepts zero or one positional argument"). The
 // Args validator runs before RunE, so this is a cobra-level rejection and
 // stdout never gets touched.
-func TestReadTooManyArgs(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetTooManyArgs(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, _, err := runReadCmd(t, "role-prompt", "extra-arg")
+	stdout, _, err := runGetCmd(t, "role-prompt", "extra-arg")
 	if err == nil {
 		t.Fatal("expected error for two positional arguments")
 	}
@@ -817,13 +817,13 @@ func TestReadTooManyArgs(t *testing.T) {
 	}
 }
 
-// TestReadUTDModulePath verifies @module/ resolution end-to-end: the file is
+// TestGetUTDModulePath verifies @module/ resolution end-to-end: the file is
 // looked up in $CUE_CACHE_DIR/mod/extract/<dir(modulePath)>/<base(modulePath)+version>/
 // (see ResolveModulePath in composer.go). The test fabricates that directory
-// layout and reads through readUTD's @module/ branch and DefaultFileReader.
+// layout and reads through getUTD's @module/ branch and DefaultFileReader.
 // Acceptance criterion: "UTD file resolution succeeds for @module/, ~/, and
 // relative paths".
-func TestReadUTDModulePath(t *testing.T) {
+func TestGetUTDModulePath(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -876,7 +876,7 @@ roles: {
 	}
 	chdir(t, dir)
 
-	stdout, stderr, err := runReadCmd(t, "role-module")
+	stdout, stderr, err := runGetCmd(t, "role-module")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -885,15 +885,15 @@ roles: {
 	}
 }
 
-// TestReadMergedScopeFindsGlobalAndLocal pins the scope constant in
-// runRead's loadConfig call from both directions. The two existing scopes
+// TestGetMergedScopeFindsGlobalAndLocal pins the scope constant in
+// runGet's loadConfig call from both directions. The two existing scopes
 // (Global at $HOME/.config/start/, Local at ./.start/) each contain a unique
-// role; both must be reachable through `start read`. A regression that flipped
-// runRead to ScopeLocal would break the global sub-test; flipping to
+// role; both must be reachable through `start get`. A regression that flipped
+// runGet to ScopeLocal would break the global sub-test; flipping to
 // ScopeGlobal would break the local sub-test. Pattern follows
 // TestShowGlobalFlag in show_test.go: HOME is set but XDG_CONFIG_HOME is not,
 // so globalConfigDir resolves to $HOME/.config/start/.
-func TestReadMergedScopeFindsGlobalAndLocal(t *testing.T) {
+func TestGetMergedScopeFindsGlobalAndLocal(t *testing.T) {
 	dir := t.TempDir()
 
 	globalStartDir := filepath.Join(dir, ".config", "start")
@@ -936,7 +936,7 @@ roles: {
 	chdir(t, dir)
 
 	t.Run("global-only role visible via merged scope", func(t *testing.T) {
-		stdout, stderr, err := runReadCmd(t, "global-only-role")
+		stdout, stderr, err := runGetCmd(t, "global-only-role")
 		if err != nil {
 			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 		}
@@ -946,7 +946,7 @@ roles: {
 	})
 
 	t.Run("local-only role visible via merged scope", func(t *testing.T) {
-		stdout, stderr, err := runReadCmd(t, "local-only-role")
+		stdout, stderr, err := runGetCmd(t, "local-only-role")
 		if err != nil {
 			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 		}
@@ -956,12 +956,12 @@ roles: {
 	})
 }
 
-// TestReadAgentModelOverrideExact verifies that --model with a key in the
+// TestGetAgentModelOverrideExact verifies that --model with a key in the
 // agent's models map produces the resolved id, not the agent's default_model.
-// Regression guard for the rendering contract: `start --model haiku read claude`
+// Regression guard for the rendering contract: `start --model haiku get claude`
 // and `start --model haiku claude` must agree on the substituted model id.
-func TestReadAgentModelOverrideExact(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgentModelOverrideExact(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -969,7 +969,7 @@ func TestReadAgentModelOverrideExact(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--model", "haiku", "read", "claude"})
+	cmd.SetArgs([]string{"--model", "haiku", "get", "claude"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -984,12 +984,12 @@ func TestReadAgentModelOverrideExact(t *testing.T) {
 	}
 }
 
-// TestReadAgentModelOverrideSubstring verifies the multi-term substring path
+// TestGetAgentModelOverrideSubstring verifies the multi-term substring path
 // of resolveModelName: --model "hai" should match "haiku" since it is the
 // only key containing that substring. Pins parity with `start`'s --model
 // resolution rather than just exact-match.
-func TestReadAgentModelOverrideSubstring(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgentModelOverrideSubstring(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -997,7 +997,7 @@ func TestReadAgentModelOverrideSubstring(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--model", "hai", "read", "claude"})
+	cmd.SetArgs([]string{"--model", "hai", "get", "claude"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -1009,11 +1009,11 @@ func TestReadAgentModelOverrideSubstring(t *testing.T) {
 	}
 }
 
-// TestReadAgentModelOverridePassthrough verifies that a --model value not
+// TestGetAgentModelOverridePassthrough verifies that a --model value not
 // present in the agent's models map is substituted verbatim. This lets users
 // pass arbitrary model identifiers without having to register them in CUE.
-func TestReadAgentModelOverridePassthrough(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgentModelOverridePassthrough(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -1021,7 +1021,7 @@ func TestReadAgentModelOverridePassthrough(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--model", "claude-opus-4-7", "read", "claude"})
+	cmd.SetArgs([]string{"--model", "claude-opus-4-7", "get", "claude"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -1033,12 +1033,12 @@ func TestReadAgentModelOverridePassthrough(t *testing.T) {
 	}
 }
 
-// TestReadVerboseTildePathExpanded verifies --verbose reports the resolved
+// TestGetVerboseTildePathExpanded verifies --verbose reports the resolved
 // absolute path for a tilde-prefixed file source, not the literal "~/..."
 // string from the CUE config. The file is read from the expanded location
 // regardless; this pins the metadata reported to the user.
-func TestReadVerboseTildePathExpanded(t *testing.T) {
-	dir := setupReadTestConfig(t)
+func TestGetVerboseTildePathExpanded(t *testing.T) {
+	dir := setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -1046,7 +1046,7 @@ func TestReadVerboseTildePathExpanded(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--verbose", "read", "role-tilde"})
+	cmd.SetArgs([]string{"--verbose", "get", "role-tilde"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -1062,12 +1062,12 @@ func TestReadVerboseTildePathExpanded(t *testing.T) {
 	}
 }
 
-// setupReadDualScopeConfig writes a global config at $HOME/.config/start/ and
+// setupGetDualScopeConfig writes a global config at $HOME/.config/start/ and
 // a local config at ./.start/. Both define a "shared-role" with distinct
 // content so --local vs --global resolution can be told apart; each scope also
 // defines a scope-only role to exercise the not-found path of the other scope.
-// Mirrors TestReadMergedScopeFindsGlobalAndLocal's environment setup.
-func setupReadDualScopeConfig(t *testing.T) string {
+// Mirrors TestGetMergedScopeFindsGlobalAndLocal's environment setup.
+func setupGetDualScopeConfig(t *testing.T) string {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -1136,23 +1136,23 @@ roles: {
 	return dir
 }
 
-// TestReadLocalScope verifies --local restricts resolution to the local
+// TestGetLocalScope verifies --local restricts resolution to the local
 // config by asserting a global-only role is not visible under --local.
 //
-// This test has only one assertion (compared to TestReadGlobalScope's two)
+// This test has only one assertion (compared to TestGetGlobalScope's two)
 // because merged-scope CUE resolution makes local override global on field
 // conflict — so a "shared role under --local returns local content" check
 // would pass even if --local were silently ignored and merged scope used
 // instead. The only discriminating assertion for --local wiring is the
 // not-found path on a global-only module: under --local-respected the module
 // is invisible, under --local-ignored merged scope finds it. See
-// TestReadGlobalScope for the symmetric test, which has two assertions
+// TestGetGlobalScope for the symmetric test, which has two assertions
 // because merged scope returns the local value for shared roles, making the
 // "global wins under --global" assertion discriminating.
-func TestReadLocalScope(t *testing.T) {
-	setupReadDualScopeConfig(t)
+func TestGetLocalScope(t *testing.T) {
+	setupGetDualScopeConfig(t)
 
-	stdout, _, err := runReadCmd(t, "--local", "global-only-role")
+	stdout, _, err := runGetCmd(t, "--local", "global-only-role")
 	if err == nil {
 		t.Fatal("expected not-found error for global-only role under --local")
 	}
@@ -1164,14 +1164,14 @@ func TestReadLocalScope(t *testing.T) {
 	}
 }
 
-// TestReadGlobalScope verifies --global restricts resolution to the global
+// TestGetGlobalScope verifies --global restricts resolution to the global
 // config: the shared role resolves to the global definition, and a local-only
 // name fails with a not-found error and empty stdout.
-func TestReadGlobalScope(t *testing.T) {
-	setupReadDualScopeConfig(t)
+func TestGetGlobalScope(t *testing.T) {
+	setupGetDualScopeConfig(t)
 
 	t.Run("shared role resolves to global definition", func(t *testing.T) {
-		stdout, stderr, err := runReadCmd(t, "--global", "shared-role")
+		stdout, stderr, err := runGetCmd(t, "--global", "shared-role")
 		if err != nil {
 			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 		}
@@ -1181,7 +1181,7 @@ func TestReadGlobalScope(t *testing.T) {
 	})
 
 	t.Run("local-only role not found under --global", func(t *testing.T) {
-		stdout, _, err := runReadCmd(t, "--global", "local-only-role")
+		stdout, _, err := runGetCmd(t, "--global", "local-only-role")
 		if err == nil {
 			t.Fatal("expected not-found error for local-only role under --global")
 		}
@@ -1194,13 +1194,13 @@ func TestReadGlobalScope(t *testing.T) {
 	})
 }
 
-// TestReadLocalAndGlobalMutuallyExclusive verifies that passing both --local
+// TestGetLocalAndGlobalMutuallyExclusive verifies that passing both --local
 // and --global returns the same mutual-exclusion error as `start show` and
 // writes nothing to stdout. No fixture is required: showScopeFromCmd errors
-// before runRead reaches loadConfig, so the cwd and HOME contents are
+// before runGet reaches loadConfig, so the cwd and HOME contents are
 // irrelevant on this path.
-func TestReadLocalAndGlobalMutuallyExclusive(t *testing.T) {
-	stdout, _, err := runReadCmd(t, "--local", "--global", "any-name")
+func TestGetLocalAndGlobalMutuallyExclusive(t *testing.T) {
+	stdout, _, err := runGetCmd(t, "--local", "--global", "any-name")
 	if err == nil {
 		t.Fatal("expected mutual-exclusion error when both --local and --global are set")
 	}
@@ -1243,12 +1243,12 @@ func TestEnsureTrailingNewline(t *testing.T) {
 	}
 }
 
-// TestReadAgentVerboseMetadata covers the --verbose branch of readAgent
-// (read.go: 175-177). The agent has no file path or command source field,
+// TestGetAgentVerboseMetadata covers the --verbose branch of getAgent
+// (get.go: 175-177). The agent has no file path or command source field,
 // so verbose stderr must contain Type and Name only — no Path or Command
 // line — and stdout is unaffected by the verbose flag.
-func TestReadAgentVerboseMetadata(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgentVerboseMetadata(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -1256,7 +1256,7 @@ func TestReadAgentVerboseMetadata(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--verbose", "read", "claude"})
+	cmd.SetArgs([]string{"--verbose", "get", "claude"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -1285,12 +1285,12 @@ func TestReadAgentVerboseMetadata(t *testing.T) {
 	}
 }
 
-// TestReadAgentRuntimePlaceholdersIntact pins read's contract that runtime
+// TestGetAgentRuntimePlaceholdersIntact pins get's contract that runtime
 // placeholders are passed through verbatim: only {{.bin}} and {{.model}} are
-// resolved at read time. {{.prompt}}, {{.role}}, {{.role_file}}, and
+// resolved at get time. {{.prompt}}, {{.role}}, {{.role_file}}, and
 // {{.datetime}} are filled by the agent execution path (start/task), not
-// read, and must remain in the rendered command for downstream piping.
-func TestReadAgentRuntimePlaceholdersIntact(t *testing.T) {
+// get, and must remain in the rendered command for downstream piping.
+func TestGetAgentRuntimePlaceholdersIntact(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -1318,7 +1318,7 @@ agents: {
 	}
 	chdir(t, dir)
 
-	stdout, stderr, err := runReadCmd(t, "runtime-rich")
+	stdout, stderr, err := runGetCmd(t, "runtime-rich")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1333,15 +1333,15 @@ agents: {
 	}
 }
 
-// TestReadStdoutContentOnly verifies the default-mode output contract: with
+// TestGetStdoutContentOnly verifies the default-mode output contract: with
 // no --verbose, stdout receives only the rendered content — no Type/Name/
 // Path metadata — and stderr is empty on the happy path. The contract is
 // asserted independently from --quiet so a regression that drops the
 // verbose gate cannot pass merely because --quiet still suppresses it.
-func TestReadStdoutContentOnly(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetStdoutContentOnly(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "role-file")
+	stdout, stderr, err := runGetCmd(t, "role-file")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1353,11 +1353,11 @@ func TestReadStdoutContentOnly(t *testing.T) {
 	}
 }
 
-// TestReadAllSourceFieldsFileWins covers the explicit three-field case: an
+// TestGetAllSourceFieldsFileWins covers the explicit three-field case: an
 // module declaring file, prompt, AND command must emit only the file
 // content. This pins the trim block (file != "" → both prompt and command
 // cleared) against a regression that handled only the two-field case.
-func TestReadAllSourceFieldsFileWins(t *testing.T) {
+func TestGetAllSourceFieldsFileWins(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -1387,7 +1387,7 @@ roles: {
 	}
 	chdir(t, dir)
 
-	stdout, stderr, err := runReadCmd(t, "all-three")
+	stdout, stderr, err := runGetCmd(t, "all-three")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1401,10 +1401,10 @@ roles: {
 	}
 }
 
-// TestReadUTDFileMissingOnDisk covers the readUTD process error path
-// (read.go: 265-267). A file source that points at a non-existent file
+// TestGetUTDFileMissingOnDisk covers the getUTD process error path
+// (get.go: 265-267). A file source that points at a non-existent file
 // must surface a descriptive error and leave stdout empty.
-func TestReadUTDFileMissingOnDisk(t *testing.T) {
+func TestGetUTDFileMissingOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -1428,7 +1428,7 @@ roles: {
 	}
 	chdir(t, dir)
 
-	stdout, _, err := runReadCmd(t, "role-missing-file")
+	stdout, _, err := runGetCmd(t, "role-missing-file")
 	if err == nil {
 		t.Fatal("expected error when file source path does not exist")
 	}
@@ -1437,14 +1437,14 @@ roles: {
 	}
 }
 
-// TestReadUTDTaskPromptSource verifies a prompt-source task resolves and
+// TestGetUTDTaskPromptSource verifies a prompt-source task resolves and
 // renders. The fixture defines task-prompt, but no other test exercises a
-// task module through read — this guards regressions where read silently
+// task module through get — this guards regressions where get silently
 // stops handling a category.
-func TestReadUTDTaskPromptSource(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDTaskPromptSource(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "task-prompt")
+	stdout, stderr, err := runGetCmd(t, "task-prompt")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1453,14 +1453,14 @@ func TestReadUTDTaskPromptSource(t *testing.T) {
 	}
 }
 
-// TestReadUTDTaskCommandSource verifies a command-source task executes its
+// TestGetUTDTaskCommandSource verifies a command-source task executes its
 // command and the output flows through ensureTrailingNewline. Companion to
-// TestReadUTDTaskPromptSource — together they confirm tasks are not a
+// TestGetUTDTaskPromptSource — together they confirm tasks are not a
 // dead category in the cross-resolver.
-func TestReadUTDTaskCommandSource(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetUTDTaskCommandSource(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "task-cmd")
+	stdout, stderr, err := runGetCmd(t, "task-cmd")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1469,12 +1469,12 @@ func TestReadUTDTaskCommandSource(t *testing.T) {
 	}
 }
 
-// TestReadUTDFileMultilineNoExtraNewline verifies that a multi-line file
+// TestGetUTDFileMultilineNoExtraNewline verifies that a multi-line file
 // already carrying a trailing newline is emitted verbatim — no extra blank
 // line appended by ensureTrailingNewline. A double-newline regression in
-// `start read foo | wc -l` would silently shift line counts for scripted
+// `start get foo | wc -l` would silently shift line counts for scripted
 // callers.
-func TestReadUTDFileMultilineNoExtraNewline(t *testing.T) {
+func TestGetUTDFileMultilineNoExtraNewline(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -1503,7 +1503,7 @@ roles: {
 	}
 	chdir(t, dir)
 
-	stdout, stderr, err := runReadCmd(t, "role-multi")
+	stdout, stderr, err := runGetCmd(t, "role-multi")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1512,11 +1512,11 @@ roles: {
 	}
 }
 
-// TestReadUTDPromptAddsTrailingNewline verifies that a prompt with no
+// TestGetUTDPromptAddsTrailingNewline verifies that a prompt with no
 // trailing newline gets exactly one appended on the way to stdout. Pins the
-// "abc" → "abc\n" branch of ensureTrailingNewline through the full read
+// "abc" → "abc\n" branch of ensureTrailingNewline through the full get
 // pipeline.
-func TestReadUTDPromptAddsTrailingNewline(t *testing.T) {
+func TestGetUTDPromptAddsTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -1539,7 +1539,7 @@ roles: {
 	}
 	chdir(t, dir)
 
-	stdout, stderr, err := runReadCmd(t, "no-newline")
+	stdout, stderr, err := runGetCmd(t, "no-newline")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1548,15 +1548,15 @@ roles: {
 	}
 }
 
-// TestReadCrossCategoryFindsContext verifies a context module is reachable
+// TestGetCrossCategoryFindsContext verifies a context module is reachable
 // via the cross-category resolver. The other categories (agents, roles,
-// tasks) all have at least one direct read test; without this case a
+// tasks) all have at least one direct get test; without this case a
 // regression dropping contexts from showCategories would only surface in
 // `show` tests.
-func TestReadCrossCategoryFindsContext(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetCrossCategoryFindsContext(t *testing.T) {
+	setupGetTestConfig(t)
 
-	stdout, stderr, err := runReadCmd(t, "ctx-cmd")
+	stdout, stderr, err := runGetCmd(t, "ctx-cmd")
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
 	}
@@ -1565,13 +1565,13 @@ func TestReadCrossCategoryFindsContext(t *testing.T) {
 	}
 }
 
-// TestReadAgentExplicitlyEmptyModelFlag verifies that an empty --model
-// value (e.g. `start --model "" read claude`) does not trigger
+// TestGetAgentExplicitlyEmptyModelFlag verifies that an empty --model
+// value (e.g. `start --model "" get claude`) does not trigger
 // resolveModelName and the agent's default_model still wins. Regression
-// guard for a "treat empty string as override" bug — readAgent gates on
+// guard for a "treat empty string as override" bug — getAgent gates on
 // flags.Model != "" before invoking the resolver.
-func TestReadAgentExplicitlyEmptyModelFlag(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetAgentExplicitlyEmptyModelFlag(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -1579,7 +1579,7 @@ func TestReadAgentExplicitlyEmptyModelFlag(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--model", "", "read", "claude"})
+	cmd.SetArgs([]string{"--model", "", "get", "claude"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
@@ -1589,12 +1589,12 @@ func TestReadAgentExplicitlyEmptyModelFlag(t *testing.T) {
 	}
 }
 
-// TestReadDebugFlagDoesNotPolluteStdout verifies that --debug — which
+// TestGetDebugFlagDoesNotPolluteStdout verifies that --debug — which
 // emits diagnostic lines via debugf — never writes to stdout. The flag is
-// useful for diagnosing path-expansion failures (read.go: ExpandFilePath
+// useful for diagnosing path-expansion failures (get.go: ExpandFilePath
 // debug branch) but stdout must remain pipe-clean regardless of verbosity.
-func TestReadDebugFlagDoesNotPolluteStdout(t *testing.T) {
-	setupReadTestConfig(t)
+func TestGetDebugFlagDoesNotPolluteStdout(t *testing.T) {
+	setupGetTestConfig(t)
 
 	cmd := NewRootCmd()
 	stdout := new(bytes.Buffer)
@@ -1602,7 +1602,7 @@ func TestReadDebugFlagDoesNotPolluteStdout(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader(""))
-	cmd.SetArgs([]string{"--debug", "read", "role-file"})
+	cmd.SetArgs([]string{"--debug", "get", "role-file"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())

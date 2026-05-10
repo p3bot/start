@@ -409,7 +409,7 @@ func prepareShow(name string, scope config.Scope, cueKey, itemType string) (Show
 // look the module up against merged config — the user's literal --local
 // contract is bypassed. The notice gives scripted callers a grep-able
 // signal; no-op when --local was not set or when --quiet is in effect.
-// Called from runRead and runShowSearch after the post-install reload.
+// Called from runGet and runShowSearch after the post-install reload.
 //
 // The post-install reload also widens --global to merged scope, but no
 // notice fires for --global by design: the install lands in global config
@@ -653,7 +653,7 @@ func resolveShowFile(filePath, origin string) (resolvedPath, content string, err
 //
 // modelOverride, when non-empty, replaces the agent's default_model — the
 // caller is expected to have already resolved it (e.g. via
-// resolver.resolveModelName for `read`) so that exact and substring matches
+// resolver.resolveModelName for `get`) so that exact and substring matches
 // against the models map have been applied. With an empty override, the
 // agent's default_model is used. Both paths look the resolved key up in the
 // models map; unknown keys pass through as the literal id.
