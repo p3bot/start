@@ -16,11 +16,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with modules_add.go, modules_list.go, modules_search.go, and
-// modules_update.go. This duplication is accepted - each command uses the results
-// differently and a shared helper would couple them for modest line savings.
-
 // addModulesIndexCommand adds the index subcommand to the modules command.
 func addModulesIndexCommand(parent *cobra.Command) {
 	indexCmd := &cobra.Command{

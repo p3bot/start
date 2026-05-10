@@ -11,7 +11,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
@@ -23,10 +22,14 @@ import (
 // errNoModules is returned by installModule when no matching modules are found.
 var errNoModules = errors.New("no modules found")
 
-// NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with modules_list.go, modules_search.go, modules_update.go, and
-// modules_index.go. This duplication is accepted - each command uses the results
-// differently and a shared helper would couple them for modest line savings.
+// NOTE(design): The post-fetch logic in this file overlaps with modules_search.go,
+// modules_info.go, and modules_update.go (config resolution, scope handling,
+// command-specific empty-state output). The repetition is kept inline because
+// each call site has command-specific UX baked into the same shape — extracting
+// a helper would either hide the per-command messages from the call site or
+// require parameterising them through callbacks, both of which reduce
+// readability more than they save lines. The shared registry-client + fetch
+// + cache-write sequence is centralised in fetchIndex (modules.go).
 
 // addModulesAddCommand adds the add subcommand to the modules command.
 func addModulesAddCommand(parent *cobra.Command) {
@@ -100,20 +103,9 @@ func runModulesAdd(cmd *cobra.Command, args []string) error {
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done()
 
-	// Create registry client
-	client, err := registry.NewClient()
+	index, client, err := fetchIndex(ctx, cmd, prog, "Fetching index...")
 	if err != nil {
-		return fmt.Errorf("creating registry client: %w", err)
-	}
-
-	// Fetch index
-	prog.Update("Fetching index...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
-	if err != nil {
-		return fmt.Errorf("fetching index: %w", err)
-	}
-	if err := cache.WriteIndex(indexVersion); err != nil {
-		debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
+		return err
 	}
 	prog.Done()
 

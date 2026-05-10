@@ -8,18 +8,19 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
-// NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with modules_add.go, modules_list.go, modules_update.go, and
-// modules_index.go. This duplication is accepted - each command uses the results
-// differently and a shared helper would couple them for modest line savings.
+// NOTE(design): The shared registry-client + fetch + cache-write sequence used
+// at the top of runModulesSearch is centralised in fetchIndex (modules.go).
+// The post-fetch flow (modules.SearchIndex + output) is search-specific and
+// not worth sharing. The collectInstalledScopes helper below repeats the
+// config-loading shape used in modules_list.go and modules_update.go for
+// installed-marking; it is kept inline because each command has
+// command-specific empty-state UX.
 
 // addModulesSearchCommand adds the search subcommand to the modules command.
 func addModulesSearchCommand(parent *cobra.Command) {
@@ -84,22 +85,12 @@ func runModulesSearch(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	flags := getFlags(cmd)
 
-	// Fetch index from registry
-	client, err := registry.NewClient()
-	if err != nil {
-		return fmt.Errorf("creating registry client: %w", err)
-	}
-
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done()
 
-	prog.Update("Fetching index...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
+	index, _, err := fetchIndex(ctx, cmd, prog, "Fetching index...")
 	if err != nil {
-		return fmt.Errorf("fetching index: %w", err)
-	}
-	if err := cache.WriteIndex(indexVersion); err != nil {
-		debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
+		return err
 	}
 	prog.Done()
 

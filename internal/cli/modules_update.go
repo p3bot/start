@@ -9,7 +9,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
@@ -18,10 +17,14 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with modules_add.go, modules_list.go, modules_search.go, and
-// modules_index.go. This duplication is accepted - each command uses the results
-// differently and a shared helper would couple them for modest line savings.
+// NOTE(design): The post-fetch logic in this file overlaps with modules_add.go,
+// modules_info.go, and modules_search.go (config resolution, scope handling,
+// command-specific empty-state output). The repetition is kept inline because
+// each call site has command-specific UX baked into the same shape — extracting
+// a helper would either hide the per-command messages from the call site or
+// require parameterising them through callbacks, both of which reduce
+// readability more than they save lines. The shared registry-client + fetch
+// + cache-write sequence is centralised in fetchIndex (modules.go).
 
 // UpdateResult tracks the result of an update operation.
 type UpdateResult struct {
@@ -134,24 +137,13 @@ func runModulesUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create registry client
-	client, err := registry.NewClient()
-	if err != nil {
-		return fmt.Errorf("creating registry client: %w", err)
-	}
-
-	// Fetch index for version comparison
 	flags := getFlags(cmd)
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done()
 
-	prog.Update("Checking for updates...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
+	index, client, err := fetchIndex(ctx, cmd, prog, "Checking for updates...")
 	if err != nil {
-		return fmt.Errorf("fetching index: %w", err)
-	}
-	if err := cache.WriteIndex(indexVersion); err != nil {
-		debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
+		return err
 	}
 	prog.Done()
 

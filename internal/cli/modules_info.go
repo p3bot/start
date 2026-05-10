@@ -10,7 +10,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
@@ -96,21 +95,12 @@ func runModulesInfo(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	flags := getFlags(cmd)
 
-	client, err := registry.NewClient()
-	if err != nil {
-		return fmt.Errorf("creating registry client: %w", err)
-	}
-
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done()
 
-	prog.Update("Fetching index...")
-	index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
+	index, _, err := fetchIndex(ctx, cmd, prog, "Fetching index...")
 	if err != nil {
-		return fmt.Errorf("fetching index: %w", err)
-	}
-	if err := cache.WriteIndex(indexVersion); err != nil {
-		debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
+		return err
 	}
 	prog.Done()
 

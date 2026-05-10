@@ -18,10 +18,14 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// NOTE(design): This file shares registry client creation, index fetching, and config
-// loading patterns with modules_add.go, modules_search.go, modules_update.go, and
-// modules_index.go. This duplication is accepted - each command uses the results
-// differently and a shared helper would couple them for modest line savings.
+// NOTE(design): The config-loading shape here (paths.ResolvePaths, AnyExists
+// gate, Load(merged) plus a separate LoadSingle(local) for scope detection) is
+// repeated in modules_search.go and modules_update.go. The repetition is kept
+// inline because each call site has command-specific empty-state UX baked into
+// the same shape — extracting a helper would either hide those messages from
+// the call site or require parameterising them through callbacks. Update
+// checking uses checkForUpdates rather than the fetchIndex helper because the
+// index is only fetched conditionally (--verbose path).
 
 // InstalledModule represents an installed module with version info.
 type InstalledModule struct {
