@@ -178,8 +178,8 @@ func TestHelpArgLeafCommands(t *testing.T) {
 		},
 		// modules subcommands
 		{
-			name: "modules add help",
-			args: []string{"modules", "add", "help"},
+			name: "modules install help",
+			args: []string{"modules", "install", "help"},
 			want: "Install",
 		},
 		{

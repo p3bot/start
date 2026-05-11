@@ -140,7 +140,7 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 
 	// Auto-setup picks one variant of the claude bin. The exact key depends on
 	// the index, but it must be slash-form (e.g. "claude/interactive") so the
-	// label matches what 'start modules add' produces. The detection output may
+	// label matches what 'start modules install' produces. The detection output may
 	// take either of two shapes depending on whether the index ships one or
 	// many variants for the bin:
 	//   single variant : "Detected: claude/interactive"

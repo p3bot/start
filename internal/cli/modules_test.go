@@ -212,7 +212,7 @@ func TestModulesCommandExists(t *testing.T) {
 	}
 
 	// Check subcommands
-	subcommands := []string{"browse", "index", "search", "add", "list", "info", "update"}
+	subcommands := []string{"browse", "index", "search", "install", "list", "info", "update"}
 	for _, name := range subcommands {
 		found := false
 		for _, c := range modulesCmd.Commands() {

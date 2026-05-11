@@ -248,7 +248,7 @@ func printModuleInfo(w io.Writer, mod modules.SearchResult, installed bool, scop
 	printSeparator(w)
 
 	if !installed {
-		_, _ = fmt.Fprintf(w, "\nUse 'start modules add %s' to install.\n", formatAddress(mod.Category, mod.Name))
+		_, _ = fmt.Fprintf(w, "\nUse 'start modules install %s' to install.\n", formatAddress(mod.Category, mod.Name))
 	}
 }
 

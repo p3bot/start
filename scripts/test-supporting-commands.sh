@@ -166,14 +166,14 @@ run_test_expect_fail "1.3 modules search (Minimum 3 chars)" \
 run_test_show "1.4 modules search (No Results)" \
     "./start modules search xyznonexistent123"
 
-skip_test "1.5 modules add" \
+skip_test "1.5 modules install" \
     "Interactive - requires TTY for selection"
 
-skip_test "1.6 modules add --local" \
+skip_test "1.6 modules install --local" \
     "Interactive - requires TTY for selection"
 
-run_test_show "1.7 modules add (Direct Path)" \
-    "./start modules add golang/code-review 2>&1 || echo '(may already exist)'"
+run_test_show "1.7 modules install (Direct Path)" \
+    "./start modules install golang/code-review 2>&1 || echo '(may already exist)'"
 
 run_test_show "1.8 modules list" \
     "./start modules list"

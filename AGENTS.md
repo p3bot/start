@@ -42,7 +42,7 @@ start describe roles            # Show installed roles
 start describe tasks            # Show installed tasks
 start describe contexts         # Show installed contexts
 start get <name>                # Output module content to stdout (pipe-clean)
-start modules add <pkg>         # Install a module from the library
+start modules install <pkg>     # Install a module from the library
 start config list               # List configuration entries
 start search <term>             # Search installed modules
 start doctor                    # Diagnose installation and configuration

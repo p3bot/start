@@ -402,7 +402,7 @@ func writeModuleToConfig(configPath string, module SearchResult, content ast.Exp
 			Doc: true,
 			List: []*ast.Comment{
 				{Text: "// start configuration"},
-				{Text: "// Managed by 'start modules add'"},
+				{Text: "// Managed by 'start modules install'"},
 			},
 		})
 		file = &ast.File{Decls: []ast.Decl{categoryField}}

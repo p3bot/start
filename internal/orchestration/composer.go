@@ -440,7 +440,7 @@ func (c *Composer) resolveContext(cfg cue.Value, name string) (ProcessResult, er
 		if origin != "" {
 			resolved, err := ResolveModulePath(fields.File, origin)
 			if err != nil {
-				return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules add' to reinstall", fields.File, err)
+				return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
 			}
 			fields.File = resolved
 		}
@@ -500,7 +500,7 @@ func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath st
 		if origin != "" {
 			resolved, err := ResolveModulePath(fields.File, origin)
 			if err != nil {
-				return "", "", fmt.Errorf("resolving module path %s: %w\nRun 'start modules add' to reinstall", fields.File, err)
+				return "", "", fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
 			}
 			fields.File = resolved
 		}
@@ -632,7 +632,7 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 
 	// All roles exhausted
 	if len(resolutions) > 0 {
-		return "", resolutions, fmt.Errorf("no roles available — all configured roles reference missing files\n  Run 'start config roles' to check your role configuration\n  Run 'start modules add <role-name>' to install a role from the registry")
+		return "", resolutions, fmt.Errorf("no roles available — all configured roles reference missing files\n  Run 'start config roles' to check your role configuration\n  Run 'start modules install <role-name>' to install a role from the registry")
 	}
 
 	return "", nil, nil
@@ -681,7 +681,7 @@ func (c *Composer) ResolveTask(cfg cue.Value, name, instructions string) (Proces
 		if origin != "" {
 			resolved, err := ResolveModulePath(fields.File, origin)
 			if err != nil {
-				return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules add' to reinstall", fields.File, err)
+				return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
 			}
 			fields.File = resolved
 		}

@@ -154,8 +154,8 @@ cmd "help" "modules index --help" \
 cmd "help" "modules search --help" \
     "./start modules search --help"
 
-cmd "help" "modules add --help" \
-    "./start modules add --help"
+cmd "help" "modules install --help" \
+    "./start modules install --help"
 
 cmd "help" "modules list --help" \
     "./start modules list --help"
@@ -628,11 +628,11 @@ cmd "modules" "modules info (search)" \
 cmd "modules" "modules info --json" \
     "./start modules info --json golang/debug"
 
-cmd "modules" "modules add (direct path)" \
-    "./start modules add golang/debug"
+cmd "modules" "modules install (direct path)" \
+    "./start modules install golang/debug"
 
-cmd "modules" "modules add --local (install to project config)" \
-    "./start modules add --local golang/debug"
+cmd "modules" "modules install --local (install to project config)" \
+    "./start modules install --local golang/debug"
 
 cmd "modules" "modules update (all)" \
     "./start modules update"

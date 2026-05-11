@@ -17,7 +17,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// NOTE(design): The post-fetch logic in this file overlaps with modules_add.go,
+// NOTE(design): The post-fetch logic in this file overlaps with modules_install.go,
 // modules_info.go, and modules_search.go (config resolution, scope handling,
 // command-specific empty-state output). The repetition is kept inline because
 // each call site has command-specific UX baked into the same shape — extracting

@@ -31,12 +31,11 @@ var errNoModules = errors.New("no modules found")
 // readability more than they save lines. The shared registry-client + fetch
 // + cache-write sequence is centralised in fetchIndex (modules.go).
 
-// addModulesAddCommand adds the add subcommand to the modules command.
-func addModulesAddCommand(parent *cobra.Command) {
-	addCmd := &cobra.Command{
-		Use:     "add [query]...",
-		Aliases: []string{"install"},
-		Short:   "Install modules from registry",
+// addModulesInstallCommand adds the install subcommand to the modules command.
+func addModulesInstallCommand(parent *cobra.Command) {
+	installCmd := &cobra.Command{
+		Use:   "install [query]...",
+		Short: "Install modules from registry",
 		Long: `Install one or more modules from the CUE registry to your configuration.
 
 Searches the registry index for matching modules. If multiple matches are found,
@@ -47,14 +46,14 @@ Multiple queries can be provided to install several modules at once.
 By default, installs to global config (~/.config/start/).
 Use --local to install to project config (./.start/).`,
 		Args: cobra.MinimumNArgs(0),
-		RunE: runModulesAdd,
+		RunE: runModulesInstall,
 	}
 
-	parent.AddCommand(addCmd)
+	parent.AddCommand(installCmd)
 }
 
-// runModulesAdd searches for and installs one or more modules.
-func runModulesAdd(cmd *cobra.Command, args []string) error {
+// runModulesInstall searches for and installs one or more modules.
+func runModulesInstall(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
