@@ -204,14 +204,14 @@ start --local
 
 ### Inspection
 
-Use `start show` to inspect resolved configuration — what agents, roles, contexts, and tasks are actually configured and what their content looks like after merging global and local config:
+Use `start describe` to inspect resolved configuration — what agents, roles, contexts, and tasks are actually configured and what their content looks like after merging global and local config:
 
 ```bash
 # List all configured items with descriptions
-start show
+start describe
 
 # Search across all categories and dump full detail
-start show golang/assistant
+start describe golang/assistant
 ```
 
 The `--global` and `--local` flags restrict output to a single config scope; omitting both shows the effective merged configuration.
@@ -254,10 +254,10 @@ start task <name> [instructions] [flags]
 
 ```bash
 # List all configured items with descriptions
-start show
+start describe
 
 # Inspect a specific resource by name (searches all categories)
-start show <name>
+start describe <name>
 ```
 
 ### Modules Management

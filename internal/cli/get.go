@@ -36,7 +36,7 @@ defines both file and prompt, get outputs the file. During role/task/context
 rendering by 'start' or 'start task', behaviour differs: the prompt is rendered
 and file contents are injected via {{.file_contents}}, command output via
 {{.command_output}}. So for mixed-field modules, get's output will not match
-what 'start' renders into the agent prompt — use 'start show' to inspect the
+what 'start' renders into the agent prompt — use 'start describe' to inspect the
 prompt.
 
 Stdout receives only the module content. Selection menus, registry progress,
@@ -54,7 +54,7 @@ To inspect strictly within --local, ensure the module is already installed.`,
 		RunE: runGet,
 	}
 
-	getCmd.PersistentFlags().Bool("global", false, "Get from global scope only")
+	getCmd.PersistentFlags().Bool("global", false, "Restrict to global config only")
 
 	parent.AddCommand(getCmd)
 }
@@ -78,7 +78,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 	}
 
 	flags := getFlags(cmd)
-	scope, err := showScopeFromCmd(cmd)
+	scope, err := describeScopeFromCmd(cmd)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 		notifyScopeWidenedIfLocal(stderr, flags, r.didInstall)
 	}
 
-	cat := showCategoryFor(match.Category)
+	cat := describeCategoryFor(match.Category)
 	if cat == nil {
 		return fmt.Errorf("unknown category %q", match.Category)
 	}
@@ -279,7 +279,7 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 // when --verbose is set; stdout remains reserved for the module content itself.
 // command is set only when command is the active source — getUTD passes the
 // post-trim fields.Command, which is non-empty exactly when command was chosen.
-// fromModuleCache labels the file location as `Cache:` (matching `start show`)
+// fromModuleCache labels the file location as `Cache:` (matching `start describe`)
 // so users aren't misled into editing the CUE module cache; local-file modules
 // keep the `Path:` label so the user knows where the editable source lives.
 func printGetVerbose(stderr io.Writer, itemType, name string, item cue.Value, resolvedFile, command string, fromModuleCache bool) {

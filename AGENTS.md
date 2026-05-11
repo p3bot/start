@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: None
+Active Project: [04-extend-describe.md](./04-extend-describe.md)
 
 When a project is complete, update this file to point to the next active project
 
@@ -37,10 +37,10 @@ Testing key principles:
 start                           # Start interactive session with default role
 start --role go-expert          # Start with specific role
 start task pre-commit-review    # Run a specific task
-start show agents               # Show installed agents
-start show roles                # Show installed roles
-start show tasks                # Show installed tasks
-start show contexts             # Show installed contexts
+start describe agents           # Show installed agents
+start describe roles            # Show installed roles
+start describe tasks            # Show installed tasks
+start describe contexts         # Show installed contexts
 start get <name>                # Output module content to stdout (pipe-clean)
 start modules add <pkg>         # Install a module from the library
 start config list               # List configuration entries

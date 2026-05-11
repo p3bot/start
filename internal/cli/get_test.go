@@ -461,7 +461,7 @@ func TestGetVerboseToStderr(t *testing.T) {
 // TestGetQuietSuppressesStderr verifies that --quiet leaves stdout holding
 // only the module content with stderr empty. Three independent stderr-write
 // paths converge in runGet and get* helpers — autoInstall progress
-// (resolve.go), notifyScopeWidenedIfLocal (show.go), and printGetVerbose
+// (resolve.go), notifyScopeWidenedIfLocal (describe.go), and printGetVerbose
 // (get.go) — and a regression in any single Quiet/Verbose gate would leak
 // metadata into a `start get --quiet | bar` pipeline. The autoInstall arm
 // of that contract is unit-tested in resolve.go's tests; the widen-notice
@@ -539,7 +539,7 @@ func TestGetCommandHelp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"get", "stdout", "start show", "Auto-installed"} {
+	for _, want := range []string{"get", "stdout", "start describe", "Auto-installed"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("help output missing %q\ngot: %s", want, stdout)
 		}
@@ -891,7 +891,7 @@ roles: {
 // role; both must be reachable through `start get`. A regression that flipped
 // runGet to ScopeLocal would break the global sub-test; flipping to
 // ScopeGlobal would break the local sub-test. Pattern follows
-// TestShowGlobalFlag in show_test.go: HOME is set but XDG_CONFIG_HOME is not,
+// TestDescribeGlobalFlag in describe_test.go: HOME is set but XDG_CONFIG_HOME is not,
 // so globalConfigDir resolves to $HOME/.config/start/.
 func TestGetMergedScopeFindsGlobalAndLocal(t *testing.T) {
 	dir := t.TempDir()
@@ -1195,8 +1195,8 @@ func TestGetGlobalScope(t *testing.T) {
 }
 
 // TestGetLocalAndGlobalMutuallyExclusive verifies that passing both --local
-// and --global returns the same mutual-exclusion error as `start show` and
-// writes nothing to stdout. No fixture is required: showScopeFromCmd errors
+// and --global returns the same mutual-exclusion error as `start describe` and
+// writes nothing to stdout. No fixture is required: describeScopeFromCmd errors
 // before runGet reaches loadConfig, so the cwd and HOME contents are
 // irrelevant on this path.
 func TestGetLocalAndGlobalMutuallyExclusive(t *testing.T) {
@@ -1551,8 +1551,8 @@ roles: {
 // TestGetCrossCategoryFindsContext verifies a context module is reachable
 // via the cross-category resolver. The other categories (agents, roles,
 // tasks) all have at least one direct get test; without this case a
-// regression dropping contexts from showCategories would only surface in
-// `show` tests.
+// regression dropping contexts from describeCategories would only surface in
+// `describe` tests.
 func TestGetCrossCategoryFindsContext(t *testing.T) {
 	setupGetTestConfig(t)
 

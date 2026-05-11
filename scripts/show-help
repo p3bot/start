@@ -35,11 +35,11 @@ show() {
 show "${BIN}"
 
 # Top-level commands
-show "${BIN} show"
-show "${BIN} show role"
-show "${BIN} show context"
-show "${BIN} show agent"
-show "${BIN} show task"
+show "${BIN} describe"
+show "${BIN} describe role"
+show "${BIN} describe context"
+show "${BIN} describe agent"
+show "${BIN} describe task"
 
 show "${BIN} prompt"
 

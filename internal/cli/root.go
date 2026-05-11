@@ -106,7 +106,7 @@ Examples:
 	)
 
 	// Add subcommands
-	addShowCommand(cmd)
+	addDescribeCommand(cmd)
 	addGetCommand(cmd)
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)

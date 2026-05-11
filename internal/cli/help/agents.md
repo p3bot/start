@@ -23,10 +23,10 @@ start task pre-commit-review
 start task review "focus on error handling"
 start task --tag golang
 start task ./custom-task.md
-start show
-start show go-expert
-start show --global
-start show --local
+start describe
+start describe go-expert
+start describe --global
+start describe --local
 start config
 start config list
 start config list agent

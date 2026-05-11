@@ -16,7 +16,7 @@ Manual CLI testing scripts from the p-012, p-013, p-014 testing projects.
 
 ```bash
 ./scripts/test-core-commands.sh        # p-012: start, prompt, task, global flags
-./scripts/test-config-commands.sh      # p-013: config, show, merging, --local
+./scripts/test-config-commands.sh      # p-013: config, describe, merging, --local
 ./scripts/test-supporting-commands.sh  # p-014: modules, doctor, completion
 ```
 

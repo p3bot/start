@@ -193,27 +193,27 @@ roles: {
 	return dir
 }
 
-// TestPrepareShowAgent tests the prepareShow function for agents.
-func TestPrepareShowAgent(t *testing.T) {
+// TestPrepareDescribeAgent tests the prepareDescribe function for agents.
+func TestPrepareDescribeAgent(t *testing.T) {
 	setupTestConfig(t)
 
 	tests := []struct {
-		name           string
-		agentName      string
-		scope          config.Scope
-		wantType       string
-		wantName       string
-		wantAllNames   []string
-		wantShowReason string
-		wantErr        bool
+		name         string
+		agentName    string
+		scope        config.Scope
+		wantType     string
+		wantName     string
+		wantAllNames []string
+		wantReason   string
+		wantErr      bool
 	}{
 		{
-			name:           "no name shows first agent",
-			agentName:      "",
-			wantType:       "Agent",
-			wantName:       "claude",
-			wantAllNames:   []string{"claude"},
-			wantShowReason: "first in config",
+			name:         "no name describes first agent",
+			agentName:    "",
+			wantType:     "Agent",
+			wantName:     "claude",
+			wantAllNames: []string{"claude"},
+			wantReason:   "first in config",
 		},
 		{
 			name:      "named agent",
@@ -249,7 +249,7 @@ func TestPrepareShowAgent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := prepareShow(tt.agentName, tt.scope, internalcue.KeyAgents, "Agent")
+			result, err := prepareDescribe(tt.agentName, tt.scope, internalcue.KeyAgents, "Agent")
 
 			if tt.wantErr {
 				if err == nil {
@@ -268,8 +268,8 @@ func TestPrepareShowAgent(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantShowReason != "" && result.ShowReason != tt.wantShowReason {
-				t.Errorf("ShowReason = %q, want %q", result.ShowReason, tt.wantShowReason)
+			if tt.wantReason != "" && result.Reason != tt.wantReason {
+				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
 			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
@@ -284,26 +284,26 @@ func TestPrepareShowAgent(t *testing.T) {
 	}
 }
 
-// TestPrepareShowRole tests the prepareShow function for roles.
-func TestPrepareShowRole(t *testing.T) {
+// TestPrepareDescribeRole tests the prepareDescribe function for roles.
+func TestPrepareDescribeRole(t *testing.T) {
 	setupTestConfig(t)
 
 	tests := []struct {
-		name           string
-		roleName       string
-		wantType       string
-		wantName       string
-		wantAllNames   []string
-		wantShowReason string
-		wantErr        bool
+		name         string
+		roleName     string
+		wantType     string
+		wantName     string
+		wantAllNames []string
+		wantReason   string
+		wantErr      bool
 	}{
 		{
-			name:           "no name shows first role",
-			roleName:       "",
-			wantType:       "Role",
-			wantName:       "assistant",
-			wantAllNames:   []string{"assistant", "code-reviewer"},
-			wantShowReason: "first in config",
+			name:         "no name describes first role",
+			roleName:     "",
+			wantType:     "Role",
+			wantName:     "assistant",
+			wantAllNames: []string{"assistant", "code-reviewer"},
+			wantReason:   "first in config",
 		},
 		{
 			name:     "named role with hyphen",
@@ -326,7 +326,7 @@ func TestPrepareShowRole(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := prepareShow(tt.roleName, config.ScopeMerged, internalcue.KeyRoles, "Role")
+			result, err := prepareDescribe(tt.roleName, config.ScopeMerged, internalcue.KeyRoles, "Role")
 
 			if tt.wantErr {
 				if err == nil {
@@ -345,8 +345,8 @@ func TestPrepareShowRole(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantShowReason != "" && result.ShowReason != tt.wantShowReason {
-				t.Errorf("ShowReason = %q, want %q", result.ShowReason, tt.wantShowReason)
+			if tt.wantReason != "" && result.Reason != tt.wantReason {
+				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
 			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
@@ -357,26 +357,26 @@ func TestPrepareShowRole(t *testing.T) {
 	}
 }
 
-// TestPrepareShowContext tests the prepareShow function for contexts.
-func TestPrepareShowContext(t *testing.T) {
+// TestPrepareDescribeContext tests the prepareDescribe function for contexts.
+func TestPrepareDescribeContext(t *testing.T) {
 	setupTestConfig(t)
 
 	tests := []struct {
-		name           string
-		contextName    string
-		wantType       string
-		wantName       string
-		wantAllNames   []string
-		wantShowReason string
-		wantErr        bool
+		name         string
+		contextName  string
+		wantType     string
+		wantName     string
+		wantAllNames []string
+		wantReason   string
+		wantErr      bool
 	}{
 		{
-			name:           "no name shows first context",
-			contextName:    "",
-			wantType:       "Context",
-			wantName:       "environment",
-			wantAllNames:   []string{"environment", "git-status"},
-			wantShowReason: "first in config",
+			name:         "no name describes first context",
+			contextName:  "",
+			wantType:     "Context",
+			wantName:     "environment",
+			wantAllNames: []string{"environment", "git-status"},
+			wantReason:   "first in config",
 		},
 		{
 			name:        "context by name",
@@ -399,7 +399,7 @@ func TestPrepareShowContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := prepareShow(tt.contextName, config.ScopeMerged, internalcue.KeyContexts, "Context")
+			result, err := prepareDescribe(tt.contextName, config.ScopeMerged, internalcue.KeyContexts, "Context")
 
 			if tt.wantErr {
 				if err == nil {
@@ -418,8 +418,8 @@ func TestPrepareShowContext(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantShowReason != "" && result.ShowReason != tt.wantShowReason {
-				t.Errorf("ShowReason = %q, want %q", result.ShowReason, tt.wantShowReason)
+			if tt.wantReason != "" && result.Reason != tt.wantReason {
+				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
 			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
@@ -430,26 +430,26 @@ func TestPrepareShowContext(t *testing.T) {
 	}
 }
 
-// TestPrepareShowTask tests the prepareShow function for tasks.
-func TestPrepareShowTask(t *testing.T) {
+// TestPrepareDescribeTask tests the prepareDescribe function for tasks.
+func TestPrepareDescribeTask(t *testing.T) {
 	setupTestConfig(t)
 
 	tests := []struct {
-		name           string
-		taskName       string
-		wantType       string
-		wantName       string
-		wantAllNames   []string
-		wantShowReason string
-		wantErr        bool
+		name         string
+		taskName     string
+		wantType     string
+		wantName     string
+		wantAllNames []string
+		wantReason   string
+		wantErr      bool
 	}{
 		{
-			name:           "no name shows first task",
-			taskName:       "",
-			wantType:       "Task",
-			wantName:       "review",
-			wantAllNames:   []string{"review"},
-			wantShowReason: "first in config",
+			name:         "no name describes first task",
+			taskName:     "",
+			wantType:     "Task",
+			wantName:     "review",
+			wantAllNames: []string{"review"},
+			wantReason:   "first in config",
 		},
 		{
 			name:     "task by name",
@@ -472,7 +472,7 @@ func TestPrepareShowTask(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := prepareShow(tt.taskName, config.ScopeMerged, internalcue.KeyTasks, "Task")
+			result, err := prepareDescribe(tt.taskName, config.ScopeMerged, internalcue.KeyTasks, "Task")
 
 			if tt.wantErr {
 				if err == nil {
@@ -491,8 +491,8 @@ func TestPrepareShowTask(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantShowReason != "" && result.ShowReason != tt.wantShowReason {
-				t.Errorf("ShowReason = %q, want %q", result.ShowReason, tt.wantShowReason)
+			if tt.wantReason != "" && result.Reason != tt.wantReason {
+				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
 			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
@@ -503,14 +503,14 @@ func TestPrepareShowTask(t *testing.T) {
 	}
 }
 
-// TestPrepareShowLocalNoConfig verifies that ScopeLocal returns an error when no local config exists.
-func TestPrepareShowLocalNoConfig(t *testing.T) {
+// TestPrepareDescribeLocalNoConfig verifies that ScopeLocal returns an error when no local config exists.
+func TestPrepareDescribeLocalNoConfig(t *testing.T) {
 	dir := t.TempDir()
 	// No .start directory created — local config is absent
 	chdir(t, dir)
 	t.Setenv("HOME", dir)
 
-	_, err := prepareShow("claude", config.ScopeLocal, internalcue.KeyAgents, "Agent")
+	_, err := prepareDescribe("claude", config.ScopeLocal, internalcue.KeyAgents, "Agent")
 	if err == nil {
 		t.Fatal("expected error when no local config exists")
 	}
@@ -519,14 +519,14 @@ func TestPrepareShowLocalNoConfig(t *testing.T) {
 	}
 }
 
-// TestPrepareShowGlobalNoConfig verifies that ScopeGlobal returns an error when no global config exists.
-func TestPrepareShowGlobalNoConfig(t *testing.T) {
+// TestPrepareDescribeGlobalNoConfig verifies that ScopeGlobal returns an error when no global config exists.
+func TestPrepareDescribeGlobalNoConfig(t *testing.T) {
 	dir := t.TempDir()
 	// No ~/.config/start directory — global config is absent
 	chdir(t, dir)
 	t.Setenv("HOME", dir)
 
-	_, err := prepareShow("claude", config.ScopeGlobal, internalcue.KeyAgents, "Agent")
+	_, err := prepareDescribe("claude", config.ScopeGlobal, internalcue.KeyAgents, "Agent")
 	if err == nil {
 		t.Fatal("expected error when no global config exists")
 	}
@@ -535,9 +535,9 @@ func TestPrepareShowGlobalNoConfig(t *testing.T) {
 	}
 }
 
-// TestShowGlobalFlag verifies --global flag behaviour: listing and subcommands
-// show only global config, excluding local items.
-func TestShowGlobalFlag(t *testing.T) {
+// TestDescribeGlobalFlag verifies --global flag behaviour: listing and subcommands
+// describe only global config, excluding local items.
+func TestDescribeGlobalFlag(t *testing.T) {
 	dir := t.TempDir()
 
 	// Global config at ~/.config/start/
@@ -584,7 +584,7 @@ agents: {
 		cmd := NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"show", "--global"})
+		cmd.SetArgs([]string{"describe", "--global"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -599,12 +599,12 @@ agents: {
 		}
 	})
 
-	t.Run("show agent name search with --global matches global-agent", func(t *testing.T) {
+	t.Run("describe agent name search with --global matches global-agent", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		cmd := NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"show", "agent", "--global"})
+		cmd.SetArgs([]string{"describe", "agent", "--global"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -624,9 +624,9 @@ agents: {
 func TestVerboseDumpCUEDefinition(t *testing.T) {
 	setupTestConfig(t)
 
-	result, err := prepareShow("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
+	result, err := prepareDescribe("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -655,9 +655,9 @@ func TestVerboseDumpCUEDefinition(t *testing.T) {
 func TestVerboseDumpAgentCommand(t *testing.T) {
 	setupTestConfig(t)
 
-	result, err := prepareShow("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
+	result, err := prepareDescribe("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -679,9 +679,9 @@ func TestVerboseDumpAgentCommand(t *testing.T) {
 func TestVerboseDumpConfigSource(t *testing.T) {
 	dir := setupTestConfig(t)
 
-	result, err := prepareShow("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
+	result, err := prepareDescribe("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -704,9 +704,9 @@ func TestVerboseDumpConfigSource(t *testing.T) {
 func TestVerboseDumpOriginCache(t *testing.T) {
 	setupTestConfigWithOrigin(t)
 
-	result, err := prepareShow("golang/assistant", config.ScopeMerged, internalcue.KeyRoles, "Role")
+	result, err := prepareDescribe("golang/assistant", config.ScopeMerged, internalcue.KeyRoles, "Role")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -728,9 +728,9 @@ func TestVerboseDumpOriginCache(t *testing.T) {
 func TestVerboseDumpFileContent(t *testing.T) {
 	setupTestConfigWithFiles(t)
 
-	result, err := prepareShow("go-expert", config.ScopeMerged, internalcue.KeyRoles, "Role")
+	result, err := prepareDescribe("go-expert", config.ScopeMerged, internalcue.KeyRoles, "Role")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -767,9 +767,9 @@ roles: {
 	chdir(t, dir)
 	t.Setenv("HOME", dir)
 
-	result, err := prepareShow("broken", config.ScopeMerged, internalcue.KeyRoles, "Role")
+	result, err := prepareDescribe("broken", config.ScopeMerged, internalcue.KeyRoles, "Role")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -786,9 +786,9 @@ roles: {
 func TestVerboseDumpCommand(t *testing.T) {
 	setupTestConfig(t)
 
-	result, err := prepareShow("review", config.ScopeMerged, internalcue.KeyTasks, "Task")
+	result, err := prepareDescribe("review", config.ScopeMerged, internalcue.KeyTasks, "Task")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -805,9 +805,9 @@ func TestVerboseDumpCommand(t *testing.T) {
 func TestVerboseDumpSeparators(t *testing.T) {
 	setupTestConfig(t)
 
-	result, err := prepareShow("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
+	result, err := prepareDescribe("claude", config.ScopeMerged, internalcue.KeyAgents, "Agent")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -821,15 +821,15 @@ func TestVerboseDumpSeparators(t *testing.T) {
 	}
 }
 
-// TestShowListingDescriptions verifies enhanced listing with descriptions.
-func TestShowListingDescriptions(t *testing.T) {
+// TestDescribeListingDescriptions verifies enhanced listing with descriptions.
+func TestDescribeListingDescriptions(t *testing.T) {
 	setupTestConfig(t)
 
 	buf := new(bytes.Buffer)
 	cmd := NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"show"})
+	cmd.SetArgs([]string{"describe"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -871,8 +871,8 @@ func TestShowListingDescriptions(t *testing.T) {
 	}
 }
 
-// TestShowListingNoDescriptions verifies items without descriptions are listed.
-func TestShowListingNoDescriptions(t *testing.T) {
+// TestDescribeListingNoDescriptions verifies items without descriptions are listed.
+func TestDescribeListingNoDescriptions(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
 	if err := os.MkdirAll(startDir, 0755); err != nil {
@@ -897,7 +897,7 @@ roles: {
 	cmd := NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"show"})
+	cmd.SetArgs([]string{"describe"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -909,15 +909,15 @@ roles: {
 	}
 }
 
-// TestShowCrossCategory verifies cross-category search with a single match.
-func TestShowCrossCategory(t *testing.T) {
+// TestDescribeCrossCategory verifies cross-category search with a single match.
+func TestDescribeCrossCategory(t *testing.T) {
 	setupTestConfig(t)
 
 	buf := new(bytes.Buffer)
 	cmd := NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"show", "claude"})
+	cmd.SetArgs([]string{"describe", "claude"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -936,9 +936,9 @@ func TestShowCrossCategory(t *testing.T) {
 	}
 }
 
-// TestShowCrossCategoryMultipleExact verifies ambiguity when an exact name exists
+// TestDescribeCrossCategoryMultipleExact verifies ambiguity when an exact name exists
 // in multiple categories (non-TTY returns error).
-func TestShowCrossCategoryMultipleExact(t *testing.T) {
+func TestDescribeCrossCategoryMultipleExact(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
 	if err := os.MkdirAll(startDir, 0755); err != nil {
@@ -972,7 +972,7 @@ tasks: {
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	// stdin is not a TTY in tests, so multiple matches should return an error
-	cmd.SetArgs([]string{"show", "helper"})
+	cmd.SetArgs([]string{"describe", "helper"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -983,8 +983,8 @@ tasks: {
 	}
 }
 
-// TestShowCommandIntegration tests the full command flow via Cobra.
-func TestShowCommandIntegration(t *testing.T) {
+// TestDescribeCommandIntegration tests the full command flow via Cobra.
+func TestDescribeCommandIntegration(t *testing.T) {
 	setupTestConfig(t)
 
 	tests := []struct {
@@ -995,57 +995,57 @@ func TestShowCommandIntegration(t *testing.T) {
 		wantErrContain string
 	}{
 		{
-			name:           "show agent is a name search returning not-found",
-			args:           []string{"show", "agent"},
+			name:           "describe agent is a name search returning not-found",
+			args:           []string{"describe", "agent"},
 			wantErr:        true,
 			wantErrContain: "agent",
 		},
 		{
-			name:           "show role is a name search returning not-found",
-			args:           []string{"show", "role"},
+			name:           "describe role is a name search returning not-found",
+			args:           []string{"describe", "role"},
 			wantErr:        true,
 			wantErrContain: "role",
 		},
 		{
-			name:           "show context is a name search returning not-found",
-			args:           []string{"show", "context"},
+			name:           "describe context is a name search returning not-found",
+			args:           []string{"describe", "context"},
 			wantErr:        true,
 			wantErrContain: "context",
 		},
 		{
-			name:           "show task is a name search returning not-found",
-			args:           []string{"show", "task"},
+			name:           "describe task is a name search returning not-found",
+			args:           []string{"describe", "task"},
 			wantErr:        true,
 			wantErrContain: "task",
 		},
 		{
-			name:    "show with two args is rejected",
-			args:    []string{"show", "claude", "extra"},
+			name:    "describe with two args is rejected",
+			args:    []string{"describe", "claude", "extra"},
 			wantErr: true,
 		},
 		{
-			name:       "show no args lists all items",
-			args:       []string{"show"},
+			name:       "describe no args lists all items",
+			args:       []string{"describe"},
 			wantOutput: []string{"agents/", "roles/", "contexts/", "tasks/", "claude", "assistant"},
 		},
 		{
-			name:       "show cross-category search single match",
-			args:       []string{"show", "claude"},
+			name:       "describe cross-category search single match",
+			args:       []string{"describe", "claude"},
 			wantOutput: []string{"Agent: claude"},
 		},
 		{
-			name:       "show --local lists only local items",
-			args:       []string{"show", "--local"},
+			name:       "describe --local lists only local items",
+			args:       []string{"describe", "--local"},
 			wantOutput: []string{"agents/", "claude"},
 		},
 		{
-			name:    "show --global errors when no global config",
-			args:    []string{"show", "--global"},
+			name:    "describe --global errors when no global config",
+			args:    []string{"describe", "--global"},
 			wantErr: true,
 		},
 		{
-			name:    "show --local and --global are mutually exclusive",
-			args:    []string{"show", "--local", "--global"},
+			name:    "describe --local and --global are mutually exclusive",
+			args:    []string{"describe", "--local", "--global"},
 			wantErr: true,
 		},
 	}
@@ -1089,9 +1089,9 @@ func TestShowCommandIntegration(t *testing.T) {
 func TestFormatCUEDefinition(t *testing.T) {
 	setupTestConfig(t)
 
-	result, err := prepareShow("assistant", config.ScopeMerged, internalcue.KeyRoles, "Role")
+	result, err := prepareDescribe("assistant", config.ScopeMerged, internalcue.KeyRoles, "Role")
 	if err != nil {
-		t.Fatalf("prepareShow: %v", err)
+		t.Fatalf("prepareDescribe: %v", err)
 	}
 
 	def := formatCUEDefinition(result.Value)
@@ -1111,8 +1111,8 @@ func TestFormatCUEDefinition(t *testing.T) {
 	}
 }
 
-// TestResolveShowFile verifies file resolution for different path types.
-func TestResolveShowFile(t *testing.T) {
+// TestResolveDescribeFile verifies file resolution for different path types.
+func TestResolveDescribeFile(t *testing.T) {
 	// Create a temp file
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.md")
@@ -1121,7 +1121,7 @@ func TestResolveShowFile(t *testing.T) {
 	}
 
 	t.Run("absolute path", func(t *testing.T) {
-		resolvedPath, content, err := resolveShowFile(testFile, "")
+		resolvedPath, content, err := resolveDescribeFile(testFile, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1134,14 +1134,14 @@ func TestResolveShowFile(t *testing.T) {
 	})
 
 	t.Run("nonexistent file", func(t *testing.T) {
-		_, _, err := resolveShowFile("/nonexistent/file.md", "")
+		_, _, err := resolveDescribeFile("/nonexistent/file.md", "")
 		if err == nil {
 			t.Error("expected error for nonexistent file")
 		}
 	})
 
 	t.Run("empty file path", func(t *testing.T) {
-		resolvedPath, content, err := resolveShowFile("", "")
+		resolvedPath, content, err := resolveDescribeFile("", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

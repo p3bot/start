@@ -20,7 +20,7 @@ func addConfigInfoCommand(parent *cobra.Command) {
 Search by name across all categories. If multiple items match, a numbered
 menu is presented. With no argument, prompts interactively for category and item.
 
-This shows raw stored fields, not resolved content. Use 'start show' to view
+This shows raw stored fields, not resolved content. Use 'start describe' to view
 resolved content after global/local merging.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runConfigInfo,

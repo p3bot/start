@@ -29,8 +29,8 @@ import (
 // r.cfg.Value (e.g. to look up the resolved module's CUE value), the caller must
 // first call r.reloadConfig(workingDir) — the installed module is written to disk
 // but r.cfg is not refreshed in place. See runStart and runTask for the
-// established reload-after-install pattern. show is exempt because
-// showVerboseItem loads config independently via prepareShow.
+// established reload-after-install pattern. describe is exempt because
+// describeVerboseItem loads config independently via prepareDescribe.
 func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	addr, err := parseAddress(query)
 	if err != nil {
@@ -40,10 +40,10 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	// When the address carries a category prefix, every per-category loop
 	// below scopes to that single category and the bare name is used for
 	// matching. With no prefix, all four categories are searched.
-	cats := showCategories
+	cats := describeCategories
 	if addr.HasPrefix {
-		if c := showCategoryFor(addr.Category); c != nil {
-			cats = []showCategory{*c}
+		if c := describeCategoryFor(addr.Category); c != nil {
+			cats = []describeCategory{*c}
 		}
 	}
 	name := addr.Name

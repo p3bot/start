@@ -339,48 +339,36 @@ run_test_show "5.2 config settings edit" \
     "EDITOR=cat ./start config settings edit"
 
 echo "========================================"
-echo "6. Show Commands"
+echo "6. Describe Commands"
 echo "========================================"
 echo
 
-run_test_show "6.1 show agent (list)" \
-    "./start show agent"
+run_test_show "6.1 describe (list all)" \
+    "./start describe"
 
-run_test_show "6.2 show agent (named)" \
-    "./start show agent claude"
+run_test_show "6.2 describe by name (claude)" \
+    "./start describe claude"
 
-run_test "6.3/6.4 show role - add role" \
+run_test "6.3 describe by name - add role" \
     "./start config role add --name test-show --prompt 'You are a test assistant'"
 
-run_test_show "6.3 show role (list)" \
-    "./start show role"
+run_test_show "6.3 describe by name (test-show)" \
+    "./start describe test-show"
 
-run_test_show "6.4 show role (named)" \
-    "./start show role test-show"
-
-run_test "6.3/6.4 cleanup" \
+run_test "6.3 cleanup" \
     "./start config role remove test-show --yes"
 
-run_test_show "6.5 show context (list)" \
-    "./start show context"
-
-run_test_show "6.6 show context (named)" \
-    "./start show context project"
-
-run_test_show "6.7 show task (list)" \
-    "./start show task"
-
-run_test_show "6.9 show --scope global" \
-    "./start show agent --scope global"
+run_test_show "6.4 describe --global" \
+    "./start describe --global"
 
 mkdir -p ./.start
-run_test "6.10 show --scope local - add local agent" \
+run_test "6.5 describe --local - add local agent" \
     "./start config agent add --name local-test --bin local --command 'local' --local"
 
-run_test_show "6.10 show --scope local" \
-    "./start show agent --scope local"
+run_test_show "6.5 describe --local" \
+    "./start describe --local"
 
-run_test "6.10 cleanup" \
+run_test "6.5 cleanup" \
     "./start config agent remove local-test --local"
 rm -rf ./.start
 
@@ -410,7 +398,7 @@ run_test_show "7.3 scope isolation - list merged" \
     "./start config agent list"
 
 run_test_show "7.3 scope isolation - global only" \
-    "./start show agent --scope global"
+    "./start describe --global"
 
 run_test "7.3 cleanup" \
     "./start config agent remove unique-local --local"
@@ -423,7 +411,7 @@ echo
 
 rm -rf ./.start
 run_test_show "8.1 global only" \
-    "./start show agent"
+    "./start describe agent"
 
 echo "8.2 local only - skipping (requires moving global config)"
 echo
@@ -435,8 +423,8 @@ run_test "8.3 merged - add global" \
 run_test "8.3 merged - add local" \
     "./start config agent add --name test-merge --bin local --command 'local' --local"
 
-run_test_show "8.3 merged - show (should be local)" \
-    "./start show agent test-merge"
+run_test_show "8.3 merged - describe (should be local)" \
+    "./start describe agent test-merge"
 
 run_test "8.3 cleanup - global" \
     "./start config agent remove test-merge"

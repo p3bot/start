@@ -139,8 +139,8 @@ cmd "help" "config export --help" \
 cmd "help" "config settings --help" \
     "./start config settings --help"
 
-cmd "help" "show --help" \
-    "./start show --help"
+cmd "help" "describe --help" \
+    "./start describe --help"
 
 cmd "help" "modules --help" \
     "./start modules --help"
@@ -531,32 +531,29 @@ cmd "config settings" "settings unknown key (expect error)" \
     "./start config settings nonexistent_key_xyz"
 
 # --------------------------------------------------------------------------
-section "18. Show Command"
+section "18. Describe Command"
 # --------------------------------------------------------------------------
 
-cmd "show" "show (listing all)" \
-    "./start show"
+cmd "describe" "describe (listing all)" \
+    "./start describe"
 
-cmd "show" "show claude (verbose dump)" \
-    "./start show claude"
+cmd "describe" "describe claude (verbose dump)" \
+    "./start describe claude"
 
-cmd "show" "show --global" \
-    "./start show --global"
+cmd "describe" "describe --global" \
+    "./start describe --global"
 
-cmd "show" "show --local" \
-    "./start show --local"
+cmd "describe" "describe --local" \
+    "./start describe --local"
 
-cmd "show" "show --global claude" \
-    "./start show --global claude"
+cmd "describe" "describe --global claude" \
+    "./start describe --global claude"
 
-cmd "show" "show --global --local (expect error)" \
-    "./start show --global --local claude"
+cmd "describe" "describe --global --local (expect error)" \
+    "./start describe --global --local claude"
 
-cmd "show" "show nonexistent (expect error)" \
-    "./start show nonexistent-xyz-123"
-
-cmd "show" "view alias" \
-    "./start view claude"
+cmd "describe" "describe nonexistent (expect error)" \
+    "./start describe nonexistent-xyz-123"
 
 # --------------------------------------------------------------------------
 section "19. Modules Commands"

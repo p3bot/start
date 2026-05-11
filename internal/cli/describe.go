@@ -19,40 +19,40 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// ShowResult holds the result of preparing show output.
-type ShowResult struct {
-	ItemType   string    // "Agent", "Role", "Context", "Task"
-	Category   string    // "agents", "roles", "contexts", "tasks"
-	CueKey     string    // Top-level CUE key (e.g., "agents")
-	Name       string    // Item name (when showing specific item)
-	Value      cue.Value // The CUE value for this item
-	AllNames   []string  // All available items of this type
-	ShowReason string    // Why this item is shown (e.g., "first in config", "default")
+// DescribeResult holds the result of preparing describe output.
+type DescribeResult struct {
+	ItemType string    // "Agent", "Role", "Context", "Task"
+	Category string    // "agents", "roles", "contexts", "tasks"
+	CueKey   string    // Top-level CUE key (e.g., "agents")
+	Name     string    // Item name (when describing a specific item)
+	Value    cue.Value // The CUE value for this item
+	AllNames []string  // All available items of this type
+	Reason   string    // Why this item is described (e.g., "first in config", "default")
 }
 
-// showCategory maps category metadata used for cross-category operations.
-type showCategory struct {
+// describeCategory maps category metadata used for cross-category operations.
+type describeCategory struct {
 	key      string // CUE key (e.g., "agents")
 	category string // Category name (e.g., "agents")
 	itemType string // Display type (e.g., "Agent")
 }
 
-var showCategories = []showCategory{
+var describeCategories = []describeCategory{
 	{internalcue.KeyAgents, "agents", "Agent"},
 	{internalcue.KeyRoles, "roles", "Role"},
 	{internalcue.KeyContexts, "contexts", "Context"},
 	{internalcue.KeyTasks, "tasks", "Task"},
 }
 
-// showCategoryFor looks up a showCategory by its category string.
-// Returns nil only if category is not in showCategories. All callers pass
-// Category values that originate from iterating showCategories, so nil is
+// describeCategoryFor looks up a describeCategory by its category string.
+// Returns nil only if category is not in describeCategories. All callers pass
+// Category values that originate from iterating describeCategories, so nil is
 // unreachable in practice. If a new ModuleMatch source is added, ensure its
-// Category is drawn from showCategories.
-func showCategoryFor(category string) *showCategory {
-	for i := range showCategories {
-		if showCategories[i].category == category {
-			return &showCategories[i]
+// Category is drawn from describeCategories.
+func describeCategoryFor(category string) *describeCategory {
+	for i := range describeCategories {
+		if describeCategories[i].category == category {
+			return &describeCategories[i]
 		}
 	}
 	return nil
@@ -79,7 +79,7 @@ func parseAddress(input string) (parsedAddress, error) {
 	}
 	cat := before
 	name := after
-	if showCategoryFor(cat) == nil {
+	if describeCategoryFor(cat) == nil {
 		return parsedAddress{}, fmt.Errorf("unknown category %q (valid: %s)", cat, knownCategoriesList())
 	}
 	return parsedAddress{Category: cat, Name: name, HasPrefix: true}, nil
@@ -88,8 +88,8 @@ func parseAddress(input string) (parsedAddress, error) {
 // knownCategoriesList returns the four valid categories as a comma-separated
 // string for use in error messages.
 func knownCategoriesList() string {
-	names := make([]string, len(showCategories))
-	for i, c := range showCategories {
+	names := make([]string, len(describeCategories))
+	for i, c := range describeCategories {
 		names[i] = c.category
 	}
 	return strings.Join(names, ", ")
@@ -102,11 +102,10 @@ func formatAddress(category, name string) string {
 	return category + ":" + name
 }
 
-// addShowCommand adds the show command and its subcommands to the parent command.
-func addShowCommand(parent *cobra.Command) {
-	showCmd := &cobra.Command{
-		Use:     "show [name]",
-		Aliases: []string{"view"},
+// addDescribeCommand adds the describe command and its subcommands to the parent command.
+func addDescribeCommand(parent *cobra.Command) {
+	describeCmd := &cobra.Command{
+		Use:     "describe [name]",
 		GroupID: "commands",
 		Short:   "Display resolved configuration content",
 		Long: `Display resolved configuration content from merged global and local config.
@@ -126,24 +125,24 @@ Auto-installed modules always land in global config; the post-install lookup
 widens to merged scope so a --local invocation can still see the new module.
 To inspect strictly within --local, ensure the module is already installed.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runShow,
+		RunE: runDescribe,
 	}
 
-	// Add --global flag to show command (show-specific scope restriction)
-	showCmd.PersistentFlags().Bool("global", false, "Show from global scope only")
+	// Add --global flag to describe command (describe-specific scope restriction)
+	describeCmd.PersistentFlags().Bool("global", false, "Restrict to global config only")
 
-	// Add show to parent
-	parent.AddCommand(showCmd)
+	// Add describe to parent
+	parent.AddCommand(describeCmd)
 }
 
-// runShow displays all configuration or searches for a specific item.
-func runShow(cmd *cobra.Command, args []string) error {
+// runDescribe displays all configuration or searches for a specific item.
+func runDescribe(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
 
 	if len(args) == 0 {
-		return runShowListing(cmd)
+		return runDescribeListing(cmd)
 	}
 
 	query := args[0]
@@ -166,7 +165,7 @@ func runShow(cmd *cobra.Command, args []string) error {
 		prompted = true
 	}
 
-	if err := runShowSearch(cmd, query); err != nil {
+	if err := runDescribeSearch(cmd, query); err != nil {
 		if prompted {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), capitalise(err.Error()))
 			return nil
@@ -176,12 +175,12 @@ func runShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runShowListing displays all items grouped by category with descriptions.
-func runShowListing(cmd *cobra.Command) error {
+// runDescribeListing displays all items grouped by category with descriptions.
+func runDescribeListing(cmd *cobra.Command) error {
 	w := cmd.OutOrStdout()
 	stdin := cmd.InOrStdin()
 
-	scope, err := showScopeFromCmd(cmd)
+	scope, err := describeScopeFromCmd(cmd)
 	if err != nil {
 		return err
 	}
@@ -211,7 +210,7 @@ func runShowListing(cmd *cobra.Command) error {
 		return err
 	}
 
-	for _, cat := range showCategories {
+	for _, cat := range describeCategories {
 		items := cfg.Value.LookupPath(cue.ParsePath(cat.key))
 		if !items.Exists() {
 			continue
@@ -270,7 +269,7 @@ func runShowListing(cmd *cobra.Command) error {
 		if query == "" {
 			return nil
 		}
-		if err := runShowSearch(cmd, query); err != nil {
+		if err := runDescribeSearch(cmd, query); err != nil {
 			_, _ = fmt.Fprintln(w, capitalise(err.Error()))
 			return nil
 		}
@@ -280,13 +279,13 @@ func runShowListing(cmd *cobra.Command) error {
 	return nil
 }
 
-// runShowSearch handles cross-category search for `start show <name>`.
-func runShowSearch(cmd *cobra.Command, name string) error {
+// runDescribeSearch handles cross-category search for `start describe <name>`.
+func runDescribeSearch(cmd *cobra.Command, name string) error {
 	w := cmd.OutOrStdout()
 	_, _ = fmt.Fprintln(w)
 	stderr := cmd.ErrOrStderr()
 	flags := getFlags(cmd)
-	scope, err := showScopeFromCmd(cmd)
+	scope, err := describeScopeFromCmd(cmd)
 	if err != nil {
 		return err
 	}
@@ -316,16 +315,16 @@ func runShowSearch(cmd *cobra.Command, name string) error {
 		notifyScopeWidenedIfLocal(stderr, flags, r.didInstall)
 	}
 
-	cat := showCategoryFor(match.Category)
+	cat := describeCategoryFor(match.Category)
 	if cat == nil {
 		return fmt.Errorf("unknown category %q", match.Category)
 	}
-	return showVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType)
+	return describeVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType)
 }
 
-// showVerboseItem prepares and displays a verbose dump for a single item.
-func showVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string) error {
-	result, err := prepareShow(name, scope, cueKey, itemType)
+// describeVerboseItem prepares and displays a verbose dump for a single item.
+func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string) error {
+	result, err := prepareDescribe(name, scope, cueKey, itemType)
 	if err != nil {
 		return err
 	}
@@ -333,40 +332,40 @@ func showVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemT
 	return nil
 }
 
-// prepareShow prepares show output for an item type.
+// prepareDescribe prepares describe output for an item type.
 // cueKey is the top-level CUE key (e.g., internalcue.KeyRoles).
 // itemType is the display name (e.g., "Role").
-func prepareShow(name string, scope config.Scope, cueKey, itemType string) (ShowResult, error) {
+func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (DescribeResult, error) {
 	cfg, err := loadConfig(scope)
 	if err != nil {
-		return ShowResult{}, err
+		return DescribeResult{}, err
 	}
 
 	typePlural := strings.ToLower(itemType) + "s"
 
 	items := cfg.Value.LookupPath(cue.ParsePath(cueKey))
 	if !items.Exists() {
-		return ShowResult{}, fmt.Errorf("no %s defined in configuration", typePlural)
+		return DescribeResult{}, fmt.Errorf("no %s defined in configuration", typePlural)
 	}
 
 	// Collect all names in config order
 	var allNames []string
 	iter, err := items.Fields()
 	if err != nil {
-		return ShowResult{}, fmt.Errorf("reading %s: %w", typePlural, err)
+		return DescribeResult{}, fmt.Errorf("reading %s: %w", typePlural, err)
 	}
 	for iter.Next() {
 		allNames = append(allNames, iter.Selector().Unquoted())
 	}
 	if len(allNames) == 0 {
-		return ShowResult{}, fmt.Errorf("no %s defined in configuration", typePlural)
+		return DescribeResult{}, fmt.Errorf("no %s defined in configuration", typePlural)
 	}
 
-	// Determine which item to show and why
-	showReason := ""
+	// Determine which item to describe and why
+	reason := ""
 	if name == "" {
 		name = allNames[0]
-		showReason = "first in config"
+		reason = "first in config"
 	}
 
 	resolvedName := name
@@ -382,23 +381,23 @@ func prepareShow(name string, scope config.Scope, cueKey, itemType string) (Show
 
 		switch len(matches) {
 		case 0:
-			return ShowResult{}, fmt.Errorf("%s %q not found", strings.ToLower(itemType), name)
+			return DescribeResult{}, fmt.Errorf("%s %q not found", strings.ToLower(itemType), name)
 		case 1:
 			resolvedName = matches[0]
 			item = items.LookupPath(cue.MakePath(cue.Str(resolvedName)))
 		default:
-			return ShowResult{}, fmt.Errorf("ambiguous %s name %q matches: %s", strings.ToLower(itemType), name, strings.Join(matches, ", "))
+			return DescribeResult{}, fmt.Errorf("ambiguous %s name %q matches: %s", strings.ToLower(itemType), name, strings.Join(matches, ", "))
 		}
 	}
 
-	return ShowResult{
-		ItemType:   itemType,
-		Category:   typePlural,
-		CueKey:     cueKey,
-		Name:       resolvedName,
-		Value:      item,
-		AllNames:   allNames,
-		ShowReason: showReason,
+	return DescribeResult{
+		ItemType: itemType,
+		Category: typePlural,
+		CueKey:   cueKey,
+		Name:     resolvedName,
+		Value:    item,
+		AllNames: allNames,
+		Reason:   reason,
 	}, nil
 }
 
@@ -409,7 +408,7 @@ func prepareShow(name string, scope config.Scope, cueKey, itemType string) (Show
 // look the module up against merged config — the user's literal --local
 // contract is bypassed. The notice gives scripted callers a grep-able
 // signal; no-op when --local was not set or when --quiet is in effect.
-// Called from runGet and runShowSearch after the post-install reload.
+// Called from runGet and runDescribeSearch after the post-install reload.
 //
 // The post-install reload also widens --global to merged scope, but no
 // notice fires for --global by design: the install lands in global config
@@ -426,9 +425,9 @@ func notifyScopeWidenedIfLocal(stderr io.Writer, flags *Flags, didInstall bool) 
 	printWarning(stderr, "--local widened to merged scope after registry install")
 }
 
-// showScopeFromCmd derives the config scope from show command flags.
+// describeScopeFromCmd derives the config scope from describe command flags.
 // Returns an error if --local and --global are both set.
-func showScopeFromCmd(cmd *cobra.Command) (config.Scope, error) {
+func describeScopeFromCmd(cmd *cobra.Command) (config.Scope, error) {
 	var global bool
 	if f := cmd.Flags().Lookup("global"); f != nil {
 		global, _ = cmd.Flags().GetBool("global")
@@ -481,17 +480,17 @@ func loadConfig(scope config.Scope) (internalcue.LoadResult, error) {
 	return result, err
 }
 
-// printVerboseDump writes the full verbose dump for a ShowResult.
-func printVerboseDump(w io.Writer, r ShowResult) {
+// printVerboseDump writes the full verbose dump for a DescribeResult.
+func printVerboseDump(w io.Writer, r DescribeResult) {
 	cat := r.Category
 	label := tui.ColorDim.Sprint
 
 	// Header
 	_, _ = tui.CategoryColor(cat).Fprint(w, r.ItemType)
 	_, _ = fmt.Fprintf(w, ": %s", r.Name)
-	if r.ShowReason != "" {
+	if r.Reason != "" {
 		_, _ = fmt.Fprint(w, " ")
-		_, _ = fmt.Fprint(w, tui.Annotate("%s", r.ShowReason))
+		_, _ = fmt.Fprint(w, tui.Annotate("%s", r.Reason))
 	}
 	_, _ = fmt.Fprintln(w)
 	printSeparator(w)
@@ -527,7 +526,7 @@ func printVerboseDump(w io.Writer, r ShowResult) {
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintf(w, "%s %s\n", label("File:"), fields.File)
 
-		resolvedPath, content, readErr := resolveShowFile(fields.File, origin)
+		resolvedPath, content, readErr := resolveDescribeFile(fields.File, origin)
 		if resolvedPath != "" && resolvedPath != fields.File {
 			_, _ = fmt.Fprintf(w, "%s %s\n", label("Path:"), resolvedPath)
 		}
@@ -610,9 +609,9 @@ func formatCUEDefinition(v cue.Value) string {
 	return string(b)
 }
 
-// resolveShowFile resolves a file reference and reads its contents.
+// resolveDescribeFile resolves a file reference and reads its contents.
 // Returns the resolved path, content, and any error.
-func resolveShowFile(filePath, origin string) (resolvedPath, content string, err error) {
+func resolveDescribeFile(filePath, origin string) (resolvedPath, content string, err error) {
 	if filePath == "" {
 		return "", "", nil
 	}
