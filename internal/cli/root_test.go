@@ -188,11 +188,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			want: "registry index",
 		},
 		{
-			name: "modules info help",
-			args: []string{"modules", "info", "help"},
-			want: "module",
-		},
-		{
 			name: "modules update help",
 			args: []string{"modules", "update", "help"},
 			want: "Update installed",

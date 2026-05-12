@@ -212,7 +212,7 @@ func TestModulesCommandExists(t *testing.T) {
 	}
 
 	// Check subcommands
-	subcommands := []string{"browse", "index", "search", "install", "list", "info", "update"}
+	subcommands := []string{"browse", "index", "search", "install", "list", "update"}
 	for _, name := range subcommands {
 		found := false
 		for _, c := range modulesCmd.Commands() {
@@ -918,59 +918,6 @@ func TestUpdateResultJSON(t *testing.T) {
 		if _, ok := item["Error"]; ok {
 			t.Errorf("Error interface field should be excluded via json:\"-\", got: %v", item)
 		}
-	}
-}
-
-// TestModuleInfoResultJSON tests that ModuleInfoResult marshals correctly.
-func TestModuleInfoResultJSON(t *testing.T) {
-	t.Parallel()
-	results := []ModuleInfoResult{
-		{
-			Category: "agents",
-			Name:     "ai/claude",
-			Entry: registry.IndexEntry{
-				Module:      "github.com/test/agents/ai/claude@v0",
-				Description: "Claude by Anthropic",
-			},
-			MatchScore:     5,
-			Installed:      true,
-			InstalledScope: "global",
-		},
-		{
-			Category: "roles",
-			Name:     "golang/assistant",
-			Entry: registry.IndexEntry{
-				Module:      "github.com/test/roles/golang/assistant@v0",
-				Description: "Go expert",
-			},
-			MatchScore: 3,
-			Installed:  false,
-		},
-	}
-
-	data, err := json.MarshalIndent(results, "", "  ")
-	if err != nil {
-		t.Fatalf("MarshalIndent failed: %v", err)
-	}
-	output := string(data)
-
-	for _, want := range []string{
-		`"installed": true`,
-		`"installedScope": "global"`,
-		`"installed": false`,
-	} {
-		if !strings.Contains(output, want) {
-			t.Errorf("output missing %s, got: %s", want, output)
-		}
-	}
-
-	// installedScope should be omitted for non-installed
-	var decoded []map[string]any
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("Unmarshal failed: %v", err)
-	}
-	if _, ok := decoded[1]["installedScope"]; ok {
-		t.Errorf("installedScope should be omitted for non-installed module")
 	}
 }
 

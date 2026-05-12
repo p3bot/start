@@ -184,11 +184,11 @@ run_test_show "1.9 modules list roles" \
 run_test_show "1.9b modules list tasks" \
     "./start modules list tasks"
 
-run_test_show "1.10 modules info" \
-    "./start modules info golang/code-review"
+run_test_show "1.10 describe (registry-only, exact)" \
+    "./start describe golang/code-review"
 
-run_test_show "1.11 modules info (Search then Show)" \
-    "./start modules info 'code review' 2>&1 | head -20"
+run_test_show "1.11 describe (registry-fuzzy)" \
+    "./start describe 'code review' 2>&1 | head -20"
 
 run_test_show "1.12 modules update" \
     "./start modules update"

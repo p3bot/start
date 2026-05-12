@@ -53,7 +53,6 @@ show "${BIN} modules search"
 show "${BIN} modules install"
 show "${BIN} modules browse"
 show "${BIN} modules index"
-show "${BIN} modules info"
 show "${BIN} modules update"
 show "${BIN} modules validate"
 

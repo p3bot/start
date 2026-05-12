@@ -273,7 +273,7 @@ start modules index
 start modules search go
 
 # Show details for a specific module
-start modules info golang/assistant
+start describe golang/assistant
 
 # Install a package
 start modules install golang/teacher

@@ -283,6 +283,7 @@ func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query stri
 
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
+			_, _ = fmt.Fprintln(w)
 			return matches[choice-1], nil
 		}
 		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)

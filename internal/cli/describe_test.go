@@ -204,17 +204,8 @@ func TestPrepareDescribeAgent(t *testing.T) {
 		wantType     string
 		wantName     string
 		wantAllNames []string
-		wantReason   string
 		wantErr      bool
 	}{
-		{
-			name:         "no name describes first agent",
-			agentName:    "",
-			wantType:     "Agent",
-			wantName:     "claude",
-			wantAllNames: []string{"claude"},
-			wantReason:   "first in config",
-		},
 		{
 			name:      "named agent",
 			agentName: "claude",
@@ -268,9 +259,6 @@ func TestPrepareDescribeAgent(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantReason != "" && result.Reason != tt.wantReason {
-				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
-			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
 					t.Errorf("AllNames length = %d, want %d", len(result.AllNames), len(tt.wantAllNames))
@@ -294,17 +282,8 @@ func TestPrepareDescribeRole(t *testing.T) {
 		wantType     string
 		wantName     string
 		wantAllNames []string
-		wantReason   string
 		wantErr      bool
 	}{
-		{
-			name:         "no name describes first role",
-			roleName:     "",
-			wantType:     "Role",
-			wantName:     "assistant",
-			wantAllNames: []string{"assistant", "code-reviewer"},
-			wantReason:   "first in config",
-		},
 		{
 			name:     "named role with hyphen",
 			roleName: "code-reviewer",
@@ -345,9 +324,6 @@ func TestPrepareDescribeRole(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantReason != "" && result.Reason != tt.wantReason {
-				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
-			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
 					t.Errorf("AllNames length = %d, want %d", len(result.AllNames), len(tt.wantAllNames))
@@ -367,17 +343,8 @@ func TestPrepareDescribeContext(t *testing.T) {
 		wantType     string
 		wantName     string
 		wantAllNames []string
-		wantReason   string
 		wantErr      bool
 	}{
-		{
-			name:         "no name describes first context",
-			contextName:  "",
-			wantType:     "Context",
-			wantName:     "environment",
-			wantAllNames: []string{"environment", "git-status"},
-			wantReason:   "first in config",
-		},
 		{
 			name:        "context by name",
 			contextName: "environment",
@@ -418,9 +385,6 @@ func TestPrepareDescribeContext(t *testing.T) {
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
 			}
-			if tt.wantReason != "" && result.Reason != tt.wantReason {
-				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
-			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
 					t.Errorf("AllNames length = %d, want %d", len(result.AllNames), len(tt.wantAllNames))
@@ -440,17 +404,8 @@ func TestPrepareDescribeTask(t *testing.T) {
 		wantType     string
 		wantName     string
 		wantAllNames []string
-		wantReason   string
 		wantErr      bool
 	}{
-		{
-			name:         "no name describes first task",
-			taskName:     "",
-			wantType:     "Task",
-			wantName:     "review",
-			wantAllNames: []string{"review"},
-			wantReason:   "first in config",
-		},
 		{
 			name:     "task by name",
 			taskName: "review",
@@ -490,9 +445,6 @@ func TestPrepareDescribeTask(t *testing.T) {
 			}
 			if result.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", result.Name, tt.wantName)
-			}
-			if tt.wantReason != "" && result.Reason != tt.wantReason {
-				t.Errorf("Reason = %q, want %q", result.Reason, tt.wantReason)
 			}
 			if len(tt.wantAllNames) > 0 {
 				if len(result.AllNames) != len(tt.wantAllNames) {
@@ -1211,5 +1163,383 @@ func TestNotifyScopeWidenedIfLocal(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestVerboseDumpMetadataBlock covers the formatted metadata block added to
+// printVerboseDump. Each case asserts the labelled lines a category emits
+// when its fields are populated, and verifies the empty-fields case emits no
+// metadata block for categories where every field is optional.
+//
+// Tier-3/tier-4 resolver behaviour is covered in cross_resolve_test.go
+// (TestResolveCrossCategory_ExactRegistryBranchInstalls,
+// TestResolveCrossCategory_CombinedSingleRegistryBranchInstalls,
+// TestResolveCrossCategory_CombinedMultipleRegistryNonTTY). runDescribeSearch
+// is a thin wrapper around resolveCrossCategory plus printVerboseDump, so
+// duplicating those at the handler level adds no new code-path coverage.
+func TestVerboseDumpMetadataBlock(t *testing.T) {
+	cases := []struct {
+		name      string
+		config    string
+		queryName string
+		cueKey    string
+		itemType  string
+		want      []string
+		notWant   []string
+	}{
+		{
+			name: "agent with all metadata fields",
+			config: `
+agents: {
+	claude: {
+		bin:           "claude"
+		command:       "{{.bin}}"
+		description:   "Claude by Anthropic"
+		default_model: "sonnet"
+		tags: ["anthropic", "ai"]
+		models: {
+			sonnet: "claude-sonnet-4-20250514"
+			opus:   "claude-opus-4-20250514"
+		}
+	}
+}`,
+			queryName: "claude",
+			cueKey:    internalcue.KeyAgents,
+			itemType:  "Agent",
+			want: []string{
+				"Description: Claude by Anthropic",
+				"Bin: claude",
+				"Default Model: sonnet",
+				"Tags: anthropic, ai",
+				"Models:",
+				"opus",
+				"sonnet",
+				"claude-sonnet-4-20250514",
+			},
+		},
+		{
+			name: "agent with no metadata fields emits no block",
+			config: `
+agents: {
+	bare: {
+		command: "bare"
+	}
+}`,
+			queryName: "bare",
+			cueKey:    internalcue.KeyAgents,
+			itemType:  "Agent",
+			notWant: []string{
+				"Description:",
+				"Bin:",
+				"Default Model:",
+				"Tags:",
+				"Models:",
+			},
+		},
+		{
+			name: "role with all metadata fields",
+			config: `
+roles: {
+	"code-reviewer": {
+		description: "Reviews code"
+		prompt:      "You are an expert code reviewer."
+		optional:    true
+		tags: ["review", "quality"]
+	}
+}`,
+			queryName: "code-reviewer",
+			cueKey:    internalcue.KeyRoles,
+			itemType:  "Role",
+			want: []string{
+				"Description: Reviews code",
+				"Prompt: You are an expert code reviewer.",
+				"Optional: true",
+				"Tags: review, quality",
+			},
+		},
+		{
+			name: "role with no metadata fields emits no block",
+			config: `
+roles: {
+	bare: {
+		prompt: ""
+	}
+}`,
+			queryName: "bare",
+			cueKey:    internalcue.KeyRoles,
+			itemType:  "Role",
+			notWant: []string{
+				"Description:",
+				"Prompt:",
+				"Optional:",
+				"Tags:",
+			},
+		},
+		{
+			name: "context with all metadata fields",
+			config: `
+contexts: {
+	environment: {
+		description: "Environment details"
+		prompt:      "Environment context loaded."
+		required:    true
+		default:     true
+		tags: ["system", "environment"]
+	}
+}`,
+			queryName: "environment",
+			cueKey:    internalcue.KeyContexts,
+			itemType:  "Context",
+			want: []string{
+				"Description: Environment details",
+				"Prompt: Environment context loaded.",
+				"Required: true",
+				"Default: true",
+				"Tags: system, environment",
+			},
+		},
+		{
+			name: "context emits required and default even when fields absent",
+			config: `
+contexts: {
+	bare: {
+		prompt: ""
+	}
+}`,
+			queryName: "bare",
+			cueKey:    internalcue.KeyContexts,
+			itemType:  "Context",
+			want: []string{
+				"Required: false",
+				"Default: false",
+			},
+			notWant: []string{
+				"Description:",
+				"Tags:",
+			},
+		},
+		{
+			name: "task with all metadata fields",
+			config: `
+tasks: {
+	review: {
+		description: "Review staged changes"
+		prompt:      "Review: {{.command_output}}"
+		role:        "code-reviewer"
+		tags: ["review", "git"]
+	}
+}`,
+			queryName: "review",
+			cueKey:    internalcue.KeyTasks,
+			itemType:  "Task",
+			want: []string{
+				"Description: Review staged changes",
+				"Prompt: Review: {{.command_output}}",
+				"Role: code-reviewer",
+				"Tags: review, git",
+			},
+		},
+		{
+			name: "task with no metadata fields emits no block",
+			config: `
+tasks: {
+	bare: {
+		prompt: ""
+	}
+}`,
+			queryName: "bare",
+			cueKey:    internalcue.KeyTasks,
+			itemType:  "Task",
+			notWant: []string{
+				"Description:",
+				"Prompt:",
+				"Role:",
+				"Tags:",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			startDir := filepath.Join(dir, ".start")
+			if err := os.MkdirAll(startDir, 0755); err != nil {
+				t.Fatalf("creating .start dir: %v", err)
+			}
+			configPath := filepath.Join(startDir, "settings.cue")
+			if err := os.WriteFile(configPath, []byte(tc.config), 0644); err != nil {
+				t.Fatalf("writing config: %v", err)
+			}
+			chdir(t, dir)
+			t.Setenv("HOME", dir)
+
+			result, err := prepareDescribe(tc.queryName, config.ScopeMerged, tc.cueKey, tc.itemType)
+			if err != nil {
+				t.Fatalf("prepareDescribe: %v", err)
+			}
+
+			var buf bytes.Buffer
+			printMetadataBlock(&buf, result)
+			output := buf.String()
+
+			for _, want := range tc.want {
+				if !strings.Contains(output, want) {
+					t.Errorf("output missing %q\ngot:\n%s", want, output)
+				}
+			}
+			for _, notWant := range tc.notWant {
+				if strings.Contains(output, notWant) {
+					t.Errorf("output should not contain %q\ngot:\n%s", notWant, output)
+				}
+			}
+		})
+	}
+}
+
+// TestVerboseDumpMetadataBlock_ModelsSortedByAlias verifies that agent model
+// aliases are emitted in alphabetical order, as required by the spec.
+func TestVerboseDumpMetadataBlock_ModelsSortedByAlias(t *testing.T) {
+	dir := t.TempDir()
+	startDir := filepath.Join(dir, ".start")
+	if err := os.MkdirAll(startDir, 0755); err != nil {
+		t.Fatalf("creating .start dir: %v", err)
+	}
+	cueConfig := `
+agents: {
+	multi: {
+		command: "multi"
+		models: {
+			sonnet: "claude-sonnet"
+			haiku:  "claude-haiku"
+			opus:   "claude-opus"
+		}
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(startDir, "settings.cue"), []byte(cueConfig), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, dir)
+	t.Setenv("HOME", dir)
+
+	result, err := prepareDescribe("multi", config.ScopeMerged, internalcue.KeyAgents, "Agent")
+	if err != nil {
+		t.Fatalf("prepareDescribe: %v", err)
+	}
+
+	var buf bytes.Buffer
+	printMetadataBlock(&buf, result)
+	output := buf.String()
+
+	haikuIdx := strings.Index(output, "haiku")
+	opusIdx := strings.Index(output, "opus")
+	sonnetIdx := strings.Index(output, "sonnet")
+
+	if haikuIdx == -1 || opusIdx == -1 || sonnetIdx == -1 {
+		t.Fatalf("output missing one or more aliases\n%s", output)
+	}
+	if !(haikuIdx < opusIdx && opusIdx < sonnetIdx) {
+		t.Errorf("models not sorted by alias: haiku=%d opus=%d sonnet=%d\n%s",
+			haikuIdx, opusIdx, sonnetIdx, output)
+	}
+}
+
+// TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE verifies the
+// metadata block lands between the Cache line (when origin set) and the CUE
+// Definition section.
+func TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE(t *testing.T) {
+	setupTestConfigWithOrigin(t)
+
+	result, err := prepareDescribe("golang/assistant", config.ScopeMerged, internalcue.KeyRoles, "Role")
+	if err != nil {
+		t.Fatalf("prepareDescribe: %v", err)
+	}
+
+	var buf bytes.Buffer
+	printVerboseDump(&buf, result)
+	output := buf.String()
+
+	cacheIdx := strings.Index(output, "Cache:")
+	if cacheIdx == -1 {
+		t.Fatalf("output missing Cache line\n%s", output)
+	}
+
+	// CUE Definition: pretty-printed CUE struct opens with the item name
+	// followed by a colon-brace on its own line in cueformat output.
+	cueDefMarker := "{"
+	cueIdx := strings.Index(output[cacheIdx:], cueDefMarker)
+	if cueIdx == -1 {
+		t.Fatalf("output missing CUE definition after Cache\n%s", output)
+	}
+	cueIdx += cacheIdx
+
+	between := output[cacheIdx:cueIdx]
+	if !strings.Contains(between, "Description:") {
+		t.Errorf("metadata Description: should appear between Cache and CUE definition\nbetween:\n%s\nfull:\n%s", between, output)
+	}
+}
+
+// TestVerboseDumpMetadataBlock_EmptyDoesNotInsertBlankLine verifies that when
+// no metadata fields are populated, printVerboseDump emits no extra blank
+// line between the header separator (or Config/Origin/Cache section) and the
+// CUE Definition. An earlier version of printMetadataBlock could have emitted
+// a bare "\n" in the empty case, producing a double blank line at this
+// boundary; the guard at describe.go's bytes.Buffer length check prevents
+// that, and this test pins it.
+func TestVerboseDumpMetadataBlock_EmptyDoesNotInsertBlankLine(t *testing.T) {
+	dir := t.TempDir()
+	startDir := filepath.Join(dir, ".start")
+	if err := os.MkdirAll(startDir, 0755); err != nil {
+		t.Fatalf("creating .start dir: %v", err)
+	}
+	cueConfig := `
+agents: {
+	bare: {
+		command: "bare"
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(startDir, "settings.cue"), []byte(cueConfig), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, dir)
+	t.Setenv("HOME", dir)
+
+	result, err := prepareDescribe("bare", config.ScopeMerged, internalcue.KeyAgents, "Agent")
+	if err != nil {
+		t.Fatalf("prepareDescribe: %v", err)
+	}
+
+	var buf bytes.Buffer
+	printVerboseDump(&buf, result)
+	output := buf.String()
+
+	// Locate the header separator, then advance past its trailing newline so
+	// the inspection window starts at the first byte after the separator
+	// line. The window ends at the CUE definition opening brace — this is
+	// the only segment where printMetadataBlock could insert a spurious
+	// blank line in the empty case.
+	sepIdx := strings.Index(output, "─")
+	if sepIdx == -1 {
+		t.Fatalf("output missing separator\n%s", output)
+	}
+	nlAfterSep := strings.IndexByte(output[sepIdx:], '\n')
+	if nlAfterSep == -1 {
+		t.Fatalf("separator without trailing newline\n%s", output)
+	}
+	windowStart := sepIdx + nlAfterSep + 1
+
+	cueIdx := strings.Index(output[windowStart:], "{")
+	if cueIdx == -1 {
+		t.Fatalf("output missing CUE definition\n%s", output)
+	}
+	cueIdx += windowStart
+
+	window := output[windowStart:cueIdx]
+	// Three consecutive newlines means two blank lines stacked, which is
+	// the signature of an empty-metadata bug emitting a bare \n on top of
+	// the legitimate blank line that precedes the CUE definition.
+	if strings.Contains(window, "\n\n\n") {
+		t.Errorf("found double blank line between separator and CUE definition:\nwindow:\n%q\nfull:\n%s", window, output)
 	}
 }

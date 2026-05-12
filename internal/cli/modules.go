@@ -22,7 +22,7 @@ const (
 // any error is logged at debug level only.
 //
 // Centralises the registry-client + fetch + cache-write trio shared by
-// modules_install, modules_info, modules_search, and modules_update. Each
+// modules_install, modules_search, and modules_update. Each
 // command's post-fetch logic stays at its call site because the four
 // commands use the index differently and consolidating further would
 // obscure call-site UX.
@@ -68,7 +68,6 @@ Use these commands to discover, install, and update modules from the library.`,
 	addModulesSearchCommand(modulesCmd)
 	addModulesInstallCommand(modulesCmd)
 	addModulesListCommand(modulesCmd)
-	addModulesInfoCommand(modulesCmd)
 	addModulesUpdateCommand(modulesCmd)
 	addModulesValidateCommand(modulesCmd)
 

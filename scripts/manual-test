@@ -160,9 +160,6 @@ cmd "help" "modules install --help" \
 cmd "help" "modules list --help" \
     "./start modules list --help"
 
-cmd "help" "modules info --help" \
-    "./start modules info --help"
-
 cmd "help" "modules update --help" \
     "./start modules update --help"
 
@@ -555,6 +552,12 @@ cmd "describe" "describe --global --local (expect error)" \
 cmd "describe" "describe nonexistent (expect error)" \
     "./start describe nonexistent-xyz-123"
 
+cmd "describe" "describe registry-only (tier-3 exact, auto-installs)" \
+    "./start describe golang/debug"
+
+cmd "describe" "describe registry-fuzzy (tier-4 single, auto-installs)" \
+    "./start describe 'code review'"
+
 # --------------------------------------------------------------------------
 section "19. Modules Commands"
 # --------------------------------------------------------------------------
@@ -618,15 +621,6 @@ cmd "modules" "modules index --export" \
 
 cmd "modules" "modules index roles (category filter)" \
     "./start modules index roles"
-
-cmd "modules" "modules info (direct path)" \
-    "./start modules info golang/debug"
-
-cmd "modules" "modules info (search)" \
-    "./start modules info 'code review'"
-
-cmd "modules" "modules info --json" \
-    "./start modules info --json golang/debug"
 
 cmd "modules" "modules install (direct path)" \
     "./start modules install golang/debug"

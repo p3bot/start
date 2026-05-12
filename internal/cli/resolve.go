@@ -597,6 +597,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 	// Try number
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
+			_, _ = fmt.Fprintln(r.stdout)
 			return matches[choice-1], nil
 		}
 		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
@@ -606,6 +607,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 	inputLower := strings.ToLower(input)
 	for i := 0; i < displayCount; i++ {
 		if strings.ToLower(matches[i].Name) == inputLower {
+			_, _ = fmt.Fprintln(r.stdout)
 			return matches[i], nil
 		}
 	}
@@ -618,6 +620,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		}
 	}
 	if len(subMatches) == 1 {
+		_, _ = fmt.Fprintln(r.stdout)
 		return subMatches[0], nil
 	}
 
