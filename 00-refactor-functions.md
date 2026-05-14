@@ -30,7 +30,7 @@ In scope:
 - Delete the four `writeXxxMetadata` functions and the `cueLookupString` / `cueLookupBool` / `cueLookupStringList` / `cueLookupStringMap` helpers from `describe.go`.
 - Widen the `Models` decoding for agents to accept both the simple and the object form. The widened walk lives in `decodeAgentValue` only (not duplicated). After the loader refactor, `loadAgentsFromDir` inherits the support by calling the decoder. This is independent of the writer extraction but lands in the same project.
 - Capture expected-output strings for `start describe` and `start config info` for all four categories before starting, plus one new fixture exercising object-form agent models.
-- The shared agent writer emits a blank line before the `Models:` section. This adds a blank line to `start describe <agent>` between Tags and Models that does not exist today; it preserves the current `start config info <agent>` blank-before-Models behaviour. See "Agent Models spacing" in Current State.
+- The shared agent writer emits a blank line before the `Models:` section whenever the models map is non-empty. This adds a blank line to `start describe <agent>` between Tags and Models that does not exist today; it preserves the current `start config info <agent>` blank-before-Models behaviour. `printMetadataBlock` skips its own leading blank line when the writer's buffer already starts with one, so the only-Models edge case stays at exactly one blank line before `Models:`. See "Agent Models spacing" in Current State.
 
 Out of scope:
 
@@ -95,7 +95,7 @@ Tasks:
 
 ### Agent line ordering
 
-The describe writer (`writeAgentMetadata`) emits Description -> Bin -> Default Model -> Tags -> Models, contiguously, no internal blank lines.
+The describe writer (`writeAgentMetadata`) today emits Description -> Bin -> Default Model -> Tags -> Models, contiguously, no internal blank lines. The new shared writer emits the same fields in the same order with one addition: a single blank line is inserted before `Models:` whenever `len(Models) > 0`. `printMetadataBlock` performs leading-`\n` dedup so the agent's only-Models edge case does not stack two blank lines before `Models:`. See Agent Models spacing.
 
 The config-info writer (`printAgentInfo`) today emits a header section (Source, Origin, Bin, Command, Default Model) followed by a metadata section (Description, Tags, blank line, Models). Bin and Default Model live in the header section; a blank line separates Tags from Models.
 
@@ -105,10 +105,11 @@ These two orderings cannot both be served by a single shared writer without dupl
 
 A second wrinkle: today's describe agent block emits Models directly after Tags with no blank line between; today's config-info agent block emits a blank line between Tags and Models. A single shared writer cannot preserve both behaviours — the call-site cannot inject a blank line in the middle of the writer's output.
 
-Resolution: the shared agent writer emits a blank line before `Models:` when the models map is non-empty. This:
+Resolution: the shared agent writer unconditionally emits a blank line before `Models:` whenever `len(agent.Models) > 0`. To avoid `printMetadataBlock` stacking its own leading blank line on top of the writer's in the only-Models edge case, `printMetadataBlock` checks `bytes.HasPrefix(buf.Bytes(), []byte("\n"))` before emitting its leading `fmt.Fprintln(w)` and skips it when the writer's buffer already starts with a blank line. This:
 
-- Preserves config-info's current blank-before-Models behaviour.
-- Adds a blank line to describe's agent output between Tags and Models that does not exist today.
+- Preserves config-info's current blank-before-Models behaviour in every shape, including the only-Models edge case. The config-info call-site writes the writer's buffer directly (no `printMetadataBlock` dedup involvement), so the writer's `\n` becomes the single blank line that today's `printAgentInfo` emits at config_info.go:185.
+- Adds a blank line to describe's agent output between Tags and Models in the common case (Description / Bin / Default Model / Tags present) that does not exist today.
+- Avoids a double blank line on `start describe <agent>` in the edge case where an agent has only `models` populated. `printMetadataBlock`'s leading-`\n` dedup yields exactly one blank line before `Models:` end-to-end — matching today's behaviour for that shape.
 
 This is the third intentional user-visible change introduced by this project (alongside the line reorder in requirement 7 and the object-form models fix in requirement 6). It applies only to agents; roles, contexts, and tasks have no internal blank-line variations to reconcile.
 
@@ -128,7 +129,7 @@ Bin: <bin>            (if non-empty)
 Default Model: <m>    (if non-empty)
 Tags: <tags>          (if non-empty)
 
-Models:               (if non-empty, preceded by blank line emitted by the shared writer — see Agent Models spacing)
+Models:               (if non-empty, preceded by blank line emitted by the shared writer — see Agent Models spacing; describe-side dedup in printMetadataBlock prevents double blank lines)
   alias -> id
   ...
 ─────...
@@ -231,7 +232,7 @@ One function per category writes the labelled metadata lines listed in Current S
 
 For roles, contexts, and tasks: output must match the existing output byte-for-byte for every input combination already exercised by `internal/cli/describe_test.go` and `internal/cli/config_test.go`.
 
-For agents: output of `start describe <agent>` gains one blank line between Tags and Models when models are present (see Agent Models spacing). Output of `start config info <agent>` reorders Bin and Default Model from the header section to the metadata section per requirement 7. Both agent-renderer changes are intentional and called out in Constraints. The object-form-models behaviour change (requirement 6) is tracked separately because it applies to a code path orthogonal to the writer extraction.
+For agents: output of `start describe <agent>` gains one blank line between Tags and Models when the models map is non-empty. In the only-Models edge case (no Description / Bin / Default Model / Tags), `printMetadataBlock`'s leading-`\n` dedup keeps the blank-line count at exactly one. See Agent Models spacing. Output of `start config info <agent>` reorders Bin and Default Model from the header section to the metadata section per requirement 7. Both agent-renderer changes are intentional and called out in Constraints. The object-form-models behaviour change (requirement 6) is tracked separately because it applies to a code path orthogonal to the writer extraction.
 
 ### 2. Both renderers delegate to the shared writer
 
@@ -255,7 +256,7 @@ The existing `TestVerboseDumpMetadataBlock*` tests pass without source changes. 
 
 New unit tests:
 
-- One per category for the shared writer in isolation: all-fields-populated, no-fields-populated, category-specific edge cases (agent `Models:` alias sort order; agent blank-line-before-`Models:` when models is non-empty; role `Optional: true` only when true; context always emits Required/Default; r/c/t `File:` and `Command:` rendered when non-empty and skipped when empty).
+- One per category for the shared writer in isolation: all-fields-populated, no-fields-populated, category-specific edge cases (agent `Models:` alias sort order; agent blank-line-before-`Models:` whenever `len(Models) > 0` — assert the writer's buffer always emits `\n` before `Models:`; agent only-Models-populated case asserting end-to-end through `printMetadataBlock` exactly one blank line precedes `Models:` (i.e., dedup fired); role `Optional: true` only when true; context always emits Required/Default; r/c/t `File:` and `Command:` rendered when non-empty and skipped when empty).
 - One per category for the new decoder helpers in `config_types.go`: each decoder, given a representative `cue.Value`, populates every field the writer renders. The agent decoder test covers both the simple and the object form of `models`.
 - Eight exact-equality snapshot tests for `start describe <a|r|c|t>` and `start config info <a|r|c|t>`, asserting against captured baselines (see implementation-plan step 1). Three of the eight reflect intentional post-refactor changes; the other five stay byte-identical to their pre-refactor captures. Together these become the regression-guard surface for any future change to rendering.
 - Object-form models fixture exercising the loader and all four consumers (resolve, edit, list, info) plus describe. The `config edit` exercise uses scripted stdin per the pattern in Current State / Test files affected.
@@ -291,8 +292,20 @@ The new layout is documented in Current State / Agent line ordering above.
 1. Capture expected-output strings for `start describe <a|r|c|t>` and `start config info <a|r|c|t>` against in-tree fixtures. The project does not currently use golden files; capture as inline string literals in new test functions (consistent with the existing `stdout.String()` assertion style in `config_test.go`). These literals are the pre-refactor baseline that step 9 compares against. Disable colour for the new exact-equality tests — the writers use `tui.ColorDim` and `tui.ColorBlue` which emit ANSI escapes via `fatih/color`. Set `color.NoColor = true` in test setup, or `t.Setenv("NO_COLOR", "1")`, before invoking the command. The existing `Contains`-style tests are unaffected because their substrings are contiguous; only the new exact-equality tests need the colour suppression.
 2. Add a new in-tree fixture: an agent declared with object-form `models: { sonnet: { id: "..." } }`. Add corresponding describe and config-info baseline test functions for the fixture (initially with empty `Models:` blocks — step 3 will populate them and the literals get updated then). Also add the `config edit` test for the fixture, scripting stdin to advance past the models prompt and asserting the rendered alias list contains every object-form alias.
 3. Add the four per-category decoder helpers in `config_types.go`: `decodeAgentValue` / `decodeRoleValue` / `decodeContextValue` / `decodeTaskValue`. Each takes a per-item `cue.Value` and returns the typed struct without `Name` or `Source` set. `decodeAgentValue` includes the both-forms `Models` walk using the try-string-then-`id` pattern. Refactor `loadAgentsFromDir` / `loadRolesFromDir` / `loadContextsFromDir` / `loadTasksFromDir` to call the decoders (each loader iterates fields, extracts the name, calls the decoder, assigns `Name`, appends). Add per-category unit tests that verify the decoder populates every field the writer renders, including the both-forms `Models` walk. Verify by running `--model` resolution, `config edit`, `config list --json`, `config info`, and `start describe` against the object-form fixture from step 2. Update the step-2 baseline literals on the config-info side to show the populated `Models:` block. Commit.
-4. Add the four shared writers in a new file in `internal/cli/` (implementer picks the file name, e.g. `metadata_writers.go`). Each accepts the typed struct and an `io.Writer`. For agents the writer emits Description -> Bin -> Default Model -> Tags -> blank-line -> Models (when models non-empty); the agent writer reads `Models` as `map[string]string` and does no CUE parsing. For roles / contexts / tasks the writer emits Description -> File -> Command -> Prompt -> (Optional or Required+Default or Role) -> Tags, each gated by the existing skip-when-empty rule.
-5. Wire `printMetadataBlock` in `describe.go` to call the new writers: decode the per-item `cue.Value` via the appropriate `decodeXxxValue`, zero `r.File = ""` and `r.Command = ""` on the typed struct for r/c/t with a one-line comment referencing `printVerboseDump`'s separate File/Command emission, then pass the struct to the writer. The existing `TestVerboseDumpMetadataBlock*` tests in `describe_test.go` pass without source modification (Contains-style assertions tolerate the new blank line before Models). The new describe-agent snapshot test (created in step 1) gets its baseline literal updated at this step to include the new blank line between Tags and Models. The object-form describe-agent baseline (created in step 2) is updated here too once the shared writer comes online.
+4. Add the four shared writers in a new file in `internal/cli/` (implementer picks the file name, e.g. `metadata_writers.go`). Each accepts the typed struct and an `io.Writer`. For agents the writer emits Description -> Bin -> Default Model -> Tags -> blank-line -> Models (the blank line is unconditional whenever `len(Models) > 0`); the writer reads `Models` as `map[string]string` and does no CUE parsing. For roles / contexts / tasks the writer emits Description -> File -> Command -> Prompt -> (Optional or Required+Default or Role) -> Tags, each gated by the existing skip-when-empty rule.
+5. Wire `printMetadataBlock` in `describe.go` to call the new writers: decode the per-item `cue.Value` via the appropriate `decodeXxxValue`, zero `r.File = ""` and `r.Command = ""` on the typed struct for r/c/t with a one-line comment referencing `printVerboseDump`'s separate File/Command emission, then pass the struct to the writer. Add the leading-`\n` dedup at the same time so the only-Models agent edge case does not stack two blank lines before `Models:` — replace the existing `_, _ = fmt.Fprintln(w)` with:
+
+    ```go
+    if buf.Len() == 0 {
+        return
+    }
+    if !bytes.HasPrefix(buf.Bytes(), []byte("\n")) {
+        _, _ = fmt.Fprintln(w)
+    }
+    _, _ = w.Write(buf.Bytes())
+    ```
+
+    `bytes` is already imported in `describe.go` for the `bytes.Buffer` used by `printMetadataBlock`. The existing `TestVerboseDumpMetadataBlock*` tests in `describe_test.go` pass without source modification (Contains-style assertions tolerate the new blank line before Models). The new describe-agent snapshot test (created in step 1) gets its baseline literal updated at this step to include the new blank line between Tags and Models. The object-form describe-agent baseline (created in step 2) is updated here too once the shared writer comes online.
 6. Restructure `printAgentInfo` / `printRoleInfo` / `printContextInfo` / `printTaskInfo` in `config_info.go` to delegate to the new writers per requirement 2. For agents, the line reorder lands here (Bin and Default Model move from the header section into the writer's output). For roles / contexts / tasks, the `File:` and `Command:` emissions on the call-site are removed (the writer owns them now). Verify `internal/cli/config_test.go` passes; update the snapshot for `config info <agent>` to reflect the line reorder.
 7. Delete `writeAgentMetadata` / `writeRoleMetadata` / `writeContextMetadata` / `writeTaskMetadata` from `describe.go`. Delete `cueLookupString` / `cueLookupBool` / `cueLookupStringList` / `cueLookupStringMap` from `describe.go`. Verify with `rg` that no callers remain.
 8. Add the per-category unit tests for the shared writer described in requirement 4 (field-rule coverage in isolation: all-fields-populated, no-fields-populated, category-specific edge cases including the new File/Command emission for r/c/t).
@@ -305,7 +318,7 @@ The new layout is documented in Current State / Agent line ordering above.
 ## Constraints
 
 - Output of `start describe <r|c|t>` (roles, contexts, tasks) is byte-for-byte unchanged.
-- Output of `start describe <agent>` gains one blank line between Tags and Models when the models map is non-empty (see Agent Models spacing). Newly populated `Models:` for object-form agents per requirement 6. No other changes.
+- Output of `start describe <agent>` gains one blank line between Tags and Models when the models map is non-empty (see Agent Models spacing). For an agent with only `models` populated and no other metadata fields, `printMetadataBlock`'s leading-`\n` dedup preserves the existing single-blank-line separator (no double blank line). Newly populated `Models:` for object-form agents per requirement 6. No other changes.
 - Output of `start config info <r|c|t>` (roles, contexts, tasks) is byte-for-byte unchanged.
 - Output of `start config info <agent>` reorders Bin and Default Model per requirement 7. Newly populated `Models:` for object-form agents per requirement 6. The blank line before Models (today on the call-site) moves into the shared writer; the resulting output emits the same blank line in the same position. No other changes.
 - No change to JSON output paths.
@@ -331,45 +344,10 @@ The new layout is documented in Current State / Agent line ordering above.
 - All eight new snapshot tests pass: `start describe <a|r|c|t>` and `start config info <a|r|c|t>` against their captured baselines (three baselines reflect intentional post-refactor changes, five are byte-identical regression guards).
 - `loadAgentsFromDir` reads both simple and object form for the `models` field (via `decodeAgentValue`).
 - The object-form agent fixture renders models correctly via `start describe`, `start config info`, `config list --json`, `config edit`, and `--model` resolution.
-- `start describe <agent>` and `start config info <agent>` produce the same metadata lines they produced before the refactor for the agent surfaces, modulo three intentional changes: (i) requirement 7 reorder for `config info <agent>`; (ii) requirement 6 populated Models for object-form agents on both renderers; (iii) one extra blank line between Tags and Models on `describe <agent>` per Agent Models spacing. Verified against the updated baseline literals.
+- `start describe <agent>` and `start config info <agent>` produce the same metadata lines they produced before the refactor for the agent surfaces, modulo three intentional changes: (i) requirement 7 reorder for `config info <agent>`; (ii) requirement 6 populated Models for object-form agents on both renderers; (iii) one extra blank line between Tags and Models on `describe <agent>` per Agent Models spacing — `printMetadataBlock`'s leading-`\n` dedup ensures an only-Models agent still emits exactly one blank line before `Models:`, not two. Verified against the updated baseline literals.
 - `start describe <r|c|t>` and `start config info <r|c|t>` produce byte-identical metadata blocks to before the refactor. Describe r/c/t does not gain File/Command lines in its metadata block (the describe caller zeros those fields before invoking the writer). Verified against the byte-identical baseline literals.
 - `scripts/invoke-tests` passes.
 - The four model readers all accept both forms: two runtime (`executor.go` `extractAgentFields`, `describe.go` `partialFillAgentCommand`) and two display (`loadAgentsFromDir` via `decodeAgentValue`, and the describe-side caller via `decodeAgentValue`). The shared writer itself does not parse CUE; it reads `agent.Models` as `map[string]string`.
 
 ## Issues Discovered
 
-1. Role / context / task File and Command lines conflict with byte-for-byte preservation (design) — Resolved: widen the shared writer to emit File and Command.
-
-   `printRoleInfo` / `printContextInfo` / `printTaskInfo` today emit `File:` and `Command:` between `Description:` and `Prompt:` (config_info.go:231-238 for roles, :283-290 for contexts, :335-342 for tasks). The proposed shared writer emits Description -> Prompt -> Optional/Required/Default/Role -> Tags contiguously, with no hook for File / Command in the middle. The doc claims "Output of `start config info <r|c|t>` is byte-for-byte unchanged" (Constraints, third bullet) and the Out-of-scope section says File/Command "stay where they are" — but the only place they can stay is mid-output between two fields the writer now owns, which the writer cannot accommodate.
-
-   Concretely, after the refactor the call site can emit File/Command either before the shared writer (giving Source/Origin/File/Command/blank/Description/Prompt/...) or after it (Source/Origin/blank/Description/Prompt/.../Tags/File/Command). Neither matches today's output (Source/Origin/blank/Description/File/Command/Prompt/...) when both Description and File are set.
-
-   Resolution: the shared writers for roles, contexts, and tasks emit `File:` and `Command:` between `Description:` and `Prompt:`, when set, with the existing skip-when-empty rule. Update Scope, Current State / Duplicated rendering rules, and the per-category field lists in this document to reflect that File and Command are part of the r/c/t writers' output.
-
-   The describe-side caller must NOT emit File and Command via the writer, because `printVerboseDump` already prints them separately later in the dump (`describe.go:519-547`) via `ExtractUTDFields`. Concretely, after decoding the cue.Value into a typed `RoleConfig` / `ContextConfig` / `TaskConfig`, the describe caller zeros `r.File = ""` and `r.Command = ""` before passing the struct to the shared writer. Two lines per category; the decoder factored in Issue 4 is reused — `config_info` calls it transitively through `loadXxxFromDir`, describe calls it directly. Add a one-line comment at the zero-out site referencing `printVerboseDump`'s File/Command emission so a future reader understands why the fields are discarded after being decoded.
-
-2. `cue:"default_model"` struct tag is silently ignored by `cue.Value.Decode` (design) — Resolved: skip `cue.Value.Decode` entirely; build the typed structs via `cue.LookupPath`.
-
-   The project's Source-of-data strategy specifies `cue:"default_model"` on `AgentConfig.DefaultModel` to bridge the CUE field name `default_model` to the Go field. `cue.Value.Decode` in cuelang.org/go v0.16.1 reads only `json:` struct tags (verified at `cue/decode.go:586`: `sf.Tag.Get("json")`). The existing tag on the field is `json:"defaultModel,omitempty"`, which does not match CUE field `default_model`, so the decoded `DefaultModel` will be empty regardless of CUE input — the proposed `cue:` tag has no effect.
-
-   The deeper issue: `cue.Value.Decode` is implemented as MarshalJSON-then-`json.Unmarshal`, so it inherits encoding/json's tag and field-matching rules. That JSON detour is what introduces the tag-mismatch problem, and it also forced the project to hand-roll the `Models` field (because the object form does not round-trip through JSON into `map[string]string`). The codebase already has a CUE-native idiom — `cue.Value.LookupPath` plus typed accessors (`.String()`, `.Bool()`, `.Fields()`, `.List()`) — used by `loadAgentsFromDir` and by the soon-to-be-deleted `cueLookupString` helpers.
-
-   Resolution: do not use `cue.Value.Decode` on the describe side. Write four small per-category decoders (`decodeAgentValue(v cue.Value) AgentConfig`, and the equivalents for role/context/task) — see Issue 4 for the file placement decision. Each decoder uses `LookupPath` per field, exactly the way `loadAgentsFromDir` already does, and the agent decoder uses the try-string-then-`id` pattern for `Models` so object-form support lives in the same call. No struct tags change. The `cue:"..."` tags described in Source-of-data strategy are not added.
-
-   The implementer should update the following sections of this document during implementation so the doc and code stay aligned:
-   - Source-of-data strategy: replace the `cue.Value.Decode` + `cue:"..."` tag description with the LookupPath-based per-category decoder approach. The "hand-roll the models field after the Decode call" sentence becomes "the agent decoder uses the try-string-then-`id` pattern when reading `models`."
-   - Implementation Plan step 4: replace "Add `cue:"default_model"` to `AgentConfig.DefaultModel`. Verify each of the four structs round-trips via `cue.Value.Decode`..." with "Write the four per-category decoders in `config_types.go` (placement per Issue 4) and refactor `loadAgentsFromDir` / `loadRolesFromDir` / `loadContextsFromDir` / `loadTasksFromDir` to call them. Verify with a unit test per category that the decoder populates every field the writer renders, including the both-forms `Models` walk for agents."
-   - Requirement 3 ("Describe path decodes cue.Value into typed struct"): keep the high-level claim — the typed-struct intermediate is preserved — but replace the `cue.Value.Decode` + tag mechanism with the LookupPath decoders.
-   - Decision section: Option A (typed struct intermediate) still wins for the three reasons already given. The refinement is that the typed struct is built via LookupPath rather than `cue.Value.Decode`. Note this refinement at the end of the Decision section so future readers do not look for `cue:` tags in the code.
-
-3. Verification of `cue.Value.Decode` behaviour on partial / non-concrete values (risk) — Resolved: obsolete; the project no longer uses `cue.Value.Decode`.
-
-   `cue.Value.Decode` on a per-item CUE value will (per the json-tag-matching rule above) leave any field whose json tag does not match the CUE field name as the Go zero value. For roles/contexts/tasks the field names happen to match; for agents the `default_model` issue applies (see issue 2). `Name` and `Source` are not in CUE and must be set by the caller after the decode — fine, but worth recording so the implementer doesn't assume Decode populates everything. The `origin` field decodes correctly. No action needed beyond documenting the post-decode assignment in plan step 6.
-
-   Resolution: Issue 2's resolution removes `cue.Value.Decode` from the project. The LookupPath-based decoders populate exactly the fields they look up, so the partial-decode concern does not arise. `Name` and `Source` are still set by the caller (the decoder takes a `cue.Value` for one item and does not know either).
-
-4. Per-category cue.Value decoders may overlap with `loadXxxFromDir` per-field extraction (design) — Resolved: factor the decoders into `config_types.go` and have the loaders call them.
-
-   Issue 2's resolution introduces four per-category decoders that walk `cue.Value` with `LookupPath`. The same per-field extraction already exists in `loadAgentsFromDir` / `loadRolesFromDir` / `loadContextsFromDir` / `loadTasksFromDir` (config_types.go:60-104, :251-287, :375-411, :502-535). Requirement 6 grants latitude for agents to factor or duplicate the both-forms `Models` walk; the same latitude should apply to the rest of the per-field extraction for all four categories.
-
-   Resolution: factor `decodeAgentValue(v cue.Value) AgentConfig`, `decodeRoleValue`, `decodeContextValue`, `decodeTaskValue` into helpers in `config_types.go`, alongside the existing structs and loaders. Each helper is a pure function that takes one per-item `cue.Value` and returns the typed struct (excluding `Name` and `Source`, which the caller assigns — for `loadXxxFromDir`, after the iterator yields the name; for describe, neither field is read by the writer so neither needs to be assigned). `loadXxxFromDir` becomes a thin loop: extract the name from the iterator, call the decoder on the value, set `Name`, append. The describe-side caller calls the same decoder directly on the cue.Value it already has, then zeros `File` and `Command` per Issue 1's resolution before passing the struct to the shared writer. The both-forms `Models` walk required by Requirement 6 lives in exactly one place: inside `decodeAgentValue`. Update Requirement 6's "Implementer may factor ... or duplicate" sentence to say the walk is in `decodeAgentValue` only.
