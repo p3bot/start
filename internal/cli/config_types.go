@@ -25,6 +25,55 @@ type AgentConfig struct {
 	Origin       string            `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
+// decodeAgentValue extracts the agent fields from a per-item CUE value and
+// returns a populated AgentConfig (Name and Source are not populated — those
+// are set by the caller). Accepts both simple- and object-form `models`
+// entries using the try-string-then-`id` pattern; the same walk is used by
+// the runtime sites in `executor.go` and `partialFillAgentCommand`.
+func decodeAgentValue(val cue.Value) AgentConfig {
+	var agent AgentConfig
+
+	if v := val.LookupPath(cue.ParsePath("bin")); v.Exists() {
+		agent.Bin, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
+		agent.Command, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("default_model")); v.Exists() {
+		agent.DefaultModel, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
+		agent.Description, _ = v.String()
+	}
+
+	agent.Tags = extractTags(val)
+
+	if modelsVal := val.LookupPath(cue.ParsePath("models")); modelsVal.Exists() {
+		agent.Models = make(map[string]string)
+		if modelIter, err := modelsVal.Fields(); err == nil {
+			for modelIter.Next() {
+				alias := modelIter.Selector().Unquoted()
+				entry := modelIter.Value()
+				if s, err := entry.String(); err == nil {
+					agent.Models[alias] = s
+					continue
+				}
+				if idVal := entry.LookupPath(cue.ParsePath("id")); idVal.Exists() {
+					if s, err := idVal.String(); err == nil {
+						agent.Models[alias] = s
+					}
+				}
+			}
+		}
+	}
+
+	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
+		agent.Origin, _ = v.String()
+	}
+
+	return agent
+}
+
 // loadAgentsForScope loads agents from the appropriate scope.
 // Returns the agents map, names in definition order, and any error.
 func loadAgentsForScope(localOnly bool) (map[string]AgentConfig, []string, error) {
@@ -59,44 +108,8 @@ func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		val := iter.Value()
-
-		agent := AgentConfig{Name: name}
-
-		if v := val.LookupPath(cue.ParsePath("bin")); v.Exists() {
-			agent.Bin, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
-			agent.Command, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("default_model")); v.Exists() {
-			agent.DefaultModel, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
-			agent.Description, _ = v.String()
-		}
-
-		agent.Tags = extractTags(val)
-
-		// Load models
-		if modelsVal := val.LookupPath(cue.ParsePath("models")); modelsVal.Exists() {
-			agent.Models = make(map[string]string)
-			modelIter, err := modelsVal.Fields()
-			if err == nil {
-				for modelIter.Next() {
-					alias := modelIter.Selector().Unquoted()
-					if s, err := modelIter.Value().String(); err == nil {
-						agent.Models[alias] = s
-					}
-				}
-			}
-		}
-
-		// Load origin (registry provenance)
-		if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
-			agent.Origin, _ = v.String()
-		}
-
+		agent := decodeAgentValue(iter.Value())
+		agent.Name = name
 		agents[name] = agent
 		order = append(order, name)
 	}
@@ -216,6 +229,36 @@ type RoleConfig struct {
 	Origin      string   `json:"origin,omitempty"`   // Registry module path when installed from registry
 }
 
+// decodeRoleValue extracts the role fields from a per-item CUE value and
+// returns a populated RoleConfig (Name and Source are set by the caller).
+func decodeRoleValue(val cue.Value) RoleConfig {
+	var role RoleConfig
+
+	if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
+		role.Description, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("file")); v.Exists() {
+		role.File, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
+		role.Command, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("prompt")); v.Exists() {
+		role.Prompt, _ = v.String()
+	}
+
+	role.Tags = extractTags(val)
+
+	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
+		role.Origin, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("optional")); v.Exists() {
+		role.Optional, _ = v.Bool()
+	}
+
+	return role
+}
+
 // loadRolesForScope loads roles from the appropriate scope.
 // Returns the roles map, names in definition order, and any error.
 func loadRolesForScope(localOnly bool) (map[string]RoleConfig, []string, error) {
@@ -250,35 +293,8 @@ func loadRolesFromDir(dir string) (map[string]RoleConfig, []string, error) {
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		val := iter.Value()
-
-		role := RoleConfig{Name: name}
-
-		if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
-			role.Description, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("file")); v.Exists() {
-			role.File, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
-			role.Command, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("prompt")); v.Exists() {
-			role.Prompt, _ = v.String()
-		}
-
-		role.Tags = extractTags(val)
-
-		// Load origin (registry provenance)
-		if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
-			role.Origin, _ = v.String()
-		}
-
-		// Load optional field
-		if v := val.LookupPath(cue.ParsePath("optional")); v.Exists() {
-			role.Optional, _ = v.Bool()
-		}
-
+		role := decodeRoleValue(iter.Value())
+		role.Name = name
 		roles[name] = role
 		order = append(order, name)
 	}
@@ -340,6 +356,39 @@ type ContextConfig struct {
 	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
+// decodeContextValue extracts the context fields from a per-item CUE value and
+// returns a populated ContextConfig (Name and Source are set by the caller).
+func decodeContextValue(val cue.Value) ContextConfig {
+	var ctx ContextConfig
+
+	if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
+		ctx.Description, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("file")); v.Exists() {
+		ctx.File, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
+		ctx.Command, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("prompt")); v.Exists() {
+		ctx.Prompt, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("required")); v.Exists() {
+		ctx.Required, _ = v.Bool()
+	}
+	if v := val.LookupPath(cue.ParsePath("default")); v.Exists() {
+		ctx.Default, _ = v.Bool()
+	}
+
+	ctx.Tags = extractTags(val)
+
+	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
+		ctx.Origin, _ = v.String()
+	}
+
+	return ctx
+}
+
 // loadContextsForScope loads contexts from the appropriate scope.
 // Returns the contexts map, names in definition order, and any error.
 func loadContextsForScope(localOnly bool) (map[string]ContextConfig, []string, error) {
@@ -374,36 +423,8 @@ func loadContextsFromDir(dir string) (map[string]ContextConfig, []string, error)
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		val := iter.Value()
-
-		ctx := ContextConfig{Name: name}
-
-		if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
-			ctx.Description, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("file")); v.Exists() {
-			ctx.File, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
-			ctx.Command, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("prompt")); v.Exists() {
-			ctx.Prompt, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("required")); v.Exists() {
-			ctx.Required, _ = v.Bool()
-		}
-		if v := val.LookupPath(cue.ParsePath("default")); v.Exists() {
-			ctx.Default, _ = v.Bool()
-		}
-
-		ctx.Tags = extractTags(val)
-
-		// Load origin (registry provenance)
-		if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
-			ctx.Origin, _ = v.String()
-		}
-
+		ctx := decodeContextValue(iter.Value())
+		ctx.Name = name
 		contexts[name] = ctx
 		order = append(order, name)
 	}
@@ -467,6 +488,36 @@ type TaskConfig struct {
 	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
+// decodeTaskValue extracts the task fields from a per-item CUE value and
+// returns a populated TaskConfig (Name and Source are set by the caller).
+func decodeTaskValue(val cue.Value) TaskConfig {
+	var task TaskConfig
+
+	if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
+		task.Description, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("file")); v.Exists() {
+		task.File, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
+		task.Command, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("prompt")); v.Exists() {
+		task.Prompt, _ = v.String()
+	}
+	if v := val.LookupPath(cue.ParsePath("role")); v.Exists() {
+		task.Role, _ = v.String()
+	}
+
+	task.Tags = extractTags(val)
+
+	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
+		task.Origin, _ = v.String()
+	}
+
+	return task
+}
+
 // loadTasksForScope loads tasks from the appropriate scope.
 // Returns the tasks map, names in definition order, and any error.
 func loadTasksForScope(localOnly bool) (map[string]TaskConfig, []string, error) {
@@ -501,33 +552,8 @@ func loadTasksFromDir(dir string) (map[string]TaskConfig, []string, error) {
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		val := iter.Value()
-
-		task := TaskConfig{Name: name}
-
-		if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
-			task.Description, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("file")); v.Exists() {
-			task.File, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("command")); v.Exists() {
-			task.Command, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("prompt")); v.Exists() {
-			task.Prompt, _ = v.String()
-		}
-		if v := val.LookupPath(cue.ParsePath("role")); v.Exists() {
-			task.Role, _ = v.String()
-		}
-
-		task.Tags = extractTags(val)
-
-		// Load origin (registry provenance)
-		if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
-			task.Origin, _ = v.String()
-		}
-
+		task := decodeTaskValue(iter.Value())
+		task.Name = name
 		tasks[name] = task
 		order = append(order, name)
 	}

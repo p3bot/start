@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -139,7 +138,10 @@ func printConfigInfo(w io.Writer, local bool, m configMatch) error {
 	return fmt.Errorf("unknown category %q", m.Category)
 }
 
-// printAgentInfo displays raw fields for an agent.
+// printAgentInfo displays raw fields for an agent. The header section emits
+// Source / Origin / Command (Command is agent-only and not owned by the
+// shared writer); the writer owns its own leading blank line and renders
+// the rest.
 func printAgentInfo(w io.Writer, local bool, name string) error {
 	agents, _, err := loadAgentsForScope(local)
 	if err != nil {
@@ -162,45 +164,19 @@ func printAgentInfo(w io.Writer, local bool, name string) error {
 		_, _ = tui.ColorDim.Fprint(w, "Origin:")
 		_, _ = fmt.Fprintf(w, " %s\n", agent.Origin)
 	}
-	if agent.Bin != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Bin:")
-		_, _ = fmt.Fprintf(w, " %s\n", agent.Bin)
-	}
 	_, _ = tui.ColorDim.Fprint(w, "Command:")
 	_, _ = fmt.Fprintf(w, " %s\n", agent.Command)
-	if agent.DefaultModel != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Default Model:")
-		_, _ = fmt.Fprintf(w, " %s\n", agent.DefaultModel)
-	}
-	if agent.Description != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorDim.Fprint(w, "Description:")
-		_, _ = fmt.Fprintf(w, " %s\n", agent.Description)
-	}
-	if len(agent.Tags) > 0 {
-		_, _ = tui.ColorDim.Fprint(w, "Tags:")
-		_, _ = fmt.Fprintf(w, " %s\n", strings.Join(agent.Tags, ", "))
-	}
-	if len(agent.Models) > 0 {
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorDim.Fprintln(w, "Models:")
-		var aliases []string
-		for alias := range agent.Models {
-			aliases = append(aliases, alias)
-		}
-		sort.Strings(aliases)
-		for _, alias := range aliases {
-			_, _ = fmt.Fprintf(w, "  %s ", alias)
-			_, _ = tui.ColorBlue.Fprint(w, "->")
-			_, _ = fmt.Fprint(w, " ")
-			_, _ = tui.ColorDim.Fprintf(w, "%s\n", agent.Models[alias])
-		}
-	}
+
+	writeAgentMetadata(w, agent)
+
 	printSeparator(w)
 	return nil
 }
 
-// printRoleInfo displays raw fields for a role.
+// printRoleInfo displays raw fields for a role. The header section emits
+// Source / Origin; everything below — including the leading blank line — is
+// owned by the shared writer (Description -> File -> Command -> Prompt ->
+// Optional -> Tags).
 func printRoleInfo(w io.Writer, local bool, name string) error {
 	roles, _, err := loadRolesForScope(local)
 	if err != nil {
@@ -223,36 +199,16 @@ func printRoleInfo(w io.Writer, local bool, name string) error {
 		_, _ = tui.ColorDim.Fprint(w, "Origin:")
 		_, _ = fmt.Fprintf(w, " %s\n", role.Origin)
 	}
-	if role.Description != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorDim.Fprint(w, "Description:")
-		_, _ = fmt.Fprintf(w, " %s\n", role.Description)
-	}
-	if role.File != "" {
-		_, _ = tui.ColorDim.Fprint(w, "File:")
-		_, _ = fmt.Fprintf(w, " %s\n", role.File)
-	}
-	if role.Command != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Command:")
-		_, _ = fmt.Fprintf(w, " %s\n", role.Command)
-	}
-	if role.Prompt != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Prompt:")
-		_, _ = fmt.Fprintf(w, " %s\n", truncatePrompt(role.Prompt, 100))
-	}
-	if role.Optional {
-		_, _ = tui.ColorDim.Fprint(w, "Optional:")
-		_, _ = fmt.Fprintln(w, " true")
-	}
-	if len(role.Tags) > 0 {
-		_, _ = tui.ColorDim.Fprint(w, "Tags:")
-		_, _ = fmt.Fprintf(w, " %s\n", strings.Join(role.Tags, ", "))
-	}
+
+	writeRoleMetadata(w, role)
+
 	printSeparator(w)
 	return nil
 }
 
-// printContextInfo displays raw fields for a context.
+// printContextInfo displays raw fields for a context. The header section
+// emits Source / Origin; everything below — including the leading blank
+// line — is owned by the shared writer.
 func printContextInfo(w io.Writer, local bool, name string) error {
 	contexts, _, err := loadContextsForScope(local)
 	if err != nil {
@@ -275,36 +231,16 @@ func printContextInfo(w io.Writer, local bool, name string) error {
 		_, _ = tui.ColorDim.Fprint(w, "Origin:")
 		_, _ = fmt.Fprintf(w, " %s\n", ctx.Origin)
 	}
-	if ctx.Description != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorDim.Fprint(w, "Description:")
-		_, _ = fmt.Fprintf(w, " %s\n", ctx.Description)
-	}
-	if ctx.File != "" {
-		_, _ = tui.ColorDim.Fprint(w, "File:")
-		_, _ = fmt.Fprintf(w, " %s\n", ctx.File)
-	}
-	if ctx.Command != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Command:")
-		_, _ = fmt.Fprintf(w, " %s\n", ctx.Command)
-	}
-	if ctx.Prompt != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Prompt:")
-		_, _ = fmt.Fprintf(w, " %s\n", truncatePrompt(ctx.Prompt, 100))
-	}
-	_, _ = tui.ColorDim.Fprint(w, "Required:")
-	_, _ = fmt.Fprintf(w, " %t\n", ctx.Required)
-	_, _ = tui.ColorDim.Fprint(w, "Default:")
-	_, _ = fmt.Fprintf(w, " %t\n", ctx.Default)
-	if len(ctx.Tags) > 0 {
-		_, _ = tui.ColorDim.Fprint(w, "Tags:")
-		_, _ = fmt.Fprintf(w, " %s\n", strings.Join(ctx.Tags, ", "))
-	}
+
+	writeContextMetadata(w, ctx)
+
 	printSeparator(w)
 	return nil
 }
 
-// printTaskInfo displays raw fields for a task.
+// printTaskInfo displays raw fields for a task. The header section emits
+// Source / Origin; everything below — including the leading blank line —
+// is owned by the shared writer.
 func printTaskInfo(w io.Writer, local bool, name string) error {
 	tasks, _, err := loadTasksForScope(local)
 	if err != nil {
@@ -327,31 +263,9 @@ func printTaskInfo(w io.Writer, local bool, name string) error {
 		_, _ = tui.ColorDim.Fprint(w, "Origin:")
 		_, _ = fmt.Fprintf(w, " %s\n", task.Origin)
 	}
-	if task.Description != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorDim.Fprint(w, "Description:")
-		_, _ = fmt.Fprintf(w, " %s\n", task.Description)
-	}
-	if task.File != "" {
-		_, _ = tui.ColorDim.Fprint(w, "File:")
-		_, _ = fmt.Fprintf(w, " %s\n", task.File)
-	}
-	if task.Command != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Command:")
-		_, _ = fmt.Fprintf(w, " %s\n", task.Command)
-	}
-	if task.Prompt != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Prompt:")
-		_, _ = fmt.Fprintf(w, " %s\n", truncatePrompt(task.Prompt, 100))
-	}
-	if task.Role != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Role:")
-		_, _ = fmt.Fprintf(w, " %s\n", task.Role)
-	}
-	if len(task.Tags) > 0 {
-		_, _ = tui.ColorDim.Fprint(w, "Tags:")
-		_, _ = fmt.Fprintf(w, " %s\n", strings.Join(task.Tags, ", "))
-	}
+
+	writeTaskMetadata(w, task)
+
 	printSeparator(w)
 	return nil
 }

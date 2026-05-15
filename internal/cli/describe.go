@@ -1,13 +1,11 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -549,169 +547,32 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 	printSeparator(w)
 }
 
-// printMetadataBlock writes a formatted, category-specific metadata block for
-// scannable inspection of common fields. Writes its own leading blank line and
-// emits nothing when no category-specific fields would be rendered. Mirrors
-// the field selection of the print*Info formatters in config_info.go but with
-// the placement and styling required by the describe verbose dump.
+// printMetadataBlock writes a formatted, category-specific metadata block
+// for scannable inspection of common fields. Decodes the per-item cue.Value
+// into the corresponding typed struct and delegates to the shared writer,
+// which owns its own leading blank line and emits nothing when no
+// category-specific fields would be rendered.
+//
+// For role/context/task, File and Command are zeroed before invoking the
+// writer so they are not rendered here — printVerboseDump emits them
+// separately below via ExtractUTDFields.
 func printMetadataBlock(w io.Writer, r DescribeResult) {
-	var buf bytes.Buffer
 	switch r.ItemType {
 	case "Agent":
-		writeAgentMetadata(&buf, r.Value)
+		writeAgentMetadata(w, decodeAgentValue(r.Value))
 	case "Role":
-		writeRoleMetadata(&buf, r.Value)
+		role := decodeRoleValue(r.Value)
+		role.File, role.Command = "", ""
+		writeRoleMetadata(w, role)
 	case "Context":
-		writeContextMetadata(&buf, r.Value)
+		ctx := decodeContextValue(r.Value)
+		ctx.File, ctx.Command = "", ""
+		writeContextMetadata(w, ctx)
 	case "Task":
-		writeTaskMetadata(&buf, r.Value)
+		task := decodeTaskValue(r.Value)
+		task.File, task.Command = "", ""
+		writeTaskMetadata(w, task)
 	}
-	if buf.Len() == 0 {
-		return
-	}
-	_, _ = fmt.Fprintln(w)
-	_, _ = w.Write(buf.Bytes())
-}
-
-func writeAgentMetadata(w io.Writer, v cue.Value) {
-	label := tui.ColorDim.Sprint
-	if s := cueLookupString(v, "description"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), s)
-	}
-	if s := cueLookupString(v, "bin"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Bin:"), s)
-	}
-	if s := cueLookupString(v, "default_model"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Default Model:"), s)
-	}
-	if tags := cueLookupStringList(v, "tags"); len(tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(tags, ", "))
-	}
-	if models := cueLookupStringMap(v, "models"); len(models) > 0 {
-		_, _ = tui.ColorDim.Fprintln(w, "Models:")
-		aliases := make([]string, 0, len(models))
-		for k := range models {
-			aliases = append(aliases, k)
-		}
-		sort.Strings(aliases)
-		for _, alias := range aliases {
-			_, _ = fmt.Fprintf(w, "  %s ", alias)
-			_, _ = tui.ColorBlue.Fprint(w, "->")
-			_, _ = fmt.Fprint(w, " ")
-			_, _ = tui.ColorDim.Fprintf(w, "%s\n", models[alias])
-		}
-	}
-}
-
-func writeRoleMetadata(w io.Writer, v cue.Value) {
-	label := tui.ColorDim.Sprint
-	if s := cueLookupString(v, "description"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), s)
-	}
-	if s := cueLookupString(v, "prompt"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(s, 100))
-	}
-	if cueLookupBool(v, "optional") {
-		_, _ = fmt.Fprintf(w, "%s true\n", label("Optional:"))
-	}
-	if tags := cueLookupStringList(v, "tags"); len(tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(tags, ", "))
-	}
-}
-
-func writeContextMetadata(w io.Writer, v cue.Value) {
-	label := tui.ColorDim.Sprint
-	if s := cueLookupString(v, "description"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), s)
-	}
-	if s := cueLookupString(v, "prompt"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(s, 100))
-	}
-	_, _ = fmt.Fprintf(w, "%s %t\n", label("Required:"), cueLookupBool(v, "required"))
-	_, _ = fmt.Fprintf(w, "%s %t\n", label("Default:"), cueLookupBool(v, "default"))
-	if tags := cueLookupStringList(v, "tags"); len(tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(tags, ", "))
-	}
-}
-
-func writeTaskMetadata(w io.Writer, v cue.Value) {
-	label := tui.ColorDim.Sprint
-	if s := cueLookupString(v, "description"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), s)
-	}
-	if s := cueLookupString(v, "prompt"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(s, 100))
-	}
-	if s := cueLookupString(v, "role"); s != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Role:"), s)
-	}
-	if tags := cueLookupStringList(v, "tags"); len(tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(tags, ", "))
-	}
-}
-
-func cueLookupString(v cue.Value, field string) string {
-	f := v.LookupPath(cue.ParsePath(field))
-	if !f.Exists() {
-		return ""
-	}
-	s, err := f.String()
-	if err != nil {
-		return ""
-	}
-	return s
-}
-
-func cueLookupBool(v cue.Value, field string) bool {
-	f := v.LookupPath(cue.ParsePath(field))
-	if !f.Exists() {
-		return false
-	}
-	b, err := f.Bool()
-	if err != nil {
-		return false
-	}
-	return b
-}
-
-func cueLookupStringList(v cue.Value, field string) []string {
-	f := v.LookupPath(cue.ParsePath(field))
-	if !f.Exists() {
-		return nil
-	}
-	iter, err := f.List()
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for iter.Next() {
-		s, err := iter.Value().String()
-		if err != nil {
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
-
-func cueLookupStringMap(v cue.Value, field string) map[string]string {
-	f := v.LookupPath(cue.ParsePath(field))
-	if !f.Exists() {
-		return nil
-	}
-	iter, err := f.Fields()
-	if err != nil {
-		return nil
-	}
-	out := make(map[string]string)
-	for iter.Next() {
-		s, err := iter.Value().String()
-		if err != nil {
-			continue
-		}
-		out[iter.Selector().Unquoted()] = s
-	}
-	return out
 }
 
 // findConfigSource determines which config file defines an item.
