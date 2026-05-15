@@ -99,7 +99,7 @@ Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md` have n
 
 ## Implementation Guidance
 
-- This project is independent of projects 04 (`04-extend-describe.md`) and 05 (`05-drop-redundant-search.md`). It can land before, after, or alongside either. There is no file overlap: project 04 touches `modules_info.go` (and adds to `describe.go` and `resolve.go`); project 05 touches `config_search.go` and `modules_search.go`; this project touches `config_info.go`. If this project lands after project 04, the paragraph in `04-extend-describe.md` referring to a "follow-up rename project" is satisfied by this document.
+- This project is independent of project 01 (`01-drop-redundant-search.md`). It can land before, after, or alongside it. There is no file overlap: project 01 touches `config_search.go` and `modules_search.go`; this project touches `config_info.go`.
 - `start config get` and top-level `start get` coexist after this project. The pattern matches `kubectl config get-contexts` versus `kubectl get`. The two surfaces are distinct: top-level `get` operates on module content (file body, rendered prompt, command output, or agent command template); `config get` operates on the config entry itself (Source, Origin, Tags, category-specific fields). The updated `Long:` description should make this distinction explicit so users do not assume the two commands are aliases or shorthands of each other.
 
 ## Issues Discovered

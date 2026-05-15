@@ -2,9 +2,9 @@
 
 ## Goal
 
-Address the cluster of design inconsistencies in scope-flag handling and merge-semantics documentation that surfaced during the `00-refactor-functions.md` design discussion. None of these are bugs that affect today's runtime behaviour for the primary global-only usage pattern. They are quality issues that complicate maintenance, mislead readers, and undermine the user-facing contract for anyone who exercises local configs or both-scopes-present workflows.
+Address the cluster of design inconsistencies in scope-flag handling and merge-semantics documentation that surfaced during the metadata-writer refactor design discussion. None of these are bugs that affect today's runtime behaviour for the primary global-only usage pattern. They are quality issues that complicate maintenance, mislead readers, and undermine the user-facing contract for anyone who exercises local configs or both-scopes-present workflows.
 
-This project is sequenced after `05-drop-redundant-search.md` and before the eventual `config get` work. The `config get` design will inherit the scope-flag surface that lands here, so getting it right before that work starts saves a downstream migration.
+This project is sequenced after `01-drop-redundant-search.md` and before the eventual `config get` work. The `config get` design will inherit the scope-flag surface that lands here, so getting it right before that work starts saves a downstream migration.
 
 ## Scope
 
@@ -127,7 +127,6 @@ Recommended sequencing: land issues 1-4 before `config get` design starts, so th
 
 ## References
 
-- `00-refactor-functions.md` — surfaced these issues during design discussion; the metadata-writer refactor explicitly punts them here.
 - `internal/cue/loader.go:140` — `mergeWithReplacement` implementation.
 - `internal/cli/describe.go:133` — describe-only `--global` registration.
 - `internal/cli/root.go:95` — root persistent `--local` registration.
