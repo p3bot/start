@@ -20,12 +20,12 @@ import (
 
 // NOTE(design): The config-loading shape here (paths.ResolvePaths, AnyExists
 // gate, Load(merged) plus a separate LoadSingle(local) for scope detection) is
-// repeated in modules_search.go and modules_update.go. The repetition is kept
-// inline because each call site has command-specific empty-state UX baked into
-// the same shape — extracting a helper would either hide those messages from
-// the call site or require parameterising them through callbacks. Update
-// checking uses checkForUpdates rather than the fetchIndex helper because the
-// index is only fetched conditionally (--verbose path).
+// repeated in modules_update.go. The repetition is kept inline because each
+// call site has command-specific empty-state UX baked into the same shape —
+// extracting a helper would either hide those messages from the call site or
+// require parameterising them through callbacks. Update checking uses
+// checkForUpdates rather than the fetchIndex helper because the index is
+// only fetched conditionally (--verbose path).
 
 // InstalledModule represents an installed module with version info.
 type InstalledModule struct {

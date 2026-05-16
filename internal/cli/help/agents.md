@@ -33,14 +33,12 @@ start config list agent
 start config list role
 start config list context
 start config list task
-start config search golang
 start config export agent
 start config settings
 start config settings default_agent claude
 start config settings timeout 120
 start search golang
 start search --tag review
-start modules search golang
 start modules install golang/code-review
 start modules list
 start modules update

@@ -123,76 +123,6 @@ func TestSearchIndex(t *testing.T) {
 	}
 }
 
-// TestPrintSearchResults tests the printSearchResults function.
-func TestPrintSearchResults(t *testing.T) {
-	t.Parallel()
-	results := []modules.SearchResult{
-		{
-			Category: "agents",
-			Name:     "ai/claude",
-			Entry: registry.IndexEntry{
-				Module:      "github.com/test/agents/ai/claude@v0",
-				Description: "Claude by Anthropic",
-				Tags:        []string{"anthropic", "ai"},
-			},
-		},
-		{
-			Category: "roles",
-			Name:     "golang/assistant",
-			Entry: registry.IndexEntry{
-				Module:      "github.com/test/roles/golang/assistant@v0",
-				Description: "Go programming expert",
-				Tags:        []string{"golang"},
-			},
-		},
-	}
-
-	t.Run("non-verbose output", func(t *testing.T) {
-		var buf bytes.Buffer
-		printSearchResults(&buf, results, false, nil)
-		output := buf.String()
-
-		if !strings.Contains(output, "Found 2 matches") {
-			t.Errorf("output missing match count, got: %s", output)
-		}
-		if !strings.Contains(output, "agents/") {
-			t.Errorf("output missing agents category, got: %s", output)
-		}
-		if !strings.Contains(output, "ai/claude") {
-			t.Errorf("output missing claude, got: %s", output)
-		}
-		if !strings.Contains(output, "Claude by Anthropic") {
-			t.Errorf("output missing description, got: %s", output)
-		}
-	})
-
-	t.Run("verbose output", func(t *testing.T) {
-		var buf bytes.Buffer
-		printSearchResults(&buf, results, true, nil)
-		output := buf.String()
-
-		if !strings.Contains(output, "Module:") {
-			t.Errorf("verbose output missing Module, got: %s", output)
-		}
-		if !strings.Contains(output, "Tags:") {
-			t.Errorf("verbose output missing Tags, got: %s", output)
-		}
-	})
-
-	t.Run("installed marker", func(t *testing.T) {
-		var buf bytes.Buffer
-		installed := map[string]bool{
-			"agents/ai/claude": true,
-		}
-		printSearchResults(&buf, results, false, installed)
-		output := buf.String()
-
-		if !strings.Contains(output, "★") {
-			t.Errorf("output missing installed marker for ai/claude, got: %s", output)
-		}
-	})
-}
-
 // TestModulesCommandExists tests that the modules command is registered.
 func TestModulesCommandExists(t *testing.T) {
 	t.Parallel()
@@ -212,7 +142,7 @@ func TestModulesCommandExists(t *testing.T) {
 	}
 
 	// Check subcommands
-	subcommands := []string{"browse", "index", "search", "install", "list", "update"}
+	subcommands := []string{"browse", "index", "install", "list", "update"}
 	for _, name := range subcommands {
 		found := false
 		for _, c := range modulesCmd.Commands() {
@@ -961,33 +891,6 @@ func TestFilterIndexByCategory(t *testing.T) {
 			}
 			if !tt.wantRoles && len(got.Roles) > 0 {
 				t.Errorf("expected no roles in filtered index, got %d", len(got.Roles))
-			}
-		})
-	}
-}
-
-// TestModulesSearchValidation tests search command argument validation.
-func TestModulesSearchValidation(t *testing.T) {
-	t.Parallel()
-	// We can't easily test the full search without network,
-	// but we can test the query length validation
-	tests := []struct {
-		name    string
-		query   string
-		wantErr bool
-	}{
-		{"query too short - 1 char", "a", true},
-		{"query too short - 2 chars", "ab", true},
-		{"query valid - 3 chars", "abc", false}, // Will fail on network, but passes validation
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Just test the validation logic
-			if len(tt.query) < 3 {
-				if !tt.wantErr {
-					t.Error("expected validation error for short query")
-				}
 			}
 		})
 	}

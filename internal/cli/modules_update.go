@@ -17,14 +17,14 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// NOTE(design): The post-fetch logic in this file overlaps with modules_install.go
-// and modules_search.go (config resolution, scope handling,
-// command-specific empty-state output). The repetition is kept inline because
-// each call site has command-specific UX baked into the same shape — extracting
-// a helper would either hide the per-command messages from the call site or
-// require parameterising them through callbacks, both of which reduce
-// readability more than they save lines. The shared registry-client + fetch
-// + cache-write sequence is centralised in fetchIndex (modules.go).
+// NOTE(design): The post-fetch logic in this file overlaps with
+// modules_install.go (config resolution, scope handling, command-specific
+// empty-state output). The repetition is kept inline because each call site
+// has command-specific UX baked into the same shape — extracting a helper
+// would either hide the per-command messages from the call site or require
+// parameterising them through callbacks, both of which reduce readability
+// more than they save lines. The shared registry-client + fetch +
+// cache-write sequence is centralised in fetchIndex (modules.go).
 
 // UpdateResult tracks the result of an update operation.
 type UpdateResult struct {

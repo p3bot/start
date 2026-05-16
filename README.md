@@ -269,9 +269,6 @@ start modules browse
 # Show the full registry catalog
 start modules index
 
-# Search for packages
-start modules search go
-
 # Show details for a specific module
 start describe golang/assistant
 
@@ -329,9 +326,6 @@ start config order role
 # Open a config file directly in $EDITOR
 start config open
 
-# Search config by keyword
-start config search <query>
-
 # Export config as text to stdout
 start config export
 
@@ -342,12 +336,8 @@ start config settings default_agent claude
 ### Search and Discovery
 
 ```bash
-# Search across all installed and registry modules
+# Search global config, local config, and the module registry index
 start search go
-
-start search <query>        # search global and local config, and modules index
-start config search <query> # search global and local config
-start modules search <query> # search installable modules
 ```
 
 ### Diagnostics

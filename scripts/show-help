@@ -49,7 +49,6 @@ show "${BIN} search"
 
 show "${BIN} modules"
 show "${BIN} modules list"
-show "${BIN} modules search"
 show "${BIN} modules install"
 show "${BIN} modules browse"
 show "${BIN} modules index"
@@ -92,7 +91,6 @@ show "${BIN} config settings"
 
 show "${BIN} config order"
 
-show "${BIN} config search"
 show "${BIN} config add"
 show "${BIN} config edit"
 show "${BIN} config remove"

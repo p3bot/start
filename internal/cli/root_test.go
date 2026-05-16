@@ -151,11 +151,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			want: "EDITOR",
 		},
 		{
-			name: "config search help",
-			args: []string{"config", "search", "help"},
-			want: "installed modules",
-		},
-		{
 			name: "config settings help",
 			args: []string{"config", "settings", "help"},
 			want: "settings",
@@ -181,11 +176,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			name: "modules install help",
 			args: []string{"modules", "install", "help"},
 			want: "Install",
-		},
-		{
-			name: "modules search help",
-			args: []string{"modules", "search", "help"},
-			want: "registry index",
 		},
 		{
 			name: "modules update help",

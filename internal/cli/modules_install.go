@@ -22,14 +22,14 @@ import (
 // errNoModules is returned by installModule when no matching modules are found.
 var errNoModules = errors.New("no modules found")
 
-// NOTE(design): The post-fetch logic in this file overlaps with modules_search.go
-// and modules_update.go (config resolution, scope handling,
-// command-specific empty-state output). The repetition is kept inline because
-// each call site has command-specific UX baked into the same shape — extracting
-// a helper would either hide the per-command messages from the call site or
-// require parameterising them through callbacks, both of which reduce
-// readability more than they save lines. The shared registry-client + fetch
-// + cache-write sequence is centralised in fetchIndex (modules.go).
+// NOTE(design): The post-fetch logic in this file overlaps with
+// modules_update.go (config resolution, scope handling, command-specific
+// empty-state output). The repetition is kept inline because each call site
+// has command-specific UX baked into the same shape — extracting a helper
+// would either hide the per-command messages from the call site or require
+// parameterising them through callbacks, both of which reduce readability
+// more than they save lines. The shared registry-client + fetch +
+// cache-write sequence is centralised in fetchIndex (modules.go).
 
 // addModulesInstallCommand adds the install subcommand to the modules command.
 func addModulesInstallCommand(parent *cobra.Command) {

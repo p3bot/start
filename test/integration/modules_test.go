@@ -457,12 +457,7 @@ func TestIntegration_ModulesCommandHelp(t *testing.T) {
 		{
 			name: "modules help",
 			args: []string{"modules", "--help"},
-			want: []string{"Manage modules", "browse", "search", "install", "list", "update"},
-		},
-		{
-			name: "modules search help",
-			args: []string{"modules", "search", "--help"},
-			want: []string{"Search", "query", "3 characters"},
+			want: []string{"Manage modules", "browse", "install", "list", "update"},
 		},
 		{
 			name: "modules install help",

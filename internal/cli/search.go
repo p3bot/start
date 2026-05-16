@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
@@ -282,6 +283,35 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 			}
 		}
 	}
+}
+
+// collectInstalledNames returns a set of "category/name" keys for installed modules.
+func collectInstalledNames() map[string]bool {
+	paths, err := config.ResolvePaths("")
+	if err != nil || !paths.AnyExists() {
+		return nil
+	}
+
+	dirs := paths.ForScope(config.ScopeMerged)
+	loader := internalcue.NewLoader()
+	cfg, err := loader.Load(dirs)
+	if err != nil {
+		return nil
+	}
+
+	var localCfg cue.Value
+	if paths.LocalExists {
+		if v, loadErr := loader.LoadSingle(paths.Local); loadErr == nil {
+			localCfg = v
+		}
+	}
+
+	installedModules := collectInstalledModules(cfg.Value, paths, localCfg)
+	names := make(map[string]bool, len(installedModules))
+	for _, a := range installedModules {
+		names[a.Category+"/"+a.Name] = true
+	}
+	return names
 }
 
 // shortenHome replaces the home directory prefix with ~.

@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: [01-drop-redundant-search.md](./01-drop-redundant-search.md)
+Active Project: [02-scope-flag-cleanup.md](./02-scope-flag-cleanup.md)
 
 When a project is complete, update this file to point to the next active project
 
@@ -42,7 +42,7 @@ start describe <name>           # Inspect a module; auto-installs from registry 
 start get <name>                # Output module content to stdout (pipe-clean)
 start modules install <pkg>     # Install a module from the library
 start config list               # List configuration entries
-start search <term>             # Search installed modules
+start search <term>             # Search installed config and the module registry
 start doctor                    # Diagnose installation and configuration
 start prompt                    # Compose and preview a prompt
 echo "summarise" | start        # Pipe text as a one-shot prompt (required contexts only)

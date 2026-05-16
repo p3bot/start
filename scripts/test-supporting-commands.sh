@@ -151,21 +151,6 @@ echo "1. Modules Commands"
 echo "========================================"
 echo
 
-run_test_show "1.1 modules search" \
-    "./start modules search role"
-
-run_test_show "1.1b modules search (golang)" \
-    "./start modules search golang"
-
-run_test_show "1.2 modules search --verbose" \
-    "./start modules search role --verbose"
-
-run_test_expect_fail "1.3 modules search (Minimum 3 chars)" \
-    "./start modules search ab"
-
-run_test_show "1.4 modules search (No Results)" \
-    "./start modules search xyznonexistent123"
-
 skip_test "1.5 modules install" \
     "Interactive - requires TTY for selection"
 

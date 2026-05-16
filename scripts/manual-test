@@ -124,9 +124,6 @@ cmd "help" "config edit --help" \
 cmd "help" "config remove --help" \
     "./start config remove --help"
 
-cmd "help" "config search --help" \
-    "./start config search --help"
-
 cmd "help" "config open --help" \
     "./start config open --help"
 
@@ -150,9 +147,6 @@ cmd "help" "modules browse --help" \
 
 cmd "help" "modules index --help" \
     "./start modules index --help"
-
-cmd "help" "modules search --help" \
-    "./start modules search --help"
 
 cmd "help" "modules install --help" \
     "./start modules install --help"
@@ -373,16 +367,6 @@ cmd "config info" "info nonexistent (expect error)" \
     "./start config info nonexistent-xyz-123"
 
 # --------------------------------------------------------------------------
-section "10. Config Search"
-# --------------------------------------------------------------------------
-
-cmd "config search" "search claude" \
-    "./start config search claude"
-
-cmd "config search" "search golang" \
-    "./start config search golang"
-
-# --------------------------------------------------------------------------
 section "11. Config Add (interactive)"
 # --------------------------------------------------------------------------
 
@@ -567,27 +551,6 @@ cmd "modules" "modules (no args - lists installed)" \
 
 cmd "modules" "modules browse (opens browser)" \
     "./start modules browse"
-
-cmd "modules" "modules search role" \
-    "./start modules search role"
-
-cmd "modules" "modules search golang" \
-    "./start modules search golang"
-
-cmd "modules" "modules search --verbose" \
-    "./start modules search role --verbose"
-
-cmd "modules" "modules search --json" \
-    "./start modules search role --json"
-
-cmd "modules" "modules search --tag filter" \
-    "./start modules search --tag golang"
-
-cmd "modules" "modules search too short (expect error)" \
-    "./start modules search ab"
-
-cmd "modules" "modules search no results" \
-    "./start modules search xyznonexistent123"
 
 cmd "modules" "modules list" \
     "./start modules list"

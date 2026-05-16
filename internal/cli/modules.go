@@ -22,10 +22,9 @@ const (
 // any error is logged at debug level only.
 //
 // Centralises the registry-client + fetch + cache-write trio shared by
-// modules_install, modules_search, and modules_update. Each
-// command's post-fetch logic stays at its call site because the four
-// commands use the index differently and consolidating further would
-// obscure call-site UX.
+// modules_install and modules_update. Each command's post-fetch logic stays
+// at its call site because the commands use the index differently and
+// consolidating further would obscure call-site UX.
 //
 // modules_index uses Fetch + ResolveLatestVersion directly (it needs the
 // source dir, not a parsed index), and modules_list fetches conditionally
@@ -65,7 +64,6 @@ Use these commands to discover, install, and update modules from the library.`,
 	// Add subcommands
 	addModulesBrowseCommand(modulesCmd)
 	addModulesIndexCommand(modulesCmd)
-	addModulesSearchCommand(modulesCmd)
 	addModulesInstallCommand(modulesCmd)
 	addModulesListCommand(modulesCmd)
 	addModulesUpdateCommand(modulesCmd)

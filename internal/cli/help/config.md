@@ -17,7 +17,6 @@ start config list agent
 start config list role
 start config list context
 start config list task
-start config search golang
 start config export agent
 start config settings
 start config settings default_agent claude

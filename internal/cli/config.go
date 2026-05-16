@@ -31,7 +31,6 @@ Use --local to target project-specific configuration.`,
 	addConfigRemoveCommand(configCmd)
 	addConfigOpenCommand(configCmd)
 	addConfigOrderCommand(configCmd)
-	addConfigSearchCommand(configCmd)
 	addConfigSettingsCommand(configCmd)
 	addConfigExportCommand(configCmd)
 
