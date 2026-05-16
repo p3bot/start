@@ -2,6 +2,7 @@
 
 # Environment setup
 # -----------------------------------------------------------------------------
+set -o nounset
 set -o pipefail
 [[ ${DEBUG-} ]] && set -o xtrace
 SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)"
@@ -9,9 +10,10 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." || exit 1; pwd)"
 
 function print_usage() {
   cat <<EOF
-Usage: $(basename "$0") [options]
+Usage: $(basename "$0") [options] [-- go-test-args...]
 
-Run tests for the start project.
+Run tests for the start project. Anything after '--' is forwarded
+to 'go test' verbatim (e.g. -run TestFoo -count=1).
 
 Options:
   -i, --integration    Include integration tests
@@ -24,12 +26,18 @@ Options:
   -h, --help           Show this help message and exit
 
 Examples:
-  $(basename "$0")           Run unit tests only
-  $(basename "$0") -i        Run unit + integration tests
-  $(basename "$0") -a -c     Run all tests with coverage
-  $(basename "$0") -r        Run unit tests with race detection
-  $(basename "$0") -v -s     Verbose output, skip long tests
+  $(basename "$0")                       Run unit tests only
+  $(basename "$0") -i                    Run unit + integration tests
+  $(basename "$0") -a -c                 Run all tests with coverage
+  $(basename "$0") -r                    Run unit tests with race detection
+  $(basename "$0") -v -s                 Verbose output, skip long tests
+  $(basename "$0") -- -run TestFoo       Run a single test by name
 EOF
+}
+
+function die() {
+  echo "ERROR: $*" >&2
+  exit 1
 }
 
 function ctrlc_trap() {
@@ -47,6 +55,7 @@ race=false
 coverage=false
 verbose=false
 short=false
+declare -a passthrough=()
 
 while [[ $# -gt 0 ]]; do
   case "${1}" in
@@ -84,9 +93,14 @@ while [[ $# -gt 0 ]]; do
       print_usage
       exit 0
       ;;
+    --)
+      shift
+      passthrough=("$@")
+      break
+      ;;
     *)
-      echo "ERROR: Unknown option: ${1}"
-      print_usage
+      echo "ERROR: Unknown option: ${1}" >&2
+      print_usage >&2
       exit 1
       ;;
   esac
@@ -95,8 +109,7 @@ done
 # Dependency Checks
 # -----------------------------------------------------------------------------
 if ! command -v go >/dev/null; then
-  echo "ERROR: Missing dependency - 'go'"
-  exit 1
+  die "Missing dependency - 'go'"
 fi
 
 # Build Binary for E2E Tests
@@ -105,8 +118,7 @@ if [[ "${include_e2e}" == true ]]; then
   echo "Building binary for e2e tests..."
   mkdir -p "${PROJECT_DIR}/bin"
   if ! go build -o "${PROJECT_DIR}/bin/start" "${PROJECT_DIR}/cmd/start/"; then
-    echo "ERROR: Failed to build binary"
-    exit 1
+    die "Failed to build binary"
   fi
   echo "Binary built: ${PROJECT_DIR}/bin/start"
   echo
@@ -148,8 +160,13 @@ if [[ "${short}" == true ]]; then
   test_args+=("-short")
 fi
 
-# Always add the package path
+# Default package selector, then pass-through args from after '--'.
+# Pass-through is for forwarding test flags (e.g. -run TestFoo,
+# -count=1, -timeout=30s). It cannot narrow the package set — go
+# test treats './... ./subpkg/...' as the union, so the default
+# './...' wins. Drop to raw `go test ./subpkg/...` for that.
 test_args+=("./...")
+test_args+=("${passthrough[@]}")
 
 # Run Tests
 # -----------------------------------------------------------------------------
@@ -159,20 +176,23 @@ echo
 
 cd "${PROJECT_DIR}" || exit 1
 
-if go test "${test_args[@]}"; then
-  echo
-  echo "Tests passed."
-else
-  echo
-  echo "Tests failed."
-  exit 1
-fi
+go test "${test_args[@]}"
+test_status=$?
 
 # Coverage Report
 # -----------------------------------------------------------------------------
+# Generated even when tests fail — a failing run is exactly when the
+# coverage report has diagnostic value.
 if [[ "${coverage}" == true && -f "${PROJECT_DIR}/coverage.out" ]]; then
   echo
   echo "Generating coverage report..."
   go tool cover -html="${PROJECT_DIR}/coverage.out" -o "${PROJECT_DIR}/coverage.html"
   echo "Coverage report: ${PROJECT_DIR}/coverage.html"
 fi
+
+echo
+if [[ ${test_status} -ne 0 ]]; then
+  echo "Tests failed." >&2
+  exit "${test_status}"
+fi
+echo "Tests passed."

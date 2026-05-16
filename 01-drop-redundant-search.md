@@ -55,7 +55,7 @@ Three search commands exist today:
 Helpers in `modules_search.go` that are used outside the file and must survive deletion:
 
 - `collectInstalledNames` — called from `search.go` line 215 and `modules_index.go` line 114
-- `collectInstalledScopes` — called from `collectInstalledNames` and from `modules_info.go` line 128 (the `modules_info.go` caller is removed by project 04)
+- `collectInstalledScopes` — called from `collectInstalledNames`
 
 Helpers in `modules_search.go` that are used only inside the file and are deleted with it:
 
