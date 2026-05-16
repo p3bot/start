@@ -45,6 +45,9 @@ start config list               # List configuration entries
 start search <term>             # Search installed modules
 start doctor                    # Diagnose installation and configuration
 start prompt                    # Compose and preview a prompt
+echo "summarise" | start        # Pipe text as a one-shot prompt (required contexts only)
+echo "..." | start prompt       # Pipe text to fill prompt's [text] arg
+echo "..." | start task review  # Pipe text to fill task's [instructions] arg
 ```
 
 ### Persistent Flags

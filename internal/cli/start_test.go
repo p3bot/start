@@ -2378,3 +2378,230 @@ func TestEnsureIndex_FreshCacheNotRewritten(t *testing.T) {
 		t.Errorf("fresh cache was rewritten (timestamp changed):\n%s", content)
 	}
 }
+
+// TestRunStart_PipedStdin verifies that piped stdin is consumed as the prompt
+// text and that only required contexts are included (matching `start prompt`).
+func TestRunStart_PipedStdin(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("hi\n"))
+	cmd.SetArgs([]string{"--dry-run"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	output := stdout.String()
+
+	// Dry-run prints a Prompt preview when customText is supplied. The piped
+	// text should appear there.
+	if !strings.Contains(output, "hi") {
+		t.Errorf("piped prompt text not found in output:\n%s", output)
+	}
+
+	// Required context "env" should be loaded (✓).
+	envLoaded := false
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.Contains(line, "env") && strings.Contains(line, "✓") {
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		t.Errorf("required context 'env' should be loaded, got:\n%s", output)
+	}
+
+	// Default context "project" should be shown as skipped (○), matching
+	// `start prompt` behaviour.
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.Contains(line, "project") {
+			if !strings.Contains(line, "○") {
+				t.Errorf("default context 'project' should be skipped, got line: %s", line)
+			}
+			if strings.Contains(line, "✓") {
+				t.Errorf("default context 'project' should not be loaded, got line: %s", line)
+			}
+		}
+	}
+}
+
+// TestRunStart_PipedStdinHonoursFlags verifies that persistent flags
+// (--context, --no-role) are still honoured when stdin is piped.
+func TestRunStart_PipedStdinHonoursFlags(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("review this"))
+	cmd.SetArgs([]string{"--dry-run", "--no-role", "--context", "project"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	output := stdout.String()
+
+	if !strings.Contains(output, "review this") {
+		t.Errorf("piped text missing from output:\n%s", output)
+	}
+
+	// --no-role should suppress role content.
+	if strings.Contains(output, "You are a helpful assistant") {
+		t.Errorf("--no-role should suppress role content, got:\n%s", output)
+	}
+
+	// --context project should load the default context even though piped
+	// stdin uses IncludeDefaults: false.
+	projectLoaded := false
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.Contains(line, "project") && strings.Contains(line, "✓") {
+			projectLoaded = true
+			break
+		}
+	}
+	if !projectLoaded {
+		t.Errorf("--context project should load the context, got:\n%s", output)
+	}
+}
+
+// TestRunStart_EmptyPipedStdin verifies that empty piped stdin falls back to
+// the normal start flow (defaults included).
+func TestRunStart_EmptyPipedStdin(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("   \n"))
+	cmd.SetArgs([]string{"--dry-run"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	output := stdout.String()
+
+	// Default context "project" should be loaded in the normal flow.
+	projectLoaded := false
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.Contains(line, "project") && strings.Contains(line, "✓") {
+			projectLoaded = true
+			break
+		}
+	}
+	if !projectLoaded {
+		t.Errorf("empty piped stdin should fall back to normal start with defaults, got:\n%s", output)
+	}
+}
+
+// TestRunTask_PipedStdinBecomesInstructions verifies that piped stdin is used
+// as the task's {{.instructions}} when no second positional arg is given.
+func TestRunTask_PipedStdinBecomesInstructions(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("piped-task-instructions"))
+	cmd.SetArgs([]string{"task", "test-task", "--dry-run"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	output := stdout.String()
+
+	// The test-task template renders "Instructions: {{.instructions}}".
+	// Piped content should land there.
+	if !strings.Contains(output, "piped-task-instructions") {
+		t.Errorf("piped stdin should appear as task instructions, got:\n%s", output)
+	}
+}
+
+// TestRunTask_ArgWinsOverPipedStdin verifies that a positional instructions
+// arg short-circuits piped stdin.
+func TestRunTask_ArgWinsOverPipedStdin(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("PIPED_SHOULD_NOT_APPEAR"))
+	cmd.SetArgs([]string{"task", "test-task", "arg-instructions-win", "--dry-run"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	output := stdout.String()
+
+	if !strings.Contains(output, "arg-instructions-win") {
+		t.Errorf("positional instructions arg should appear in output, got:\n%s", output)
+	}
+	if strings.Contains(output, "PIPED_SHOULD_NOT_APPEAR") {
+		t.Errorf("piped stdin should be ignored when an instructions arg is given, got:\n%s", output)
+	}
+}
+
+// TestRunTask_PipedStdinHonoursFlags verifies that persistent flags
+// (--no-role, --context) are still honoured when stdin is piped to
+// `start task`. Parallel to TestRunStart_PipedStdinHonoursFlags.
+func TestRunTask_PipedStdinHonoursFlags(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("piped instructions"))
+	cmd.SetArgs([]string{"task", "test-task", "--dry-run", "--no-role", "--context", "project"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	output := stdout.String()
+
+	if !strings.Contains(output, "piped instructions") {
+		t.Errorf("piped instructions missing from output:\n%s", output)
+	}
+
+	// --no-role should suppress role content (task has role: "assistant" configured).
+	if strings.Contains(output, "You are a helpful assistant") {
+		t.Errorf("--no-role should suppress role content, got:\n%s", output)
+	}
+
+	// --context project should load the default context even though tasks
+	// use IncludeDefaults: false by default.
+	projectLoaded := false
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.Contains(line, "project") && strings.Contains(line, "✓") {
+			projectLoaded = true
+			break
+		}
+	}
+	if !projectLoaded {
+		t.Errorf("--context project should load the context, got:\n%s", output)
+	}
+}

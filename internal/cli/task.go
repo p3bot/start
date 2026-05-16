@@ -52,7 +52,9 @@ With a name, searches for and runs the matching task.
 The name can be a config task name, a "tasks:name" fully-qualified address
 (the prefix must be "tasks"), or a file path (starting with ./, /, or ~).
 Tasks are reusable workflows defined in configuration.
-Instructions are passed to the task template via the {{.instructions}} placeholder.`,
+Instructions are passed to the task template via the {{.instructions}} placeholder.
+If no instructions arg is given and stdin is piped, the piped content is used
+as the instructions.`,
 		Args: cobra.RangeArgs(0, 2),
 		RunE: runTask,
 	}
@@ -78,6 +80,17 @@ func runTask(cmd *cobra.Command, args []string) error {
 	instructions := ""
 	if len(args) > 1 {
 		instructions = args[1]
+	} else {
+		// Accept piped stdin as the instructions, mirroring `start prompt`.
+		// Positional arg wins; empty pipes are accepted (task templates may
+		// not require {{.instructions}}).
+		pipedText, piped, err := readPipedStdin(cmd.InOrStdin())
+		if err != nil {
+			return err
+		}
+		if piped {
+			instructions = pipedText
+		}
 	}
 
 	tagFlags, _ := cmd.Flags().GetStringSlice("tag")

@@ -49,11 +49,19 @@ func NewRootCmd() *cobra.Command {
 		Long: `start is a command-line orchestrator for AI agents built on CUE.
 It manages prompt composition, context injection, and workflow automation.
 
+When stdin is piped, its content is used as the prompt text — equivalent
+to passing it inline. For bare 'start', only required contexts are
+included; for 'start prompt' it fills the missing [text] arg; for
+'start task <name>' it fills the missing [instructions] arg. Persistent
+flags (--agent, --role, --context, ...) are honoured as normal.
+
 Examples:
-  start                           Launch agent with default role and contexts
-  start --role go-expert          Launch with a specific role
-  start task review/pre-commit    Run a predefined task
-  start doctor                    Check installation and configuration`,
+  start                              Launch agent with default role and contexts
+  start --role go-expert             Launch with a specific role
+  echo "summarise this" | start      Send piped text as a one-shot prompt
+  echo "..." | start task review     Pipe instructions to a task
+  start task review/pre-commit       Run a predefined task
+  start doctor                       Check installation and configuration`,
 		Version: cliVersion,
 		// SilenceUsage prevents usage from being printed on RunE errors.
 		// Usage is still shown for flag/argument parsing errors.
@@ -162,4 +170,25 @@ func isTerminal(r io.Reader) bool {
 		return false
 	}
 	return term.IsTerminal(int(f.Fd()))
+}
+
+// readPipedStdin returns the full contents of stdin when it is piped
+// (not a TTY). Content is returned raw to preserve leading whitespace
+// and trailing newlines, matching file-sourced prompts via
+// orchestration.ReadFilePath. When stdin is a TTY, returns
+// ("", false, nil) so callers can fall back to their interactive path.
+//
+// Callers decide their own empty-stdin policy. runStart treats a blank
+// pipe as "no prompt given" and falls back to the normal start flow
+// (preserving back-compat for `start </dev/null`); runPrompt and
+// runTask accept an empty pipe as a valid no-text invocation.
+func readPipedStdin(stdin io.Reader) (text string, piped bool, err error) {
+	if isTerminal(stdin) {
+		return "", false, nil
+	}
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return "", true, fmt.Errorf("reading stdin: %w", err)
+	}
+	return string(data), true, nil
 }

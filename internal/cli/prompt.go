@@ -16,7 +16,8 @@ func addPromptCommand(parent *cobra.Command) {
 		Long: `Launch AI agent with a custom prompt and only required contexts.
 
 The argument can be inline text or a file path (starting with ./, /, or ~).
-Default contexts are excluded to keep the prompt focused.
+If no argument is given and stdin is piped, the piped content is used as the
+prompt text. Default contexts are excluded to keep the prompt focused.
 Use -c default to include contexts configured with default: true.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runPrompt,
@@ -40,15 +41,24 @@ func runPrompt(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		stdin := cmd.InOrStdin()
-		if isTerminal(stdin) {
-			text, err := promptText(cmd.OutOrStdout(), stdin, "Prompt text", "")
+		pipedText, piped, err := readPipedStdin(stdin)
+		if err != nil {
+			return err
+		}
+		if piped {
+			// `start prompt` accepts empty piped stdin: execution proceeds
+			// with role + required contexts only, mirroring `start prompt`
+			// invoked with no argument and no pipe.
+			customText = pipedText
+		} else {
+			interactive, err := promptText(cmd.OutOrStdout(), stdin, "Prompt text", "")
 			if err != nil {
 				return err
 			}
-			if text == "" {
+			if interactive == "" {
 				return nil
 			}
-			customText = text
+			customText = interactive
 		}
 	}
 

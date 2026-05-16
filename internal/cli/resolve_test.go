@@ -529,6 +529,54 @@ func TestResolveModelName_Empty(t *testing.T) {
 	}
 }
 
+// TestResolveModelName_ObjectFormAgent chains the runtime agent-loading
+// path (orchestration.ExtractAgent, which uses the both-forms walk in
+// extractAgentFields) with resolveModelName to prove that --model resolution
+// works against an object-form agent loaded from CUE.
+//
+// The Models[...] assertions are intentional and overlap with
+// orchestration.TestExtractAgent. They split failure attribution: a break
+// in extractAgentFields fails the Models check (clear "ExtractAgent didn't
+// pull the id" signal); a break in resolveModelName fails only the final
+// assertions. Without the split, a regression in either layer would surface
+// as a confusing resolveModelName failure. Do not collapse.
+func TestResolveModelName_ObjectFormAgent(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		agents: {
+			objform: {
+				bin: "objform"
+				command: "{{.bin}} --model {{.model}}"
+				default_model: "sonnet"
+				models: {
+					sonnet: { id: "obj-sonnet-id" }
+					opus:   { id: "obj-opus-id" }
+				}
+			}
+		}
+	}`)
+
+	agent, err := orchestration.ExtractAgent(cfg.Value, "objform")
+	if err != nil {
+		t.Fatalf("ExtractAgent: %v", err)
+	}
+	if got := agent.Models["sonnet"]; got != "obj-sonnet-id" {
+		t.Errorf("Models[sonnet] = %q, want %q", got, "obj-sonnet-id")
+	}
+	if got := agent.Models["opus"]; got != "obj-opus-id" {
+		t.Errorf("Models[opus] = %q, want %q", got, "obj-opus-id")
+	}
+
+	r := newTestResolver(internalcue.LoadResult{})
+	if got := r.resolveModelName("sonnet", agent); got != "sonnet" {
+		t.Errorf("resolveModelName(\"sonnet\") = %q, want %q (exact)", got, "sonnet")
+	}
+	if got := r.resolveModelName("son", agent); got != "sonnet" {
+		t.Errorf("resolveModelName(\"son\") = %q, want %q (substring)", got, "sonnet")
+	}
+}
+
 func TestResolveContexts_ExactName(t *testing.T) {
 	t.Parallel()
 

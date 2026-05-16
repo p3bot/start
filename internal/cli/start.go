@@ -292,9 +292,32 @@ func promptSetDefault(w io.Writer, reader *bufio.Reader, agentName string) bool 
 }
 
 // runStart executes the start command (root command with no subcommand).
+//
+// When stdin is piped (not a TTY) and non-blank, the piped content becomes
+// the prompt text and only required contexts are included — making
+// `echo hi | start` behave like `start prompt "hi"`. Blank or empty piped
+// stdin falls through to the normal start flow (preserving back-compat for
+// invocations like `start </dev/null`).
 func runStart(cmd *cobra.Command, args []string) error {
 	flags := getFlags(cmd)
-	return executeStart(cmd.OutOrStdout(), cmd.ErrOrStderr(), cmd.InOrStdin(), flags, orchestration.ContextSelection{
+	stdin := cmd.InOrStdin()
+
+	pipedText, piped, err := readPipedStdin(stdin)
+	if err != nil {
+		return err
+	}
+	// Non-blank piped content switches to prompt-mode (required contexts
+	// only). Blank or whitespace-only pipes fall through to the normal
+	// start flow so `start </dev/null` keeps its defaults.
+	if piped && strings.TrimSpace(pipedText) != "" {
+		return executeStart(cmd.OutOrStdout(), cmd.ErrOrStderr(), stdin, flags, orchestration.ContextSelection{
+			IncludeRequired: true,
+			IncludeDefaults: false,
+			Tags:            flags.Context,
+		}, pipedText)
+	}
+
+	return executeStart(cmd.OutOrStdout(), cmd.ErrOrStderr(), stdin, flags, orchestration.ContextSelection{
 		IncludeRequired: true,
 		IncludeDefaults: true,
 		Tags:            flags.Context,
