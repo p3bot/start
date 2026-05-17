@@ -39,28 +39,31 @@ The merge for `ScopeMerged` is implemented by `internalcue.Loader.mergeWithRepla
 ### Issue 1: --global flag asymmetry
 
 - `--local` is a root persistent flag (`internal/cli/root.go:95`). Every command in the CLI parses it.
-- `--global` is a describe-only persistent flag (`internal/cli/describe.go:133`). No other command parses it.
+- `--global` is registered on both `describe` (`internal/cli/describe.go:131`) and `get` (`internal/cli/get.go:57`). No other command parses it. Both commands resolve scope via the shared `describeScopeFromCmd` helper.
 - The `Flags` struct (`internal/cli/start.go:29`) has `Local bool` but no `Global` field.
 - `--global` is read ad-hoc inside `describeScopeFromCmd` via `cmd.Flags().Lookup("global")`.
 - Mutual exclusion (`--local` and `--global` both set is an error) is enforced only inside `describeScopeFromCmd`. No other command can express that check.
 
 Consequence: `start config info claude --global` returns "unknown flag: --global". `start describe claude --global` works. Users have no signal in `--help` output that `--global` is describe-specific.
 
-Recommended fix: promote `--global` to a root persistent flag. Add `Global bool` to `Flags`. Add a `Flags.Scope() (config.Scope, error)` helper that:
+Recommended fix: promote `--global` to a root persistent flag. Add `Global bool` to `Flags`. Add two scope helpers that share a mutual-exclusion check:
 
-- Returns `ScopeLocal` if `--local` only.
-- Returns `ScopeGlobal` if `--global` only.
-- Returns an error if both are set.
-- Returns `ScopeMerged` if neither is set.
+- `Flags.Scope() (config.Scope, error)` for read commands. Returns `ScopeLocal` for `--local`, `ScopeGlobal` for `--global`, `ScopeMerged` when neither is set, and an error when both are set.
+- `Flags.WriteScope() (config.Scope, error)` for write-target commands. Returns `ScopeLocal` for `--local`, `ScopeGlobal` when neither is set, and an error when `--global` is set (write-target commands already default to global; `--global` is redundant and surfaces as an explicit error rather than a silent no-op). The combined `--local --global` case is covered by the same error since `--global` alone is enough to reject.
 
-Every scope-aware command calls one helper. Mutual exclusion lives in one place.
+Read commands (`describe`, `get`, `config info`, `config list`, the root `config` listing) call `Scope()`. Write commands (`config edit`, `config remove`, `config add`, `config settings set`/`unset`/`edit`, `config order`, `config open`) call `WriteScope()`. Primary mutual-exclusion enforcement is via `cmd.MarkFlagsMutuallyExclusive("local", "global")` registered in `root.go` — cobra rejects the combination at parse time, mirroring how `role`/`no-role` is already handled. The shared internal helper inside the two `Scope` methods keeps the same check as redundant defence in depth.
 
 Files affected:
 
 - `internal/cli/root.go` — register `--global` as persistent.
-- `internal/cli/start.go` — add `Global bool` to `Flags`; add the `Scope()` helper.
-- `internal/cli/describe.go` — remove the describe-specific `--global` registration and the local `describeScopeFromCmd`; call the new helper.
-- `internal/cli/config_info.go`, `config_list.go`, `config_edit.go`, `config_remove.go`, `config.go`, `config_helpers.go` — opt into the helper where they currently read `flags.Local`.
+- `internal/cli/start.go` — add `Global bool` to `Flags`; add the `Scope()` and `WriteScope()` helpers plus their shared mutual-exclusion check.
+- `internal/cli/describe.go` — remove the describe-specific `--global` registration; remove the local `describeScopeFromCmd`; call `Scope()`.
+- `internal/cli/get.go` — remove the get-specific `--global` registration; switch the scope read from `describeScopeFromCmd` to `Scope()`.
+- `internal/cli/get_test.go` — update the assertion at `get_test.go:559` that checks `getCmd.Flag("global")` to account for the flag being inherited from root rather than locally registered.
+- `internal/cli/config_info.go`, `config_list.go`, `config.go` — call `Scope()` where they currently read `flags.Local`.
+- `internal/cli/config_edit.go`, `config_remove.go`, `config_add.go`, `config_order.go`, `config_open.go` — call `WriteScope()` where they currently read `flags.Local`.
+- `internal/cli/config_settings.go` — mixed file: `list` and `show` are read operations and call `Scope()`; `set`, `unset`, and `edit` are write operations and call `WriteScope()`. Convert each call site according to its semantic, not as a single sweep.
+- `internal/cli/config_helpers.go` — adjust any helpers that take a `local bool` to take a `config.Scope` (or keep the bool and have callers translate, depending on which is simpler at each site).
 
 ### Issue 2: --local semantic overload
 
@@ -108,16 +111,23 @@ Recommended fix:
 
 The project author does not use local configs in day-to-day practice. The merge / scope code is covered by tests but not by manual usage. Any regression introduced in this area surfaces only through CI or via downstream user reports.
 
-Recommended fix: add at least one integration test per scope-aware command (describe, config info, config list, config edit, config remove) that exercises both-scopes-present + name collision. The fixture for each should:
+Recommended fix: add at least one integration test per scope-aware command exercising both-scopes-present + name collision. The assertions differ for read vs write commands.
 
-- Declare module `foo` in global with one set of fields.
-- Declare module `foo` in local with a different set of fields.
-- Assert the no-flag run shows local's version (the `mergeWithReplacement` contract).
-- Assert `--local` shows local's version.
-- Assert `--global` shows global's version (after issue 1 lands; today only `describe` supports this).
-- Assert `--local --global` errors (after issue 1 lands).
+Read commands (`describe`, `get`, `config info`, `config list`). Fixture declares module `foo` in global with one set of fields and in local with a different set. Assertions:
 
-These tests are the safety net for any future refactor that touches the merge path.
+- No-flag run shows local's version (the `mergeWithReplacement` contract).
+- `--local` shows local's version.
+- `--global` shows global's version (after Issue 1 lands).
+- `--local --global` errors (cobra mutual-exclusion error after Issue 1 lands).
+
+Write commands (`config edit`, `config remove`). Fixture declares module `foo` in both global and local. Assertions:
+
+- No-flag invocation modifies the global file (the write-target default).
+- `--local` invocation modifies the local file.
+- `--global` returns an explicit error ("redundant on write commands"), no file is modified.
+- `--local --global` errors (cobra mutual-exclusion error).
+
+These tests are the safety net for any future refactor that touches the merge path or the scope-flag plumbing.
 
 ### Issue 6: Tie-in with config get
 
@@ -128,8 +138,10 @@ Recommended sequencing: land issues 1-4 before `config get` design starts, so th
 ## References
 
 - `internal/cue/loader.go:140` — `mergeWithReplacement` implementation.
-- `internal/cli/describe.go:133` — describe-only `--global` registration.
+- `internal/cli/describe.go:131` and `internal/cli/get.go:57` — current `--global` registrations (both per-command, both to be removed and replaced by a root persistent flag).
+- `internal/cli/describe.go:424` — `describeScopeFromCmd` (called by both `describe` and `get`; to be removed).
 - `internal/cli/root.go:95` — root persistent `--local` registration.
+- `internal/cli/root.go:105` — existing `cmd.MarkFlagsMutuallyExclusive("role", "no-role")` (template for the new `local`/`global` mark).
 - `internal/cli/start.go:29` — `Flags` struct (today has `Local`, lacks `Global`).
 
 ## Requirements
@@ -137,10 +149,14 @@ Recommended sequencing: land issues 1-4 before `config get` design starts, so th
 ### 1. --global is a root persistent flag
 
 - `cmd.PersistentFlags().BoolVar(&flags.Global, "global", false, "Restrict scope to global config")` registered alongside `--local` in `root.go`.
+- `cmd.MarkFlagsMutuallyExclusive("local", "global")` registered in `root.go` alongside the existing `role`/`no-role` mark. Cobra rejects conflicting flag combinations at parse time before any `RunE` runs.
 - `Flags.Global bool` field added.
-- `Flags.Scope() (config.Scope, error)` helper centralises the local/global/merged decision and the mutual-exclusion check.
-- `describeScopeFromCmd` is removed; describe calls `flags.Scope()`.
-- All other scope-aware commands call `flags.Scope()` where they currently read `flags.Local`.
+- `Flags.Scope() (config.Scope, error)` helper for read commands: returns `ScopeLocal` / `ScopeGlobal` / `ScopeMerged` based on the flags, errors on `--local --global`.
+- `Flags.WriteScope() (config.Scope, error)` helper for write-target commands: returns `ScopeLocal` for `--local`, `ScopeGlobal` as the default, errors when `--global` is set (rejected as redundant on write commands).
+- Both helpers share a single internal mutual-exclusion check as defence in depth in case any caller reads `flags.Local` / `flags.Global` directly.
+- `describeScopeFromCmd` is removed; `describe` and `get` call `flags.Scope()`.
+- Read commands (`describe`, `get`, `config info`, `config list`, root `config`) call `flags.Scope()`.
+- Write commands (`config edit`, `config remove`, `config add`, `config settings set`/`unset`/`edit`, `config order`, `config open`) call `flags.WriteScope()`.
 
 ### 2. --local semantic clarification
 
@@ -169,13 +185,37 @@ This project lands before `config get` design begins.
 
 The implementer sequences these as separate commits, in this order:
 
-1. `Flags.Scope()` helper and the `Global bool` field. No flag registered yet; just the typed plumbing and a unit test.
-2. Register `--global` as a root persistent flag. Remove the describe-only registration. Switch `describe` to call `flags.Scope()`.
-3. Switch the other scope-aware commands to `flags.Scope()`. One commit per command keeps reviews small.
-4. Per-command help-text pass.
-5. `ScopeMerged` rename or doc comment.
-6. README updates.
-7. Integration tests for scope paths.
+1. `Flags.Scope()` and `Flags.WriteScope()` helpers, the `Global bool` field, and the shared mutual-exclusion check. No flag registered yet; just the typed plumbing and unit tests for each helper covering all flag combinations.
+2. Register `--global` as a root persistent flag. Add `cmd.MarkFlagsMutuallyExclusive("local", "global")` in `NewRootCmd`. Remove the describe-specific and get-specific `--global` registrations. Switch `describe` and `get` to call `flags.Scope()`. Update `get_test.go:559` for the now-inherited flag.
+3. Switch the remaining read commands (`config info`, `config list`, root `config`) to `flags.Scope()`. One commit per command keeps reviews small.
+4. Switch the write commands (`config edit`, `config remove`, `config add`, `config settings set`/`unset`/`edit`, `config order`, `config open`) to `flags.WriteScope()`. One commit per command.
+5. Run-command scope-flag rejection: in `runStart`, reject `flags.Local` or `flags.Global` with a clear error ("scope flags have no effect on the run command — runtime always uses the merged scope"). Behaviour change, not help text.
+6. Per-command help-text pass: update each scope-aware command's `Long:` to describe what `--local` and `--global` mean for that command specifically; shorten the root persistent flag short-help to a generic phrase.
+7. `ScopeMerged` rename or doc comment.
+8. README updates.
+9. Integration tests for scope paths (read and write assertions per Issue 5).
+
+## Issues Discovered
+
+1. Current State misstates where `--global` is registered (gap) — Resolved: amended Current State and Files affected.
+
+   The project said `--global` was "a describe-only persistent flag" at `internal/cli/describe.go:133`, but the codebase also registers it on `get` at `internal/cli/get.go:57`, and `get` already calls `describeScopeFromCmd`. The "Files affected" list under Issue 1 was therefore incomplete, and Implementation Plan step 2 ("Remove the describe-only registration") needed to remove both registrations, not one.
+   Resolution: Current State now lists both registration sites. Issue 1's Files affected list now includes `internal/cli/get.go` (with the same registration-removal and helper-switch treatment) and `internal/cli/get_test.go` (test assertion at line 559 needs updating once `--global` moves to root).
+
+2. `Flags.Scope()` conflates read-filter and write-target semantics (design) — Resolved: option A (two helpers).
+
+   The original proposed helper returned `ScopeMerged` when neither flag is set. That is the right default for read-style commands (`describe`, `config info`, `config list`, `get`) where the user wants the effective view. It was the wrong default for write-target commands (`config edit`, `config remove`, `config settings set`/`unset`, `config order`, `config open`) where `--local` toggles between two real targets and the default has always been global — there is no "merged" file to write to.
+   Resolution: split into two helpers — `Flags.Scope()` for read paths (default `ScopeMerged`) and `Flags.WriteScope()` for write paths (default `ScopeGlobal`). They share a single internal mutual-exclusion check so the rule lives in one place. `WriteScope()` rejects `--global` explicitly (no silent no-op) since it adds nothing to the existing default. Issue 1 (Scope), Requirements §1, and the Implementation Plan have been updated to reflect the read/write split.
+
+3. `config_settings.go` missing from affected-files list (gap) — Resolved: added to Files affected with read/write split note.
+
+   Issue 1's original "Files affected" list enumerated `config_info.go`, `config_list.go`, `config_edit.go`, `config_remove.go`, `config.go`, `config_helpers.go`, but `config_settings.go` also reads `flags.Local` across `listSettings`, `showSetting`, `setSetting`, `unsetSetting`, `editSettings`, `loadSettingsForScope`.
+   Resolution: `config_settings.go` is now listed as a separate entry in Issue 1's Files affected list, called out as a mixed file — `list`/`show` adopt `Scope()` (read), `set`/`unset`/`edit` adopt `WriteScope()` (write). Per-call-site conversion required, not a single sweep.
+
+4. Mutual exclusion via cobra not considered (design) — Resolved: add cobra mark; keep helper check as defence in depth.
+
+   The project originally planned to enforce `--local` + `--global` exclusion only inside `Flags.Scope()`. Cobra already exposes `cmd.MarkFlagsMutuallyExclusive("local", "global")` and the codebase uses the same mechanism for `--role`/`--no-role` at `internal/cli/root.go:105`. Marking the pair mutually exclusive on the root command lets cobra reject conflicting invocations before any `RunE` runs and yields a consistent error message across every command.
+   Resolution: add `cmd.MarkFlagsMutuallyExclusive("local", "global")` in `NewRootCmd` alongside the existing role/no-role mark as the primary enforcement; keep the same check inside the shared helper used by `Scope()` / `WriteScope()` as a redundant guard for any direct flag reads. Requirements §1 and Issue 1's "Recommended fix" updated.
 
 ## Constraints
 
@@ -189,7 +229,8 @@ The implementer sequences these as separate commits, in this order:
 - `start config info claude --global` is accepted by cobra and shows global-only output (or "not found" if only declared locally).
 - `start config info claude --local --global` returns a mutual-exclusion error.
 - `start --local` either errors clearly or the flag is not advertised on the run command.
-- `Flags.Scope()` is the single source of truth for scope decisions; `cmd.Flags().Lookup("global")` does not appear in the codebase.
+- `Flags.Scope()` and `Flags.WriteScope()` are the only consumers of `flags.Local` / `flags.Global`; `cmd.Flags().Lookup("global")` and `describeScopeFromCmd` do not appear in the codebase.
+- `start config edit --global` (and other write-target commands) returns a clear error rather than silently no-opping.
 - Integration tests for both-scopes-present + name collision pass for describe, config info, config list, config edit, config remove.
 - `ScopeMerged` either has a new name or has a doc comment that documents the actual semantics.
 - Root command help mentions the default merge behaviour.

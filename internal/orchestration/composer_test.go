@@ -807,6 +807,217 @@ func TestSelectDefaultRole(t *testing.T) {
 			t.Errorf("second status = %q, want 'loaded'", resolutions[1].Status)
 		}
 	})
+
+}
+
+// TestSelectDefaultRole_ModulePath is separate from TestSelectDefaultRole
+// because it needs t.Setenv, which is incompatible with t.Parallel.
+func TestSelectDefaultRole_ModulePath(t *testing.T) {
+	// Regression: selectDefaultRole previously passed "@module/role.md"
+	// straight to os.Stat, so an installed module role was reported as
+	// "file not found" before resolveRole ever ran.
+	cacheDir := t.TempDir()
+	t.Setenv("CUE_CACHE_DIR", cacheDir)
+
+	moduleDir := filepath.Join(cacheDir, "mod", "extract",
+		"github.com", "test", "roles", "library", "assistant@v1.0.0")
+	if err := os.MkdirAll(moduleDir, 0755); err != nil {
+		t.Fatalf("mkdir module cache: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "role.md"),
+		[]byte("Module role"), 0644); err != nil {
+		t.Fatalf("write role.md: %v", err)
+	}
+
+	ctx := cuecontext.New()
+	composer := NewComposer(NewTemplateProcessor(nil, nil, ""), "")
+
+	t.Run("resolves via origin when cached", func(t *testing.T) {
+		cfg := ctx.CompileString(`
+			roles: {
+				"library/assistant": {
+					origin: "github.com/test/roles/library/assistant@v1.0.0"
+					file: "@module/role.md"
+				}
+			}
+		`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+
+		roleName, resolutions, err := composer.selectDefaultRole(cfg)
+		if err != nil {
+			t.Fatalf("selectDefaultRole() error = %v", err)
+		}
+		if roleName != "library/assistant" {
+			t.Errorf("roleName = %q, want 'library/assistant'", roleName)
+		}
+		if len(resolutions) != 1 || resolutions[0].Status != "loaded" {
+			t.Fatalf("resolutions = %+v, want one loaded entry", resolutions)
+		}
+	})
+
+	t.Run("surfaces resolver error when module not cached", func(t *testing.T) {
+		// Optional so the iteration records it as skipped rather than aborting,
+		// letting us assert on the captured checkErr.
+		cfg := ctx.CompileString(`
+			roles: {
+				"missing/mod": {
+					origin: "github.com/test/roles/missing/mod@v9.9.9"
+					file: "@module/role.md"
+					optional: true
+				}
+				"fallback": {
+					prompt: "Fallback"
+				}
+			}
+		`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+
+		roleName, resolutions, err := composer.selectDefaultRole(cfg)
+		if err != nil {
+			t.Fatalf("selectDefaultRole() error = %v", err)
+		}
+		if roleName != "fallback" {
+			t.Errorf("roleName = %q, want 'fallback'", roleName)
+		}
+		if len(resolutions) < 1 || resolutions[0].Status != "skipped" {
+			t.Fatalf("resolutions[0] = %+v, want skipped entry", resolutions)
+		}
+		if !strings.Contains(resolutions[0].Error, "resolving module path") {
+			t.Errorf("error = %q, want it to mention 'resolving module path'", resolutions[0].Error)
+		}
+	})
+
+	t.Run("missing origin reported as actionable error", func(t *testing.T) {
+		cfg := ctx.CompileString(`
+			roles: {
+				"no-origin": {
+					file: "@module/role.md"
+					optional: true
+				}
+				"fallback": {
+					prompt: "Fallback"
+				}
+			}
+		`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+
+		roleName, resolutions, err := composer.selectDefaultRole(cfg)
+		if err != nil {
+			t.Fatalf("selectDefaultRole() error = %v", err)
+		}
+		if roleName != "fallback" {
+			t.Errorf("roleName = %q, want 'fallback'", roleName)
+		}
+		if len(resolutions) < 1 || resolutions[0].Status != "skipped" {
+			t.Fatalf("resolutions[0] = %+v, want skipped entry", resolutions)
+		}
+		if !strings.Contains(resolutions[0].Error, "missing origin") {
+			t.Errorf("error = %q, want it to mention 'missing origin'", resolutions[0].Error)
+		}
+	})
+}
+
+// TestRoleFileAvailable covers the helper extracted from selectDefaultRole.
+// Uses t.Setenv for the @module/ branches, so the function does not call
+// t.Parallel even though some sub-tests would otherwise be parallel-safe.
+func TestRoleFileAvailable(t *testing.T) {
+	cacheDir := t.TempDir()
+	t.Setenv("CUE_CACHE_DIR", cacheDir)
+
+	moduleDir := filepath.Join(cacheDir, "mod", "extract",
+		"github.com", "test", "roles", "library", "assistant@v1.0.0")
+	if err := os.MkdirAll(moduleDir, 0755); err != nil {
+		t.Fatalf("mkdir module cache: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "role.md"),
+		[]byte("Module role"), 0644); err != nil {
+		t.Fatalf("write role.md: %v", err)
+	}
+
+	existingFile := filepath.Join(t.TempDir(), "role.md")
+	if err := os.WriteFile(existingFile, []byte("Local role"), 0644); err != nil {
+		t.Fatalf("write local role: %v", err)
+	}
+
+	ctx := cuecontext.New()
+
+	roleVal := func(t *testing.T, config string) cue.Value {
+		t.Helper()
+		v := ctx.CompileString(config)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		return v.LookupPath(cue.ParsePath("roles")).LookupPath(cue.MakePath(cue.Str("r")))
+	}
+
+	tests := []struct {
+		name      string
+		filePath  string
+		roleCfg   string
+		wantOK    bool
+		wantErrIn string
+	}{
+		{
+			name:     "non-module path that exists",
+			filePath: existingFile,
+			roleCfg:  `roles: r: {}`,
+			wantOK:   true,
+		},
+		{
+			name:      "non-module path that is missing",
+			filePath:  filepath.Join(t.TempDir(), "nope.md"),
+			roleCfg:   `roles: r: {}`,
+			wantOK:    false,
+			wantErrIn: "file not found",
+		},
+		{
+			name:     "@module path resolves when cached",
+			filePath: "@module/role.md",
+			roleCfg: `roles: r: {
+				origin: "github.com/test/roles/library/assistant@v1.0.0"
+			}`,
+			wantOK: true,
+		},
+		{
+			name:     "@module path with empty origin",
+			filePath: "@module/role.md",
+			roleCfg:  `roles: r: {}`,
+			wantOK:   false,
+			// Test asserts the literal message so a future caller-facing
+			// rewording is a deliberate change, not silent drift.
+			wantErrIn: "missing origin for @module/ path",
+		},
+		{
+			name:     "@module path with origin but no cache entry",
+			filePath: "@module/role.md",
+			roleCfg: `roles: r: {
+				origin: "github.com/test/roles/missing/mod@v9.9.9"
+			}`,
+			wantOK:    false,
+			wantErrIn: "resolving module path",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ok, msg := roleFileAvailable(tc.filePath, roleVal(t, tc.roleCfg))
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v (msg %q)", ok, tc.wantOK, msg)
+			}
+			if tc.wantOK && msg != "" {
+				t.Errorf("msg = %q, want empty when ok=true", msg)
+			}
+			if !tc.wantOK && !strings.Contains(msg, tc.wantErrIn) {
+				t.Errorf("msg = %q, want substring %q", msg, tc.wantErrIn)
+			}
+		})
+	}
 }
 
 func TestComposeWithRole_OptionalBehavior(t *testing.T) {

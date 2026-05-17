@@ -437,13 +437,14 @@ func (c *Composer) resolveContext(cfg cue.Value, name string) (ProcessResult, er
 	// Resolve @module/ paths using origin field
 	if strings.HasPrefix(fields.File, "@module/") {
 		origin := ExtractOrigin(ctxVal)
-		if origin != "" {
-			resolved, err := ResolveModulePath(fields.File, origin)
-			if err != nil {
-				return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
-			}
-			fields.File = resolved
+		if origin == "" {
+			return ProcessResult{}, fmt.Errorf("missing origin for @module/ path %s\nRun 'start modules install' to reinstall", fields.File)
 		}
+		resolved, err := ResolveModulePath(fields.File, origin)
+		if err != nil {
+			return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
+		}
+		fields.File = resolved
 	}
 
 	// Write file to temp for agent access (only for external files).
@@ -497,13 +498,14 @@ func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath st
 	// Resolve @module/ paths using origin field
 	if strings.HasPrefix(fields.File, "@module/") {
 		origin := ExtractOrigin(roleVal)
-		if origin != "" {
-			resolved, err := ResolveModulePath(fields.File, origin)
-			if err != nil {
-				return "", "", fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
-			}
-			fields.File = resolved
+		if origin == "" {
+			return "", "", fmt.Errorf("missing origin for @module/ path %s\nRun 'start modules install' to reinstall", fields.File)
 		}
+		resolved, err := ResolveModulePath(fields.File, origin)
+		if err != nil {
+			return "", "", fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
+		}
+		fields.File = resolved
 	}
 
 	// Track the file path for {{.role_file}} placeholder.
@@ -591,14 +593,9 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 		var checkErr string
 
 		if filePath != "" {
-			// File-based role - check if file exists
-			expandedPath, err := ExpandFilePath(filePath)
-			if err != nil {
+			if ok, msg := roleFileAvailable(filePath, roleVal); !ok {
 				available = false
-				checkErr = fmt.Sprintf("expanding path: %v", err)
-			} else if _, err := os.Stat(expandedPath); err != nil {
-				available = false
-				checkErr = "file not found"
+				checkErr = msg
 			}
 		}
 		// Non-file roles (command/prompt only) are always available at selection time
@@ -636,6 +633,32 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 	}
 
 	return "", nil, nil
+}
+
+// roleFileAvailable reports whether a role's file path is resolvable and present.
+// @module/ paths resolve via the role's origin field against the CUE cache;
+// non-module paths are expanded and stat'd directly.
+func roleFileAvailable(filePath string, roleVal cue.Value) (ok bool, errMsg string) {
+	checkPath := filePath
+	if strings.HasPrefix(checkPath, "@module/") {
+		origin := ExtractOrigin(roleVal)
+		if origin == "" {
+			return false, "missing origin for @module/ path"
+		}
+		resolved, err := ResolveModulePath(checkPath, origin)
+		if err != nil {
+			return false, fmt.Sprintf("resolving module path: %v", err)
+		}
+		checkPath = resolved
+	}
+	expandedPath, err := ExpandFilePath(checkPath)
+	if err != nil {
+		return false, fmt.Sprintf("expanding path: %v", err)
+	}
+	if _, err := os.Stat(expandedPath); err != nil {
+		return false, "file not found"
+	}
+	return true, ""
 }
 
 // ExtractUTDFields extracts UTD fields from a CUE value.
@@ -678,13 +701,14 @@ func (c *Composer) ResolveTask(cfg cue.Value, name, instructions string) (Proces
 	// Resolve @module/ paths using origin field
 	if strings.HasPrefix(fields.File, "@module/") {
 		origin := ExtractOrigin(taskVal)
-		if origin != "" {
-			resolved, err := ResolveModulePath(fields.File, origin)
-			if err != nil {
-				return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
-			}
-			fields.File = resolved
+		if origin == "" {
+			return ProcessResult{}, fmt.Errorf("missing origin for @module/ path %s\nRun 'start modules install' to reinstall", fields.File)
 		}
+		resolved, err := ResolveModulePath(fields.File, origin)
+		if err != nil {
+			return ProcessResult{}, fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", fields.File, err)
+		}
+		fields.File = resolved
 	}
 
 	// Write file to temp for agent access (only for external files).
