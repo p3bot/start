@@ -12,8 +12,8 @@ In scope:
 - Rename `internal/cli/config_info.go` to `internal/cli/config_get.go`.
 - Rename the internal Go symbols defined in that file: `addConfigInfoCommand` → `addConfigGetCommand`, `runConfigInfo` → `runConfigGet`, `runConfigInfoInteractive` → `runConfigGetInteractive`, `printConfigInfo` → `printConfigGet`. The four per-category renderers (`printAgentInfo`, `printRoleInfo`, `printContextInfo`, `printTaskInfo`) may be renamed for consistency or kept; renderer naming is an implementation choice.
 - Update the cobra `Use:`, `Short:`, and `Long:` fields to use `get` and to clarify how this command differs from the top-level `start get` and `start describe`.
-- Rename tests in `internal/cli/config_test.go`, `internal/cli/config_integration_test.go`, and `internal/cli/root_test.go` to reflect the new command name.
-- Update the stale comment at `internal/cli/config_list.go:35` to reference `config get` instead of `config info`.
+- Rename tests in `internal/cli/config_test.go`, `internal/cli/config_integration_test.go`, `internal/cli/root_test.go`, and `internal/cli/snapshots_test.go` to reflect the new command name. The six `TestSnapshot_ConfigInfo*` functions in `snapshots_test.go` rename to `TestSnapshot_ConfigGet*`; the file header and per-test docstrings update from `config info` to `config get`.
+- Update the stale comment at `internal/cli/config_list.go:35` and the comment at `internal/cli/metadata_writers.go:29` to reference `config get` / `config_get` instead of `config info` / `config_info`.
 - Update `README.md` and shell scripts to reference `start config get`.
 
 Out of scope:
@@ -48,20 +48,22 @@ Inline production strings inside `internal/cli/config_info.go` that carry the ol
 
 Test files affected:
 
-- `internal/cli/config_test.go` — `TestConfigInfo_Agent` (line 85), `TestConfigInfo_NotFound` (line 139), `TestConfigInfoJSON_MultipleMatches` (line 2259), `TestConfigInfoJSON_WithMatch` (line 2320), `TestConfigInfoJSON_NoArgs` (line 2369), `TestConfigInfoJSON_NotFound` (line 2390).
+- `internal/cli/config_test.go` — `TestConfigInfo_Agent` (line 85), `TestConfigInfo_NotFound` (line 139), `TestConfigInfoJSON_MultipleMatches` (line 2076), `TestConfigInfoJSON_WithMatch` (line 2137), `TestConfigInfoJSON_NoArgs` (line 2186), `TestConfigInfoJSON_NotFound` (line 2207).
 - `internal/cli/config_integration_test.go` — `TestConfigInfo_ZeroMatch` (line 1222).
 - `internal/cli/root_test.go` — help-table entry at lines 133-136 (`config info help`).
+- `internal/cli/snapshots_test.go` — six snapshot tests: `TestSnapshot_ConfigInfoAgent` (line 296), `TestSnapshot_ConfigInfoRole` (line 326), `TestSnapshot_ConfigInfoContext` (line 350), `TestSnapshot_ConfigInfoAgentObjectForm` (line 432), `TestSnapshot_ConfigInfoTask` (line 462), `TestSnapshot_ConfigInfoContextWithoutDescription` (line 493). Plus the file header at lines 3-4 ("End-to-end snapshot tests for the describe and config info rendering surfaces …") and the docstrings on five of the six tests (lines 293, 324, 348, 427, 460) that each reference `start config info <category>`. The sixth test's docstring (line 485, for `TestSnapshot_ConfigInfoContextWithoutDescription`) describes layout regression behaviour and does not reference the command name — only its `func` declaration needs renaming. Each snapshot function also calls `printAgentInfo` / `printRoleInfo` / `printContextInfo` / `printTaskInfo` directly at lines 300, 330, 354, 436, 466, 497; these calls track the optional renderer rename — if the renderers are renamed, the call sites update with them, otherwise they stay.
 
-Stale comment to update:
+Stale comments to update:
 
 - `internal/cli/config_list.go:35` reads `// Used by config info and config list JSON paths.`. Update the `config info` reference.
+- `internal/cli/metadata_writers.go:29` reads `// (config_info as a header line; describe via ExtractUTDFields).`. Update the `config_info` reference to `config_get` (underscore preserved since it refers to the file name idiomatically).
 
 Documentation references:
 
-- `README.md` — line 193 (`start config info claude`), line 317 (`start config info`), line 318 (`start config info claude`). All three become `start config get`.
-- `scripts/manual-test` — lines 115-116 (`config info --help`), lines 369-376 (`config info` test cases). Update command names and the `"config info"` section labels.
+- `README.md` — line 193 (`start config info claude`), line 314 (`start config info`), line 315 (`start config info claude`). All three become `start config get`.
+- `scripts/manual-test` — lines 115-116 (`config info --help`), lines 360-367 (`config info` test cases at 361, 364, 367; section labels at 360, 363, 366). Update command names and the `"config info"` section labels.
 
-Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md` have no current `config info` references.
+Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md`, and `cmd/` have no `config info` / `config_info` / `ConfigInfo` references.
 
 ## Requirements
 
@@ -70,22 +72,22 @@ Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md` have n
 3. The cobra registration call at `internal/cli/config.go:28` calls `addConfigGetCommand(configCmd)`.
 4. The cobra `Use:` field changes from `info [query]` to `get [query]`. `Short:` and `Long:` are updated to use `get` consistently and to note the contrast with top-level `start get` (which outputs module content) and `start describe` (which shows the verbose resolved dump).
 5. Inline production strings inside the renamed file are updated: the doc comments at lines 13, 32, 100, 127 reflect the new symbol/command names; the error context at lines 62 and 79 (`marshalling config info`) becomes `marshalling config get`; the interactive header at line 102 (`Info:`) is updated so it does not mislabel the renamed command.
-6. All `TestConfigInfo*` and `TestConfigInfoJSON*` test functions are renamed to `TestConfigGet*` and `TestConfigGetJSON*`. Inline command-name strings inside test bodies (e.g. `"info"`, `"config info"`, error messages mentioning the command name) are updated.
+6. All `TestConfigInfo*`, `TestConfigInfoJSON*`, and `TestSnapshot_ConfigInfo*` test functions are renamed to `TestConfigGet*`, `TestConfigGetJSON*`, and `TestSnapshot_ConfigGet*`. Inline command-name strings inside test bodies (e.g. `"info"` in `cmd.SetArgs([]string{"config", "info", ...})`, `"config info"` in subtest names and error messages) are updated. The `snapshots_test.go` file header (lines 3-4) and the five docstrings that reference `start config info <category>` (lines 293, 324, 348, 427, 460) are updated to `config get`. If the optional renderer rename is taken, the six direct renderer calls in `snapshots_test.go` (lines 300, 330, 354, 436, 466, 497) update to match the new symbol names.
 7. The help-table entry at `internal/cli/root_test.go:133-136` is updated from `config info help` to `config get help`, with the expected output reflecting the renamed cobra command.
-8. The comment at `internal/cli/config_list.go:35` is updated to read `config get` in place of `config info`.
+8. The comment at `internal/cli/config_list.go:35` is updated to read `config get` in place of `config info`. The comment at `internal/cli/metadata_writers.go:29` is updated to read `config_get` in place of `config_info`.
 9. README.md and `scripts/manual-test` are updated to reference `start config get` wherever they currently reference `start config info`. Section labels in `scripts/manual-test` (`"config info"`) become `"config get"`.
 10. The command's flag set (`--local`, `--json`), JSON output shape (`[]ConfigListItem`), resolution behaviour, multi-match handling, no-arg interactive flow, and per-category output formatting are unchanged.
 11. No backward-compatibility alias `info` is added. Hard cutover.
-12. Final verification: `rg -n 'addConfigInfoCommand|runConfigInfo|printConfigInfo|TestConfigInfo' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches. `rg -n 'config info\b' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches. (Other project documents under the repo root may continue to mention `config info` for historical context and are not scanned.)
+12. Final verification: `rg -n 'addConfigInfoCommand|runConfigInfo|printConfigInfo|ConfigInfo' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches. `rg -n 'config info\b|config_info' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches. (Other project documents under the repo root may continue to mention `config info` for historical context and are not scanned.) The `ConfigInfo` portion of the symbol regex deliberately broadens from `TestConfigInfo` to catch `TestSnapshot_ConfigInfo*`; the `config_info` portion of the text regex catches the underscore variant in comments.
 
 ## Implementation Plan
 
 1. Rename the file `internal/cli/config_info.go` to `internal/cli/config_get.go`. Inside the new file, rename `addConfigInfoCommand`, `runConfigInfo`, `runConfigInfoInteractive`, and `printConfigInfo` to their `Get` counterparts. Change the cobra `Use:` field to `get [query]`. Rewrite the `Long:` description: it currently ends with `This shows raw stored fields, not resolved content. Use 'start describe' to view resolved content after global/local merging.` Update to clarify the three-command landscape — `start config get` shows raw installed config fields; top-level `start get` outputs resolved module content; `start describe` shows the verbose resolved dump. Also update the inline production strings flagged in Current State: the two `marshalling config info` error contexts (lines 62, 79) and the `Info:` interactive header (line 102).
 2. Update `internal/cli/config.go:28` to call `addConfigGetCommand(configCmd)`.
-3. Update the stale comment at `internal/cli/config_list.go:35` to reference `config get` instead of `config info`.
-4. Rename the test functions in `internal/cli/config_test.go` and `internal/cli/config_integration_test.go` to their `Get` counterparts. Within each test body, update any string literals referencing the old command (e.g. `"info"`, `"config info"`, error messages mentioning the command name) to use `get` / `config get`.
+3. Update the stale comment at `internal/cli/config_list.go:35` to reference `config get` instead of `config info`. Update the comment at `internal/cli/metadata_writers.go:29` to reference `config_get` instead of `config_info`.
+4. Rename the test functions in `internal/cli/config_test.go`, `internal/cli/config_integration_test.go`, and `internal/cli/snapshots_test.go` to their `Get` counterparts. Within each test body, update any string literals referencing the old command (e.g. `"info"`, `"config info"`, error messages mentioning the command name) to use `get` / `config get`. For `snapshots_test.go` specifically: rename the six `TestSnapshot_ConfigInfo*` functions to `TestSnapshot_ConfigGet*`, update the file header at lines 3-4 and the per-test docstrings to say `config get`, and — if the optional renderer rename is taken — update the six direct renderer calls (`printAgentInfo` / `printRoleInfo` / `printContextInfo` / `printTaskInfo`) to match the new symbol names.
 5. Update the help-table entry at `internal/cli/root_test.go:133-136` from `config info help` to `config get help`, including the expected `Short:` text from the renamed cobra command.
-6. Update documentation: rewrite the three `start config info` lines in `README.md` (193, 317, 318) to `start config get`. In `scripts/manual-test`, update lines 115-116 and 369-376 to use the new command name and update the `"config info"` section labels.
+6. Update documentation: rewrite the three `start config info` lines in `README.md` (193, 314, 315) to `start config get`. In `scripts/manual-test`, update lines 115-116 and 360-367 to use the new command name and update the `"config info"` section labels.
 7. Run the verification queries from requirement 12. Run `gofmt -w .`, `go build ./...`, and `scripts/invoke-tests`.
 
 ## Constraints
@@ -115,6 +117,17 @@ Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md` have n
 
    Resolution: use `get`. The conceptual overlap with top-level `start get` is acknowledged and addressed in the renamed command's `Long:` description. The pattern `<group> get <thing>` is well-established in the broader CLI ecosystem.
 
+2. `internal/cli/snapshots_test.go` and `internal/cli/metadata_writers.go` are missing from documented scope (gap) — Resolved: expanded scope to cover both files.
+
+   The Current State claims only `config_test.go`, `config_integration_test.go`, and `root_test.go` need test renames, and asserts "Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md`". Two additional files carry references that need updating:
+
+   - `internal/cli/snapshots_test.go` contains six test function names (`TestSnapshot_ConfigInfoAgent` at line 296, `TestSnapshot_ConfigInfoRole` at line 326, `TestSnapshot_ConfigInfoContext` at line 350, `TestSnapshot_ConfigInfoAgentObjectForm` at line 432, `TestSnapshot_ConfigInfoTask` at line 462, `TestSnapshot_ConfigInfoContextWithoutDescription` at line 493) and ~10 comment occurrences of `config info` (including the file header at lines 3-4 and per-test docstrings). The tests call `printAgentInfo`, `printRoleInfo`, `printContextInfo`, `printTaskInfo` directly — if the optional renderer rename is taken, those call sites need updating too.
+   - `internal/cli/metadata_writers.go:29` carries a comment referencing `config_info as a header line`.
+
+   Consequence: requirement 12's verification regex `rg -n 'config info\b' internal/ cmd/ test/ scripts/ README.md AGENTS.md` will hit the `snapshots_test.go` comment lines and fail acceptance. The snapshot test function names (`TestSnapshot_ConfigInfo*`) survive the symbol regex because they don't match `TestConfigInfo`, and the `metadata_writers.go` reference uses an underscore so it survives both regexes — both would remain as silent stale references unless explicitly addressed.
+
+   Resolution: Scope, Current State, Requirements, Implementation Plan, and Acceptance Criteria extended to cover both files. The six `TestSnapshot_ConfigInfo*` functions are renamed to `TestSnapshot_ConfigGet*`; the file header at lines 3-4 and per-test docstrings in `snapshots_test.go` are updated from `config info` to `config get`; the comment at `metadata_writers.go:29` is updated from `config_info` to `config_get`. The renderer rename remains optional — if taken, the six direct calls to `printAgentInfo`/`printRoleInfo`/`printContextInfo`/`printTaskInfo` in `snapshots_test.go` update accordingly; if not, they stay. Verification regexes are widened to catch the new patterns.
+
 ## Acceptance Criteria
 
 - `start config --help` lists `get` as a subcommand and does not list `info`.
@@ -122,7 +135,9 @@ Files NOT affected (verified): `AGENTS.md`, `internal/cli/help/agents.md` have n
 - `start config get --json <name>` produces the same `[]ConfigListItem` JSON shape as `start config info --json` did before.
 - `start config info` exits with cobra's unknown-command error.
 - `internal/cli/config_info.go` does not exist; `internal/cli/config_get.go` does.
-- `rg -n 'addConfigInfoCommand|runConfigInfo|printConfigInfo|TestConfigInfo' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches.
-- `rg -n 'config info\b' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches.
+- `rg -n 'addConfigInfoCommand|runConfigInfo|printConfigInfo|ConfigInfo' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches.
+- `rg -n 'config info\b|config_info' internal/ cmd/ test/ scripts/ README.md AGENTS.md` returns no matches.
 - `README.md` and `scripts/manual-test` reference `start config get` in all locations that previously referenced `start config info`.
+- `internal/cli/snapshots_test.go` defines `TestSnapshot_ConfigGet*` functions in place of the previous `TestSnapshot_ConfigInfo*` set, with no remaining `config info` references in the file header, per-test docstrings, or test bodies.
+- `internal/cli/metadata_writers.go` contains no `config_info` reference.
 - `scripts/invoke-tests` passes.
