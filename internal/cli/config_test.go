@@ -82,7 +82,7 @@ func TestConfigListAgent_WithAgents(t *testing.T) {
 	}
 }
 
-func TestConfigInfo_Agent(t *testing.T) {
+func TestConfigGet_Agent(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -114,7 +114,7 @@ func TestConfigInfo_Agent(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "info", "claude"})
+	cmd.SetArgs([]string{"config", "get", "claude"})
 
 	err := cmd.Execute()
 	if err != nil {
@@ -136,7 +136,7 @@ func TestConfigInfo_Agent(t *testing.T) {
 	}
 }
 
-func TestConfigInfo_NotFound(t *testing.T) {
+func TestConfigGet_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -154,7 +154,7 @@ func TestConfigInfo_NotFound(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "info", "nonexistent"})
+	cmd.SetArgs([]string{"config", "get", "nonexistent"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -2073,7 +2073,7 @@ roles: {
 	}
 }
 
-func TestConfigInfoJSON_MultipleMatches(t *testing.T) {
+func TestConfigGetJSON_MultipleMatches(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -2105,7 +2105,7 @@ tasks: {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "info", "go", "--json"})
+	cmd.SetArgs([]string{"config", "get", "go", "--json"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2134,7 +2134,7 @@ tasks: {
 	}
 }
 
-func TestConfigInfoJSON_WithMatch(t *testing.T) {
+func TestConfigGetJSON_WithMatch(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -2160,7 +2160,7 @@ func TestConfigInfoJSON_WithMatch(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "info", "claude", "--json"})
+	cmd.SetArgs([]string{"config", "get", "claude", "--json"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2183,7 +2183,7 @@ func TestConfigInfoJSON_WithMatch(t *testing.T) {
 	}
 }
 
-func TestConfigInfoJSON_NoArgs(t *testing.T) {
+func TestConfigGetJSON_NoArgs(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -2193,7 +2193,7 @@ func TestConfigInfoJSON_NoArgs(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "info", "--json"})
+	cmd.SetArgs([]string{"config", "get", "--json"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -2204,7 +2204,7 @@ func TestConfigInfoJSON_NoArgs(t *testing.T) {
 	}
 }
 
-func TestConfigInfoJSON_NotFound(t *testing.T) {
+func TestConfigGetJSON_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -2214,7 +2214,7 @@ func TestConfigInfoJSON_NotFound(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "info", "nonexistent-item", "--json"})
+	cmd.SetArgs([]string{"config", "get", "nonexistent-item", "--json"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)

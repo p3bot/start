@@ -130,8 +130,8 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			want: "category",
 		},
 		{
-			name: "config info help",
-			args: []string{"config", "info", "help"},
+			name: "config get help",
+			args: []string{"config", "get", "help"},
 			want: "raw stored",
 		},
 		// config order commands

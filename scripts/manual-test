@@ -112,8 +112,8 @@ cmd "help" "config --help" \
 cmd "help" "config list --help" \
     "./start config list --help"
 
-cmd "help" "config info --help" \
-    "./start config info --help"
+cmd "help" "config get --help" \
+    "./start config get --help"
 
 cmd "help" "config add --help" \
     "./start config add --help"
@@ -354,17 +354,17 @@ cmd "config list" "list -l" \
     "./start config list -l"
 
 # --------------------------------------------------------------------------
-section "9. Config Info"
+section "9. Config Get"
 # --------------------------------------------------------------------------
 
-cmd "config info" "info claude" \
-    "./start config info claude"
+cmd "config get" "get claude" \
+    "./start config get claude"
 
-cmd "config info" "info claude --json" \
-    "./start config info claude --json"
+cmd "config get" "get claude --json" \
+    "./start config get claude --json"
 
-cmd "config info" "info nonexistent (expect error)" \
-    "./start config info nonexistent-xyz-123"
+cmd "config get" "get nonexistent (expect error)" \
+    "./start config get nonexistent-xyz-123"
 
 # --------------------------------------------------------------------------
 section "11. Config Add (interactive)"

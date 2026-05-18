@@ -25,7 +25,7 @@ Use --local to target project-specific configuration.`,
 
 	// Verb-first subcommands
 	addConfigListCommand(configCmd)
-	addConfigInfoCommand(configCmd)
+	addConfigGetCommand(configCmd)
 	addConfigAddCommand(configCmd)
 	addConfigEditCommand(configCmd)
 	addConfigRemoveCommand(configCmd)

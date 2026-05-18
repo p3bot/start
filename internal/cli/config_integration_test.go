@@ -64,23 +64,23 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("info displays agent details", func(t *testing.T) {
+	t.Run("get displays agent details", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "claude"})
+		cmd.SetArgs([]string{"config", "get", "claude"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("info failed: %v", err)
+			t.Fatalf("get failed: %v", err)
 		}
 
 		output := stdout.String()
 		if !strings.Contains(output, "agents/claude") {
-			t.Errorf("info output missing agent name: %s", output)
+			t.Errorf("get output missing agent name: %s", output)
 		}
 		if !strings.Contains(output, "Default Model: sonnet") {
-			t.Errorf("info output missing default model: %s", output)
+			t.Errorf("get output missing default model: %s", output)
 		}
 	})
 
@@ -256,23 +256,23 @@ func TestConfigRole_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("info role details", func(t *testing.T) {
+	t.Run("get role details", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "reviewer"})
+		cmd.SetArgs([]string{"config", "get", "reviewer"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("info failed: %v", err)
+			t.Fatalf("get failed: %v", err)
 		}
 
 		output := stdout.String()
 		if !strings.Contains(output, "roles/reviewer") {
-			t.Errorf("info missing role name: %s", output)
+			t.Errorf("get missing role name: %s", output)
 		}
 		if !strings.Contains(output, "Prompt:") {
-			t.Errorf("info missing prompt: %s", output)
+			t.Errorf("get missing prompt: %s", output)
 		}
 	})
 
@@ -352,23 +352,23 @@ func TestConfigContext_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("info context details", func(t *testing.T) {
+	t.Run("get context details", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "project"})
+		cmd.SetArgs([]string{"config", "get", "project"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("info failed: %v", err)
+			t.Fatalf("get failed: %v", err)
 		}
 
 		output := stdout.String()
 		if !strings.Contains(output, "contexts/project") {
-			t.Errorf("info missing context name: %s", output)
+			t.Errorf("get missing context name: %s", output)
 		}
 		if !strings.Contains(output, "Required: true") {
-			t.Errorf("info missing required field: %s", output)
+			t.Errorf("get missing required field: %s", output)
 		}
 	})
 
@@ -438,23 +438,23 @@ func TestConfigTask_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("info task details", func(t *testing.T) {
+	t.Run("get task details", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "review"})
+		cmd.SetArgs([]string{"config", "get", "review"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("info failed: %v", err)
+			t.Fatalf("get failed: %v", err)
 		}
 
 		output := stdout.String()
 		if !strings.Contains(output, "tasks/review") {
-			t.Errorf("info missing task name: %s", output)
+			t.Errorf("get missing task name: %s", output)
 		}
 		if !strings.Contains(output, "Role: code-reviewer") {
-			t.Errorf("info missing role: %s", output)
+			t.Errorf("get missing role: %s", output)
 		}
 	})
 
@@ -587,15 +587,15 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	}
 
-	t.Run("info with unique substring", func(t *testing.T) {
+	t.Run("get with unique substring", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "create-role"})
+		cmd.SetArgs([]string{"config", "get", "create-role"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("info with substring failed: %v", err)
+			t.Fatalf("get with substring failed: %v", err)
 		}
 
 		output := stdout.String()
@@ -604,15 +604,15 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("info with exact match still works", func(t *testing.T) {
+	t.Run("get with exact match still works", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "confluence/read-doc"})
+		cmd.SetArgs([]string{"config", "get", "confluence/read-doc"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("info with exact name failed: %v", err)
+			t.Fatalf("get with exact name failed: %v", err)
 		}
 
 		output := stdout.String()
@@ -621,14 +621,14 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("info with ambiguous substring in non-interactive mode errors", func(t *testing.T) {
+	t.Run("get with ambiguous substring in non-interactive mode errors", func(t *testing.T) {
 		// "review" matches golang/review/architecture and golang/review/code
 		// In non-interactive mode, this should return an error about ambiguity
 		cmd := NewRootCmd()
 		cmd.SetIn(strings.NewReader("")) // non-interactive stdin
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "review"})
+		cmd.SetArgs([]string{"config", "get", "review"})
 
 		err := cmd.Execute()
 		if err == nil {
@@ -639,11 +639,11 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("info with no match errors", func(t *testing.T) {
+	t.Run("get with no match errors", func(t *testing.T) {
 		cmd := NewRootCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "info", "nonexistent"})
+		cmd.SetArgs([]string{"config", "get", "nonexistent"})
 
 		err := cmd.Execute()
 		if err == nil {
@@ -667,9 +667,9 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		stdout2 := &bytes.Buffer{}
 		cmd2.SetOut(stdout2)
 		cmd2.SetErr(&bytes.Buffer{})
-		cmd2.SetArgs([]string{"config", "info", "confluence/read-doc"})
+		cmd2.SetArgs([]string{"config", "get", "confluence/read-doc"})
 		if err := cmd2.Execute(); err != nil {
-			t.Fatalf("info after edit failed: %v", err)
+			t.Fatalf("get after edit failed: %v", err)
 		}
 		output := stdout2.String()
 		if !strings.Contains(output, "Updated description") {
@@ -1219,7 +1219,7 @@ func TestConfigRemovedCommands(t *testing.T) {
 	}
 }
 
-func TestConfigInfo_ZeroMatch(t *testing.T) {
+func TestConfig_ZeroMatch(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -1230,7 +1230,7 @@ func TestConfigInfo_ZeroMatch(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	for _, name := range []string{"edit", "remove", "info"} {
+	for _, name := range []string{"edit", "remove", "get"} {
 		t.Run("config "+name+" not found", func(t *testing.T) {
 			cmd := NewRootCmd()
 			cmd.SetOut(&bytes.Buffer{})

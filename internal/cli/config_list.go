@@ -32,7 +32,7 @@ type ConfigListItem struct {
 }
 
 // buildConfigListItem loads the full config data for a match and maps it to ConfigListItem.
-// Used by config info and config list JSON paths.
+// Used by config get and config list JSON paths.
 func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
 	item := ConfigListItem{Category: m.Category, Name: m.Name}
 	switch m.Category {

@@ -190,7 +190,7 @@ start config edit claude
 start config remove claude --yes
 
 # Show raw config fields for an item
-start config info claude
+start config get claude
 
 # Open a config file directly in $EDITOR
 start config open
@@ -311,8 +311,8 @@ start config edit claude
 start config edit gemini/interactive
 
 # Show raw config fields for an item
-start config info
-start config info claude
+start config get
+start config get claude
 
 # Remove an item
 start config remove claude

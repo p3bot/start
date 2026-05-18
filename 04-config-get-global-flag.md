@@ -28,8 +28,6 @@ Out of scope:
 
 ## Current State
 
-This project depends on `03-config-info-to-get.md` having landed: the rename target file is `internal/cli/config_get.go` and the symbol names referenced below assume the post-rename state.
-
 `start config get` supports two scopes today, gated on `flags.Local`:
 
 - Default: merged view (global + local, local wins per name on collision).
@@ -44,7 +42,7 @@ runConfigGet
           → loadForScope[T](localOnly, ...)
   → buildConfigListItem(m, local)                  internal/cli/config_list.go
       → loadXxxForScope(local)
-  → printAgentInfo(w, local, name) / ...           internal/cli/config_get.go
+  → printAgentGet(w, local, name) / ...            internal/cli/config_get.go
       → loadAgentsForScope(local)
 ```
 
@@ -56,7 +54,7 @@ Functions with a `localOnly bool` or equivalent scope-selecting bool parameter:
 - `internal/cli/config_types.go` — `loadAgentsForScope`, `loadRolesForScope`, `loadContextsForScope`, `loadTasksForScope`, `loadConfigForScope`.
 - `internal/cli/config_settings.go` — `loadSettingsForScope`.
 - `internal/cli/config_list.go` — `buildConfigListItem`, `collectConfigListItems`, `listAgents`, `listRoles`, `listContexts`, `listTasks`.
-- `internal/cli/config_get.go` — `printAgentInfo`, `printRoleInfo`, `printContextInfo`, `printTaskInfo`, `printConfigGet`, `runConfigGetInteractive`.
+- `internal/cli/config_get.go` — `printAgentGet`, `printRoleGet`, `printContextGet`, `printTaskGet`, `printConfigGet`, `runConfigGetInteractive`.
 - `internal/config/settings.go` — `ResolveAllSettings`. This file lives in `internal/config/`, outside `internal/cli/`, and is easy to miss when grepping for `localOnly` from `internal/cli/`.
 
 Call sites that pass `flags.Local` (these are the translation points where the refactor swaps `bool` for `config.Scope`):

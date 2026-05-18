@@ -9,27 +9,32 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigInfoCommand adds the "config info [query]" command.
-func addConfigInfoCommand(parent *cobra.Command) {
+// addConfigGetCommand adds the "config get [query]" command.
+func addConfigGetCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
-		Use:   "info [query]",
+		Use:   "get [query]",
 		Short: "Show raw config fields for an item",
 		Long: `Show raw stored configuration fields for an agent, role, context, or task.
 
 Search by name across all categories. If multiple items match, a numbered
 menu is presented. With no argument, prompts interactively for category and item.
 
-This shows raw stored fields, not resolved content. Use 'start describe' to view
-resolved content after global/local merging.`,
+This command shows the raw stored fields for an installed config entry. Related
+commands operate on different data:
+  - 'start get <name>'      outputs a module's rendered content (file body,
+                            rendered prompt, command output, or agent command
+                            template) to stdout for piping.
+  - 'start describe <name>' shows the verbose resolved dump for a module,
+                            after global/local merging.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runConfigInfo,
+		RunE: runConfigGet,
 	}
 	cmd.Flags().Bool("json", false, "Output as JSON")
 	parent.AddCommand(cmd)
 }
 
-// runConfigInfo is the handler for "config info [query]".
-func runConfigInfo(cmd *cobra.Command, args []string) error {
+// runConfigGet is the handler for "config get [query]".
+func runConfigGet(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -44,9 +49,9 @@ func runConfigInfo(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("query required with --json")
 		}
 		if !isTerminal(stdin) {
-			return fmt.Errorf("interactive info requires a terminal")
+			return fmt.Errorf("interactive get requires a terminal")
 		}
-		return runConfigInfoInteractive(stdin, stdout, local)
+		return runConfigGetInteractive(stdin, stdout, local)
 	}
 
 	query := args[0]
@@ -58,7 +63,7 @@ func runConfigInfo(cmd *cobra.Command, args []string) error {
 	if len(matches) == 0 {
 		if jsonFlag {
 			if err := writeJSON(stdout, []ConfigListItem{}); err != nil {
-				return fmt.Errorf("marshalling config info: %w", err)
+				return fmt.Errorf("marshalling config get: %w", err)
 			}
 			return nil
 		}
@@ -75,7 +80,7 @@ func runConfigInfo(cmd *cobra.Command, args []string) error {
 			results = append(results, item)
 		}
 		if err := writeJSON(stdout, results); err != nil {
-			return fmt.Errorf("marshalling config info: %w", err)
+			return fmt.Errorf("marshalling config get: %w", err)
 		}
 		return nil
 	}
@@ -93,12 +98,12 @@ func runConfigInfo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return printConfigInfo(stdout, local, selected)
+	return printConfigGet(stdout, local, selected)
 }
 
-// runConfigInfoInteractive prompts for category then item, then shows info.
-func runConfigInfoInteractive(stdin io.Reader, stdout io.Writer, local bool) error {
-	_, _ = fmt.Fprintln(stdout, "Info:")
+// runConfigGetInteractive prompts for category then item, then shows the entry.
+func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, local bool) error {
+	_, _ = fmt.Fprintln(stdout, "Get:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
 	if err != nil || category == "" {
 		return err
@@ -120,29 +125,29 @@ func runConfigInfoInteractive(stdin io.Reader, stdout io.Writer, local bool) err
 		return err
 	}
 
-	return printConfigInfo(stdout, local, configMatch{Name: selected, Category: singular})
+	return printConfigGet(stdout, local, configMatch{Name: selected, Category: singular})
 }
 
-// printConfigInfo displays the raw config fields for a single matched item.
-func printConfigInfo(w io.Writer, local bool, m configMatch) error {
+// printConfigGet displays the raw config fields for a single matched item.
+func printConfigGet(w io.Writer, local bool, m configMatch) error {
 	switch m.Category {
 	case "agent":
-		return printAgentInfo(w, local, m.Name)
+		return printAgentGet(w, local, m.Name)
 	case "role":
-		return printRoleInfo(w, local, m.Name)
+		return printRoleGet(w, local, m.Name)
 	case "context":
-		return printContextInfo(w, local, m.Name)
+		return printContextGet(w, local, m.Name)
 	case "task":
-		return printTaskInfo(w, local, m.Name)
+		return printTaskGet(w, local, m.Name)
 	}
 	return fmt.Errorf("unknown category %q", m.Category)
 }
 
-// printAgentInfo displays raw fields for an agent. The header section emits
+// printAgentGet displays raw fields for an agent. The header section emits
 // Source / Origin / Command (Command is agent-only and not owned by the
 // shared writer); the writer owns its own leading blank line and renders
 // the rest.
-func printAgentInfo(w io.Writer, local bool, name string) error {
+func printAgentGet(w io.Writer, local bool, name string) error {
 	agents, _, err := loadAgentsForScope(local)
 	if err != nil {
 		return err
@@ -173,11 +178,11 @@ func printAgentInfo(w io.Writer, local bool, name string) error {
 	return nil
 }
 
-// printRoleInfo displays raw fields for a role. The header section emits
+// printRoleGet displays raw fields for a role. The header section emits
 // Source / Origin; everything below — including the leading blank line — is
 // owned by the shared writer (Description -> File -> Command -> Prompt ->
 // Optional -> Tags).
-func printRoleInfo(w io.Writer, local bool, name string) error {
+func printRoleGet(w io.Writer, local bool, name string) error {
 	roles, _, err := loadRolesForScope(local)
 	if err != nil {
 		return err
@@ -206,10 +211,10 @@ func printRoleInfo(w io.Writer, local bool, name string) error {
 	return nil
 }
 
-// printContextInfo displays raw fields for a context. The header section
+// printContextGet displays raw fields for a context. The header section
 // emits Source / Origin; everything below — including the leading blank
 // line — is owned by the shared writer.
-func printContextInfo(w io.Writer, local bool, name string) error {
+func printContextGet(w io.Writer, local bool, name string) error {
 	contexts, _, err := loadContextsForScope(local)
 	if err != nil {
 		return err
@@ -238,10 +243,10 @@ func printContextInfo(w io.Writer, local bool, name string) error {
 	return nil
 }
 
-// printTaskInfo displays raw fields for a task. The header section emits
+// printTaskGet displays raw fields for a task. The header section emits
 // Source / Origin; everything below — including the leading blank line —
 // is owned by the shared writer.
-func printTaskInfo(w io.Writer, local bool, name string) error {
+func printTaskGet(w io.Writer, local bool, name string) error {
 	tasks, _, err := loadTasksForScope(local)
 	if err != nil {
 		return err

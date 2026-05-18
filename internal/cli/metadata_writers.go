@@ -26,7 +26,7 @@ import (
 // writeAgentMetadata writes Description, Bin, Default Model, Tags, then a
 // blank line, then the Models block. AgentConfig.Command is intentionally
 // not emitted here — both consumers render it outside the metadata block
-// (config_info as a header line; describe via ExtractUTDFields).
+// (config_get as a header line; describe via ExtractUTDFields).
 func writeAgentMetadata(w io.Writer, agent AgentConfig) {
 	// hasHeader gates the inner blank line before `Models:`. Keep it in
 	// sync with the field emissions below if a new pre-Models field is

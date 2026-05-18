@@ -1,9 +1,7 @@
 package cli
 
-// End-to-end snapshot tests for the describe and config info rendering
-// surfaces. Three of the eight baselines (describe agent, config info agent,
-// object-form agent on both surfaces) are updated by this refactor; the
-// remaining five act as byte-identical regression guards.
+// End-to-end snapshot tests for the describe and config get rendering
+// surfaces. All eight baselines act as byte-identical regression guards.
 //
 // Tests in this file use os.Chdir (via the chdir helper) and modify
 // color.NoColor; they cannot run in parallel.
@@ -290,15 +288,14 @@ Tags: review, git
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigInfoAgent pins `start config info <agent>`. The literal
-// is updated in step 6 of the refactor when Bin and Default Model move from
-// the header section into the shared writer (per requirement 7).
-func TestSnapshot_ConfigInfoAgent(t *testing.T) {
+// TestSnapshot_ConfigGetAgent pins `start config get <agent>` for the
+// simple-form fixture.
+func TestSnapshot_ConfigGetAgent(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotAgentCue)
 
 	var buf bytes.Buffer
-	if err := printAgentInfo(&buf, false, "claude"); err != nil {
-		t.Fatalf("printAgentInfo: %v", err)
+	if err := printAgentGet(&buf, false, "claude"); err != nil {
+		t.Fatalf("printAgentGet: %v", err)
 	}
 
 	want := fmt.Sprintf(`
@@ -321,14 +318,14 @@ Models:
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigInfoRole pins `start config info <role>`. Byte-identical
+// TestSnapshot_ConfigGetRole pins `start config get <role>`. Byte-identical
 // across the refactor.
-func TestSnapshot_ConfigInfoRole(t *testing.T) {
+func TestSnapshot_ConfigGetRole(t *testing.T) {
 	setupSnapshotFixture(t, "roles.cue", snapshotRoleCue)
 
 	var buf bytes.Buffer
-	if err := printRoleInfo(&buf, false, "code-reviewer"); err != nil {
-		t.Fatalf("printRoleInfo: %v", err)
+	if err := printRoleGet(&buf, false, "code-reviewer"); err != nil {
+		t.Fatalf("printRoleGet: %v", err)
 	}
 
 	want := fmt.Sprintf(`
@@ -345,14 +342,14 @@ Tags: review, quality
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigInfoContext pins `start config info <context>`.
+// TestSnapshot_ConfigGetContext pins `start config get <context>`.
 // Byte-identical across the refactor.
-func TestSnapshot_ConfigInfoContext(t *testing.T) {
+func TestSnapshot_ConfigGetContext(t *testing.T) {
 	setupSnapshotFixture(t, "contexts.cue", snapshotContextCue)
 
 	var buf bytes.Buffer
-	if err := printContextInfo(&buf, false, "environment"); err != nil {
-		t.Fatalf("printContextInfo: %v", err)
+	if err := printContextGet(&buf, false, "environment"); err != nil {
+		t.Fatalf("printContextGet: %v", err)
 	}
 
 	want := fmt.Sprintf(`
@@ -424,17 +421,14 @@ Command: objform --model obj-sonnet-id "{{.prompt}}"
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigInfoAgentObjectForm pins `start config info <agent>` for
-// the object-form fixture. The literal reflects the populated Models block
-// `decodeAgentValue` produces (post step 3 loader refactor). The header /
-// metadata line order will reorder in step 6 alongside the simple-form
-// agent.
-func TestSnapshot_ConfigInfoAgentObjectForm(t *testing.T) {
+// TestSnapshot_ConfigGetAgentObjectForm pins `start config get <agent>` for
+// the object-form fixture.
+func TestSnapshot_ConfigGetAgentObjectForm(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
 	var buf bytes.Buffer
-	if err := printAgentInfo(&buf, false, "objform"); err != nil {
-		t.Fatalf("printAgentInfo: %v", err)
+	if err := printAgentGet(&buf, false, "objform"); err != nil {
+		t.Fatalf("printAgentGet: %v", err)
 	}
 
 	want := fmt.Sprintf(`
@@ -457,14 +451,14 @@ Models:
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigInfoTask pins `start config info <task>`. Byte-identical
+// TestSnapshot_ConfigGetTask pins `start config get <task>`. Byte-identical
 // across the refactor.
-func TestSnapshot_ConfigInfoTask(t *testing.T) {
+func TestSnapshot_ConfigGetTask(t *testing.T) {
 	setupSnapshotFixture(t, "tasks.cue", snapshotTaskCue)
 
 	var buf bytes.Buffer
-	if err := printTaskInfo(&buf, false, "myreview"); err != nil {
-		t.Fatalf("printTaskInfo: %v", err)
+	if err := printTaskGet(&buf, false, "myreview"); err != nil {
+		t.Fatalf("printTaskGet: %v", err)
 	}
 
 	want := fmt.Sprintf(`
@@ -482,7 +476,7 @@ Tags: review, git
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigInfoContextWithoutDescription pins the layout for a
+// TestSnapshot_ConfigGetContextWithoutDescription pins the layout for a
 // context that has no `description:` set. Pre-Phase-2 (when callers gated
 // the blank line on `Description != ""`), the writer's first line stuck
 // against the header — `Required: false` rendered immediately under
@@ -490,12 +484,12 @@ Tags: review, git
 // so the metadata block always sits visually separated from the header
 // regardless of which fields are populated. This is a deliberate behaviour
 // change and this test locks it in.
-func TestSnapshot_ConfigInfoContextWithoutDescription(t *testing.T) {
+func TestSnapshot_ConfigGetContextWithoutDescription(t *testing.T) {
 	setupSnapshotFixture(t, "contexts.cue", snapshotDescriptionlessContextCue)
 
 	var buf bytes.Buffer
-	if err := printContextInfo(&buf, false, "barebones"); err != nil {
-		t.Fatalf("printContextInfo: %v", err)
+	if err := printContextGet(&buf, false, "barebones"); err != nil {
+		t.Fatalf("printContextGet: %v", err)
 	}
 
 	want := fmt.Sprintf(`
