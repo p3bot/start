@@ -117,7 +117,7 @@ func listSettings(w io.Writer, localOnly bool) error {
 	printConfigPaths(w, paths)
 	_, _ = fmt.Fprintln(w)
 
-	entries, err := config.ResolveAllSettings(paths, localOnly)
+	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func showSetting(w io.Writer, key string, localOnly bool) error {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	entries, err := config.ResolveAllSettings(paths, localOnly)
+	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func listSettingsJSON(w io.Writer, localOnly bool) error {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	entries, err := config.ResolveAllSettings(paths, localOnly)
+	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func showSettingJSON(w io.Writer, key string, localOnly bool) error {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	entries, err := config.ResolveAllSettings(paths, localOnly)
+	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
 	if err != nil {
 		return err
 	}

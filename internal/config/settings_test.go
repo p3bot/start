@@ -74,7 +74,7 @@ func TestResolveAllSettings_DefaultsOnly(t *testing.T) {
 		LocalExists:  false,
 	}
 
-	entries, err := ResolveAllSettings(paths, false)
+	entries, err := ResolveAllSettings(paths, ScopeMerged)
 	if err != nil {
 		t.Fatalf("ResolveAllSettings() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestResolveAllSettings_GlobalOverride(t *testing.T) {
 		LocalExists:  false,
 	}
 
-	entries, err := ResolveAllSettings(paths, false)
+	entries, err := ResolveAllSettings(paths, ScopeMerged)
 	if err != nil {
 		t.Fatalf("ResolveAllSettings() error = %v", err)
 	}
@@ -159,7 +159,7 @@ func TestResolveAllSettings_LocalOverridesGlobal(t *testing.T) {
 		LocalExists:  true,
 	}
 
-	entries, err := ResolveAllSettings(paths, false)
+	entries, err := ResolveAllSettings(paths, ScopeMerged)
 	if err != nil {
 		t.Fatalf("ResolveAllSettings() error = %v", err)
 	}
@@ -200,7 +200,7 @@ func TestResolveAllSettings_LocalOnly(t *testing.T) {
 		LocalExists:  true,
 	}
 
-	entries, err := ResolveAllSettings(paths, true)
+	entries, err := ResolveAllSettings(paths, ScopeLocal)
 	if err != nil {
 		t.Fatalf("ResolveAllSettings() error = %v", err)
 	}
@@ -217,6 +217,53 @@ func TestResolveAllSettings_LocalOnly(t *testing.T) {
 	}
 	if e.Source != "local" {
 		t.Errorf("timeout source = %q, want %q", e.Source, "local")
+	}
+}
+
+func TestResolveAllSettings_GlobalOnly(t *testing.T) {
+	t.Parallel()
+
+	globalDir := filepath.Join(t.TempDir(), "global")
+	localDir := filepath.Join(t.TempDir(), "local")
+	for _, dir := range []string{globalDir, localDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(globalDir, "settings.cue"),
+		[]byte(`settings: { default_agent: "claude" }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "settings.cue"),
+		[]byte(`settings: { default_agent: "gemini", timeout: 120 }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	paths := Paths{
+		Global:       globalDir,
+		Local:        localDir,
+		GlobalExists: true,
+		LocalExists:  true,
+	}
+
+	entries, err := ResolveAllSettings(paths, ScopeGlobal)
+	if err != nil {
+		t.Fatalf("ResolveAllSettings() error = %v", err)
+	}
+
+	// Global default_agent should be picked up — local must NOT override
+	e := entries["default_agent"]
+	if e.Value != "claude" {
+		t.Errorf("default_agent value = %q, want %q (local should be ignored)", e.Value, "claude")
+	}
+	if e.Source != "global" {
+		t.Errorf("default_agent source = %q, want %q", e.Source, "global")
+	}
+
+	// Local timeout should NOT leak through — defaults remain
+	if e := entries["timeout"]; e.Source != "default" {
+		t.Errorf("timeout source = %q, want %q (local should be ignored)", e.Source, "default")
 	}
 }
 

@@ -74,15 +74,13 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	_, _ = fmt.Fprintln(w, tui.Annotate("%s", localStatus))
 
 	// Determine scope for listing
-	scopeLabel := "merged"
-	if local {
-		scopeLabel = "local"
-	}
+	scope := config.ScopeFromLocal(local)
+	scopeLabel := scope.String()
 
 	stderr := cmd.ErrOrStderr()
 
 	// Settings
-	entries, err := config.ResolveAllSettings(paths, local)
+	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		printWarning(stderr, "failed to load settings: %s", err)
 	}

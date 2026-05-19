@@ -488,7 +488,7 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 func CheckSettings(paths config.Paths, cfgValue cue.Value) SectionResult {
 	section := SectionResult{Name: "Settings"}
 
-	entries, err := config.ResolveAllSettings(paths, false)
+	entries, err := config.ResolveAllSettings(paths, config.ScopeMerged)
 	if err != nil {
 		section.Results = append(section.Results, CheckResult{
 			Status:  StatusWarn,

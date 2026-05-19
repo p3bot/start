@@ -193,8 +193,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 	printConfigPaths(w, paths)
 	_, _ = fmt.Fprintln(w)
 
-	flags := getFlags(cmd)
-	entries, err := config.ResolveAllSettings(paths, flags.Local)
+	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}

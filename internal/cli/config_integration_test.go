@@ -450,7 +450,7 @@ func TestConfigTask_FullWorkflow(t *testing.T) {
 		}
 
 		output := stdout.String()
-		if !strings.Contains(output, "tasks/review") {
+		if !strings.Contains(output, "tasks:review") {
 			t.Errorf("get missing task name: %s", output)
 		}
 		if !strings.Contains(output, "Role: code-reviewer") {

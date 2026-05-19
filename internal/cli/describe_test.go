@@ -572,6 +572,117 @@ agents: {
 	})
 }
 
+// TestDescribeListingSettingsScope verifies the settings block inside the
+// describe listing honours --local/--global/no-flag. The same setting key
+// (default_agent) is defined with a distinct value in global and local
+// config; each scope should surface only the matching value.
+func TestDescribeListingSettingsScope(t *testing.T) {
+	dir := t.TempDir()
+
+	globalStartDir := filepath.Join(dir, ".config", "start")
+	if err := os.MkdirAll(globalStartDir, 0755); err != nil {
+		t.Fatalf("creating global config dir: %v", err)
+	}
+	globalCueConfig := `
+settings: {
+	default_agent: "claude-global"
+}
+`
+	if err := os.WriteFile(filepath.Join(globalStartDir, "settings.cue"), []byte(globalCueConfig), 0644); err != nil {
+		t.Fatalf("writing global config: %v", err)
+	}
+
+	localStartDir := filepath.Join(dir, ".start")
+	if err := os.MkdirAll(localStartDir, 0755); err != nil {
+		t.Fatalf("creating local config dir: %v", err)
+	}
+	localCueConfig := `
+settings: {
+	default_agent: "gemini-local"
+}
+`
+	if err := os.WriteFile(filepath.Join(localStartDir, "settings.cue"), []byte(localCueConfig), 0644); err != nil {
+		t.Fatalf("writing local config: %v", err)
+	}
+
+	chdir(t, dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
+
+	cases := []struct {
+		name    string
+		args    []string
+		want    string
+		notWant string
+	}{
+		{
+			name:    "merged shows local (local wins)",
+			args:    []string{"describe"},
+			want:    "gemini-local",
+			notWant: "claude-global",
+		},
+		{
+			name:    "--local shows local only",
+			args:    []string{"describe", "--local"},
+			want:    "gemini-local",
+			notWant: "claude-global",
+		},
+		{
+			name:    "--global shows global only",
+			args:    []string{"describe", "--global"},
+			want:    "claude-global",
+			notWant: "gemini-local",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			cmd := NewRootCmd()
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+			cmd.SetArgs(tc.args)
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			output := buf.String()
+			// Scope the assertion to the settings/ block so a future change
+			// that surfaces an agent name elsewhere in the listing cannot
+			// make the negative assertion pass for the wrong reason.
+			settingsBlock := extractDescribeSection(output, "settings")
+			if settingsBlock == "" {
+				t.Fatalf("settings block not found in output:\n%s", output)
+			}
+			if !strings.Contains(settingsBlock, tc.want) {
+				t.Errorf("settings block missing %q\nblock:\n%s\nfull:\n%s", tc.want, settingsBlock, output)
+			}
+			if strings.Contains(settingsBlock, tc.notWant) {
+				t.Errorf("settings block should not contain %q\nblock:\n%s", tc.notWant, settingsBlock)
+			}
+		})
+	}
+}
+
+// extractDescribeSection returns the slice of describe-listing output that
+// starts at the given category header ("settings", "agents", ...) and ends
+// at the next blank line. The header must appear on its own line — anchoring
+// on "\n<header>/\n" avoids collisions with filesystem paths printed in the
+// Configuration Paths block above. Returns "" if the header is not found.
+func extractDescribeSection(output, header string) string {
+	anchor := "\n" + header + "/\n"
+	idx := strings.Index(output, anchor)
+	if idx == -1 {
+		return ""
+	}
+	rest := output[idx+1:] // skip the leading newline so the slice starts at the header
+	if endIdx := strings.Index(rest, "\n\n"); endIdx != -1 {
+		return rest[:endIdx]
+	}
+	return rest
+}
+
 // TestVerboseDumpCUEDefinition verifies CUE definition output in verbose dump.
 func TestVerboseDumpCUEDefinition(t *testing.T) {
 	setupTestConfig(t)

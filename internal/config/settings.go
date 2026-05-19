@@ -61,7 +61,12 @@ func SettingDefault(key string) string {
 }
 
 // ResolveAllSettings resolves all valid settings with their values and sources.
-func ResolveAllSettings(paths Paths, localOnly bool) (map[string]SettingEntry, error) {
+// Built-in defaults are seeded for every registered key first; scope-selected
+// overrides then apply on top. Scope selects which config directory's
+// settings override the built-in defaults: ScopeLocal applies local only,
+// ScopeGlobal applies global only, ScopeMerged applies global then local
+// (local wins).
+func ResolveAllSettings(paths Paths, scope Scope) (map[string]SettingEntry, error) {
 	entries := make(map[string]SettingEntry, len(SettingsRegistry))
 
 	// Start with defaults
@@ -73,7 +78,8 @@ func ResolveAllSettings(paths Paths, localOnly bool) (map[string]SettingEntry, e
 		}
 	}
 
-	if localOnly {
+	switch scope {
+	case ScopeLocal:
 		if paths.LocalExists {
 			localSettings, err := LoadSettingsFromDir(paths.Local)
 			if err != nil {
@@ -83,7 +89,17 @@ func ResolveAllSettings(paths Paths, localOnly bool) (map[string]SettingEntry, e
 				entries[k] = SettingEntry{Value: v, Source: "local"}
 			}
 		}
-	} else {
+	case ScopeGlobal:
+		if paths.GlobalExists {
+			globalSettings, err := LoadSettingsFromDir(paths.Global)
+			if err != nil {
+				return nil, err
+			}
+			for k, v := range globalSettings {
+				entries[k] = SettingEntry{Value: v, Source: "global"}
+			}
+		}
+	default:
 		if paths.GlobalExists {
 			globalSettings, err := LoadSettingsFromDir(paths.Global)
 			if err != nil {

@@ -30,6 +30,16 @@ func (s Scope) String() string {
 	}
 }
 
+// ScopeFromLocal maps a local-only boolean to a Scope. Used by call sites
+// that accept --local but not --global, where the binary choice is always
+// between local-only and merged.
+func ScopeFromLocal(local bool) Scope {
+	if local {
+		return ScopeLocal
+	}
+	return ScopeMerged
+}
+
 // Paths holds the resolved configuration directory paths.
 type Paths struct {
 	// Global is the path to the global config directory (~/.config/start/).
