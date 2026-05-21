@@ -102,7 +102,7 @@ func formatAddress(category, name string) string {
 }
 
 // addDescribeCommand adds the describe command and its subcommands to the parent command.
-func addDescribeCommand(parent *cobra.Command) {
+func addDescribeCommand(parent *cobra.Command, flags *Flags) {
 	describeCmd := &cobra.Command{
 		Use:     "describe [name]",
 		GroupID: "commands",
@@ -127,11 +127,12 @@ To inspect strictly within --local, ensure the module is already installed.`,
 		RunE: runDescribe,
 	}
 
-	// Add --global flag to describe command (describe-specific scope restriction)
-	describeCmd.PersistentFlags().Bool("global", false, "Restrict to global config only")
-
-	// Add describe to parent
+	// Bind --global to flags.Global. AddCommand must run before
+	// MarkFlagsMutuallyExclusive so cobra's mergePersistentFlags() can see
+	// the inherited --local from root via VisitParents.
+	describeCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	parent.AddCommand(describeCmd)
+	describeCmd.MarkFlagsMutuallyExclusive("local", "global")
 }
 
 // runDescribe displays all configuration or searches for a specific item.
@@ -179,10 +180,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 	w := cmd.OutOrStdout()
 	stdin := cmd.InOrStdin()
 
-	scope, err := describeScopeFromCmd(cmd)
-	if err != nil {
-		return err
-	}
+	scope := scopeFromFlags(getFlags(cmd))
 
 	// Show config paths and settings
 	paths, err := config.ResolvePaths("")
@@ -283,10 +281,7 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	_, _ = fmt.Fprintln(w)
 	stderr := cmd.ErrOrStderr()
 	flags := getFlags(cmd)
-	scope, err := describeScopeFromCmd(cmd)
-	if err != nil {
-		return err
-	}
+	scope := scopeFromFlags(flags)
 	stdin := cmd.InOrStdin()
 
 	cfg, err := loadConfig(scope)
@@ -418,24 +413,17 @@ func notifyScopeWidenedIfLocal(stderr io.Writer, flags *Flags, didInstall bool) 
 	printWarning(stderr, "--local widened to merged scope after registry install")
 }
 
-// describeScopeFromCmd derives the config scope from describe command flags.
-// Returns an error if --local and --global are both set.
-func describeScopeFromCmd(cmd *cobra.Command) (config.Scope, error) {
-	var global bool
-	if f := cmd.Flags().Lookup("global"); f != nil {
-		global, _ = cmd.Flags().GetBool("global")
+// scopeFromFlags derives the config scope from --local/--global. Cobra's
+// MarkFlagsMutuallyExclusive rejects the both-set combination at parse time
+// before RunE runs, so this helper does not return an error.
+func scopeFromFlags(flags *Flags) config.Scope {
+	if flags.Global {
+		return config.ScopeGlobal
 	}
-	local := getFlags(cmd).Local
-	if local && global {
-		return config.ScopeMerged, fmt.Errorf("--local and --global are mutually exclusive")
+	if flags.Local {
+		return config.ScopeLocal
 	}
-	if global {
-		return config.ScopeGlobal, nil
-	}
-	if local {
-		return config.ScopeLocal, nil
-	}
-	return config.ScopeMerged, nil
+	return config.ScopeMerged
 }
 
 // loadConfig loads CUE configuration for the given scope.

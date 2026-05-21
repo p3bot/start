@@ -37,6 +37,7 @@ type Flags struct {
 	Debug   bool
 	NoColor bool
 	Local   bool
+	Global  bool
 	NoRole  bool
 }
 

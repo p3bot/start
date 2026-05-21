@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: [02-unify-global-flag-registration.md](./02-unify-global-flag-registration.md)
+Active Project: [03-config-get-global-flag.md](./03-config-get-global-flag.md)
 
 When a project is complete, update this file to point to the next active project
 

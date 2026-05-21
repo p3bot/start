@@ -114,8 +114,8 @@ Examples:
 	)
 
 	// Add subcommands
-	addDescribeCommand(cmd)
-	addGetCommand(cmd)
+	addDescribeCommand(cmd, flags)
+	addGetCommand(cmd, flags)
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)
 	addModulesCommand(cmd)

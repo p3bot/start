@@ -13,7 +13,7 @@ import (
 )
 
 // addGetCommand registers the `start get` subcommand.
-func addGetCommand(parent *cobra.Command) {
+func addGetCommand(parent *cobra.Command, flags *Flags) {
 	getCmd := &cobra.Command{
 		Use:     "get [name]",
 		GroupID: "commands",
@@ -54,9 +54,12 @@ To inspect strictly within --local, ensure the module is already installed.`,
 		RunE: runGet,
 	}
 
-	getCmd.PersistentFlags().Bool("global", false, "Restrict to global config only")
-
+	// Bind --global to flags.Global. AddCommand must run before
+	// MarkFlagsMutuallyExclusive so cobra's mergePersistentFlags() can see
+	// the inherited --local from root via VisitParents.
+	getCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	parent.AddCommand(getCmd)
+	getCmd.MarkFlagsMutuallyExclusive("local", "global")
 }
 
 // runGet resolves a module and writes its content to stdout.
@@ -78,10 +81,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 	}
 
 	flags := getFlags(cmd)
-	scope, err := describeScopeFromCmd(cmd)
-	if err != nil {
-		return err
-	}
+	scope := scopeFromFlags(flags)
 	cfg, err := loadConfig(scope)
 	if err != nil {
 		return err
