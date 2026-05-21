@@ -836,9 +836,8 @@ type configMatch struct {
 // searchAllConfigCategories searches all four config categories for a query string.
 // Returns all matches across categories tagged with their category name.
 // Zero matches in a category is not an error; the returned slice may be empty.
-func searchAllConfigCategories(query string, local bool) ([]configMatch, error) {
+func searchAllConfigCategories(query string, scope config.Scope) ([]configMatch, error) {
 	var results []configMatch
-	scope := config.ScopeFromLocal(local)
 
 	agents, _, err := loadAgentsForScope(scope)
 	if err != nil {

@@ -34,9 +34,8 @@ type ConfigListItem struct {
 
 // buildConfigListItem loads the full config data for a match and maps it to ConfigListItem.
 // Used by config get and config list JSON paths.
-func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
+func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, error) {
 	item := ConfigListItem{Category: m.Category, Name: m.Name}
-	scope := config.ScopeFromLocal(local)
 	switch m.Category {
 	case "agent":
 		agents, _, err := loadAgentsForScope(scope)

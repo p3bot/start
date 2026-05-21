@@ -48,7 +48,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 	_, _ = fmt.Fprintln(stdout)
 	query := args[0]
-	matches, err := searchAllConfigCategories(query, local)
+	matches, err := searchAllConfigCategories(query, config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func runConfigEditInteractive(stdin io.Reader, stdout io.Writer, local bool) err
 		return err
 	}
 
-	names, err := loadNamesForCategory(category, local)
+	names, err := loadNamesForCategory(category, config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}

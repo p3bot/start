@@ -294,7 +294,7 @@ func TestSnapshot_ConfigGetAgent(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotAgentCue)
 
 	var buf bytes.Buffer
-	if err := printAgentGet(&buf, false, "claude"); err != nil {
+	if err := printAgentGet(&buf, config.ScopeMerged, "claude"); err != nil {
 		t.Fatalf("printAgentGet: %v", err)
 	}
 
@@ -324,7 +324,7 @@ func TestSnapshot_ConfigGetRole(t *testing.T) {
 	setupSnapshotFixture(t, "roles.cue", snapshotRoleCue)
 
 	var buf bytes.Buffer
-	if err := printRoleGet(&buf, false, "code-reviewer"); err != nil {
+	if err := printRoleGet(&buf, config.ScopeMerged, "code-reviewer"); err != nil {
 		t.Fatalf("printRoleGet: %v", err)
 	}
 
@@ -348,7 +348,7 @@ func TestSnapshot_ConfigGetContext(t *testing.T) {
 	setupSnapshotFixture(t, "contexts.cue", snapshotContextCue)
 
 	var buf bytes.Buffer
-	if err := printContextGet(&buf, false, "environment"); err != nil {
+	if err := printContextGet(&buf, config.ScopeMerged, "environment"); err != nil {
 		t.Fatalf("printContextGet: %v", err)
 	}
 
@@ -427,7 +427,7 @@ func TestSnapshot_ConfigGetAgentObjectForm(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
 	var buf bytes.Buffer
-	if err := printAgentGet(&buf, false, "objform"); err != nil {
+	if err := printAgentGet(&buf, config.ScopeMerged, "objform"); err != nil {
 		t.Fatalf("printAgentGet: %v", err)
 	}
 
@@ -457,7 +457,7 @@ func TestSnapshot_ConfigGetTask(t *testing.T) {
 	setupSnapshotFixture(t, "tasks.cue", snapshotTaskCue)
 
 	var buf bytes.Buffer
-	if err := printTaskGet(&buf, false, "myreview"); err != nil {
+	if err := printTaskGet(&buf, config.ScopeMerged, "myreview"); err != nil {
 		t.Fatalf("printTaskGet: %v", err)
 	}
 
@@ -488,7 +488,7 @@ func TestSnapshot_ConfigGetContextWithoutDescription(t *testing.T) {
 	setupSnapshotFixture(t, "contexts.cue", snapshotDescriptionlessContextCue)
 
 	var buf bytes.Buffer
-	if err := printContextGet(&buf, false, "barebones"); err != nil {
+	if err := printContextGet(&buf, config.ScopeMerged, "barebones"); err != nil {
 		t.Fatalf("printContextGet: %v", err)
 	}
 

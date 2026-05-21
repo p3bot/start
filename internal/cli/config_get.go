@@ -11,7 +11,7 @@ import (
 )
 
 // addConfigGetCommand adds the "config get [query]" command.
-func addConfigGetCommand(parent *cobra.Command) {
+func addConfigGetCommand(parent *cobra.Command, flags *Flags) {
 	cmd := &cobra.Command{
 		Use:   "get [query]",
 		Short: "Show raw config fields for an item",
@@ -19,6 +19,11 @@ func addConfigGetCommand(parent *cobra.Command) {
 
 Search by name across all categories. If multiple items match, a numbered
 menu is presented. With no argument, prompts interactively for category and item.
+
+Use --global to restrict the lookup to the global config (~/.config/start/) or
+--local to restrict to the local config (./.start/). These flags are mutually
+exclusive; omitting both reads the merged configuration where local entries
+override global entries with the same name.
 
 This command shows the raw stored fields for an installed config entry. Related
 commands operate on different data:
@@ -31,7 +36,13 @@ commands operate on different data:
 		RunE: runConfigGet,
 	}
 	cmd.Flags().Bool("json", false, "Output as JSON")
+
+	// Bind --global to flags.Global. AddCommand must run before
+	// MarkFlagsMutuallyExclusive so cobra's mergePersistentFlags() can see
+	// the inherited --local from root via VisitParents.
+	cmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	parent.AddCommand(cmd)
+	cmd.MarkFlagsMutuallyExclusive("local", "global")
 }
 
 // runConfigGet is the handler for "config get [query]".
@@ -42,7 +53,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 
 	stdin := cmd.InOrStdin()
 	stdout := cmd.OutOrStdout()
-	local := getFlags(cmd).Local
+	scope := scopeFromFlags(getFlags(cmd))
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
 	if len(args) == 0 {
@@ -52,11 +63,11 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		if !isTerminal(stdin) {
 			return fmt.Errorf("interactive get requires a terminal")
 		}
-		return runConfigGetInteractive(stdin, stdout, local)
+		return runConfigGetInteractive(stdin, stdout, scope)
 	}
 
 	query := args[0]
-	matches, err := searchAllConfigCategories(query, local)
+	matches, err := searchAllConfigCategories(query, scope)
 	if err != nil {
 		return err
 	}
@@ -74,7 +85,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	if jsonFlag {
 		var results []ConfigListItem
 		for _, m := range matches {
-			item, err := buildConfigListItem(m, local)
+			item, err := buildConfigListItem(m, scope)
 			if err != nil {
 				return err
 			}
@@ -99,18 +110,18 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return printConfigGet(stdout, local, selected)
+	return printConfigGet(stdout, scope, selected)
 }
 
 // runConfigGetInteractive prompts for category then item, then shows the entry.
-func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, local bool) error {
+func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, scope config.Scope) error {
 	_, _ = fmt.Fprintln(stdout, "Get:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
 	if err != nil || category == "" {
 		return err
 	}
 
-	names, err := loadNamesForCategory(category, local)
+	names, err := loadNamesForCategory(category, scope)
 	if err != nil {
 		return err
 	}
@@ -126,20 +137,20 @@ func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, local bool) erro
 		return err
 	}
 
-	return printConfigGet(stdout, local, configMatch{Name: selected, Category: singular})
+	return printConfigGet(stdout, scope, configMatch{Name: selected, Category: singular})
 }
 
 // printConfigGet displays the raw config fields for a single matched item.
-func printConfigGet(w io.Writer, local bool, m configMatch) error {
+func printConfigGet(w io.Writer, scope config.Scope, m configMatch) error {
 	switch m.Category {
 	case "agent":
-		return printAgentGet(w, local, m.Name)
+		return printAgentGet(w, scope, m.Name)
 	case "role":
-		return printRoleGet(w, local, m.Name)
+		return printRoleGet(w, scope, m.Name)
 	case "context":
-		return printContextGet(w, local, m.Name)
+		return printContextGet(w, scope, m.Name)
 	case "task":
-		return printTaskGet(w, local, m.Name)
+		return printTaskGet(w, scope, m.Name)
 	}
 	return fmt.Errorf("unknown category %q", m.Category)
 }
@@ -148,8 +159,8 @@ func printConfigGet(w io.Writer, local bool, m configMatch) error {
 // Source / Origin / Command (Command is agent-only and not owned by the
 // shared writer); the writer owns its own leading blank line and renders
 // the rest.
-func printAgentGet(w io.Writer, local bool, name string) error {
-	agents, _, err := loadAgentsForScope(config.ScopeFromLocal(local))
+func printAgentGet(w io.Writer, scope config.Scope, name string) error {
+	agents, _, err := loadAgentsForScope(scope)
 	if err != nil {
 		return err
 	}
@@ -183,8 +194,8 @@ func printAgentGet(w io.Writer, local bool, name string) error {
 // Source / Origin; everything below — including the leading blank line — is
 // owned by the shared writer (Description -> File -> Command -> Prompt ->
 // Optional -> Tags).
-func printRoleGet(w io.Writer, local bool, name string) error {
-	roles, _, err := loadRolesForScope(config.ScopeFromLocal(local))
+func printRoleGet(w io.Writer, scope config.Scope, name string) error {
+	roles, _, err := loadRolesForScope(scope)
 	if err != nil {
 		return err
 	}
@@ -215,8 +226,8 @@ func printRoleGet(w io.Writer, local bool, name string) error {
 // printContextGet displays raw fields for a context. The header section
 // emits Source / Origin; everything below — including the leading blank
 // line — is owned by the shared writer.
-func printContextGet(w io.Writer, local bool, name string) error {
-	contexts, _, err := loadContextsForScope(config.ScopeFromLocal(local))
+func printContextGet(w io.Writer, scope config.Scope, name string) error {
+	contexts, _, err := loadContextsForScope(scope)
 	if err != nil {
 		return err
 	}
@@ -247,8 +258,8 @@ func printContextGet(w io.Writer, local bool, name string) error {
 // printTaskGet displays raw fields for a task. The header section emits
 // Source / Origin; everything below — including the leading blank line —
 // is owned by the shared writer.
-func printTaskGet(w io.Writer, local bool, name string) error {
-	tasks, _, err := loadTasksForScope(config.ScopeFromLocal(local))
+func printTaskGet(w io.Writer, scope config.Scope, name string) error {
+	tasks, _, err := loadTasksForScope(scope)
 	if err != nil {
 		return err
 	}

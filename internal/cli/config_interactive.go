@@ -14,8 +14,7 @@ var allConfigCategories = []string{"agents", "roles", "contexts", "tasks"}
 // Agents and tasks are returned sorted alphabetically (their config order is not
 // meaningful). Roles and contexts preserve config order, which is managed by
 // "start config order".
-func loadNamesForCategory(category string, local bool) ([]string, error) {
-	scope := config.ScopeFromLocal(local)
+func loadNamesForCategory(category string, scope config.Scope) ([]string, error) {
 	switch category {
 	case "agents":
 		_, order, err := loadAgentsForScope(scope)

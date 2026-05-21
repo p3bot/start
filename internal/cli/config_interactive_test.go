@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/start-cli/start/internal/config"
 )
 
 func TestConfigInteractive_RequiresTerminal(t *testing.T) {
@@ -44,6 +46,7 @@ func TestConfigInteractive_RequiresTerminal(t *testing.T) {
 
 func TestLoadNamesForCategory(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
 
@@ -76,7 +79,7 @@ func TestLoadNamesForCategory(t *testing.T) {
 		{"tasks", "my-task"},
 	} {
 		t.Run(tc.category, func(t *testing.T) {
-			names, err := loadNamesForCategory(tc.category, false)
+			names, err := loadNamesForCategory(tc.category, config.ScopeFromLocal(false))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -88,7 +91,7 @@ func TestLoadNamesForCategory(t *testing.T) {
 	}
 
 	t.Run("unknown category returns error", func(t *testing.T) {
-		_, err := loadNamesForCategory("unknown", false)
+		_, err := loadNamesForCategory("unknown", config.ScopeFromLocal(false))
 		if err == nil {
 			t.Fatal("expected error for unknown category")
 		}

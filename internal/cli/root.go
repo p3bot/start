@@ -119,7 +119,7 @@ Examples:
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)
 	addModulesCommand(cmd)
-	addConfigCommand(cmd)
+	addConfigCommand(cmd, flags)
 	addSearchCommand(cmd)
 	addDoctorCommand(cmd)
 	addCompletionCommand(cmd)

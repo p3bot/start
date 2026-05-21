@@ -10,8 +10,10 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigCommand adds the config command group and its subcommands to the parent.
-func addConfigCommand(parent *cobra.Command) {
+// addConfigCommand adds the config command group and its subcommands to the
+// parent. flags is forwarded to addConfigGetCommand so it can bind --global to
+// flags.Global; no other subcommand factory consumes it.
+func addConfigCommand(parent *cobra.Command, flags *Flags) {
 	configCmd := &cobra.Command{
 		Use:     "config",
 		GroupID: "commands",
@@ -23,9 +25,15 @@ Use --local to target project-specific configuration.`,
 		RunE: runConfigList,
 	}
 
+	// Attach configCmd to root before registering subcommands. addConfigGetCommand
+	// calls MarkFlagsMutuallyExclusive("local", "global"); cobra's
+	// mergePersistentFlags() walks up the parent chain to find --local on root,
+	// so configCmd must already be attached when that runs.
+	parent.AddCommand(configCmd)
+
 	// Verb-first subcommands
 	addConfigListCommand(configCmd)
-	addConfigGetCommand(configCmd)
+	addConfigGetCommand(configCmd, flags)
 	addConfigAddCommand(configCmd)
 	addConfigEditCommand(configCmd)
 	addConfigRemoveCommand(configCmd)
@@ -33,8 +41,6 @@ Use --local to target project-specific configuration.`,
 	addConfigOrderCommand(configCmd)
 	addConfigSettingsCommand(configCmd)
 	addConfigExportCommand(configCmd)
-
-	parent.AddCommand(configCmd)
 }
 
 // runConfigList displays an overview of all configuration.

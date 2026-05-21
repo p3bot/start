@@ -2288,6 +2288,188 @@ func TestConfigSettingsJSON_SingleKey(t *testing.T) {
 	}
 }
 
+// TestConfigGetScope verifies the four --local/--global scope outcomes for
+// config get against a fixture that defines the same name in both global and
+// local config with different field values.
+func TestConfigGetScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Global config: agent "claude" with bin "claude-global".
+	globalDir := filepath.Join(tmpDir, "start")
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	globalCue := `agents: {
+	"claude": {
+		bin: "claude-global"
+		command: "claude \"{{.prompt}}\""
+		description: "Global Claude"
+	}
+}`
+	if err := os.WriteFile(filepath.Join(globalDir, "agents.cue"), []byte(globalCue), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Local config: agent "claude" with bin "claude-local" (same name,
+	// different field value), proving local-wins on merge.
+	localDir := filepath.Join(tmpDir, ".start")
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	localCue := `agents: {
+	"claude": {
+		bin: "claude-local"
+		command: "claude \"{{.prompt}}\""
+		description: "Local Claude"
+	}
+}`
+	if err := os.WriteFile(filepath.Join(localDir, "agents.cue"), []byte(localCue), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	chdir(t, tmpDir)
+
+	run := func(t *testing.T, args ...string) (string, string, error) {
+		t.Helper()
+		cmd := NewRootCmd()
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		cmd.SetOut(stdout)
+		cmd.SetErr(stderr)
+		cmd.SetArgs(append([]string{"config", "get"}, args...))
+		err := cmd.Execute()
+		return stdout.String(), stderr.String(), err
+	}
+
+	t.Run("no flag returns merged with local winning", func(t *testing.T) {
+		stdout, stderr, err := run(t, "claude")
+		if err != nil {
+			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+		}
+		if !strings.Contains(stdout, "claude-local") {
+			t.Errorf("expected merged view to show local-wins bin, got: %s", stdout)
+		}
+		if strings.Contains(stdout, "claude-global") {
+			t.Errorf("merged view should not show global bin when local overrides it, got: %s", stdout)
+		}
+		if !strings.Contains(stdout, "Source: local") {
+			t.Errorf("expected 'Source: local' in merged view, got: %s", stdout)
+		}
+	})
+
+	t.Run("--local returns local entry", func(t *testing.T) {
+		stdout, stderr, err := run(t, "claude", "--local")
+		if err != nil {
+			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+		}
+		if !strings.Contains(stdout, "claude-local") {
+			t.Errorf("expected local bin, got: %s", stdout)
+		}
+		if strings.Contains(stdout, "claude-global") {
+			t.Errorf("--local should not show global bin, got: %s", stdout)
+		}
+		if !strings.Contains(stdout, "Source: local") {
+			t.Errorf("expected 'Source: local', got: %s", stdout)
+		}
+	})
+
+	t.Run("--global returns global entry", func(t *testing.T) {
+		stdout, stderr, err := run(t, "claude", "--global")
+		if err != nil {
+			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+		}
+		if !strings.Contains(stdout, "claude-global") {
+			t.Errorf("expected global bin, got: %s", stdout)
+		}
+		if strings.Contains(stdout, "claude-local") {
+			t.Errorf("--global should not show local bin, got: %s", stdout)
+		}
+		if !strings.Contains(stdout, "Source: global") {
+			t.Errorf("expected 'Source: global', got: %s", stdout)
+		}
+	})
+
+	t.Run("--local --global is a mutual-exclusion error", func(t *testing.T) {
+		stdout, _, err := run(t, "claude", "--local", "--global")
+		if err == nil {
+			t.Fatal("expected mutual-exclusion error, got nil")
+		}
+		if !strings.Contains(err.Error(), "local") || !strings.Contains(err.Error(), "global") {
+			t.Errorf("error should mention both flags, got: %v", err)
+		}
+		if stdout != "" {
+			t.Errorf("expected empty stdout on mutual-exclusion error, got: %q", stdout)
+		}
+	})
+
+	t.Run("--json --global returns global entry with unchanged shape", func(t *testing.T) {
+		stdout, stderr, err := run(t, "claude", "--json", "--global")
+		if err != nil {
+			t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+		}
+		var items []map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &items); err != nil {
+			t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout)
+		}
+		if len(items) != 1 {
+			t.Fatalf("expected 1 item, got %d", len(items))
+		}
+		if items[0]["bin"] != "claude-global" {
+			t.Errorf("expected global bin, got: %v", items[0]["bin"])
+		}
+		if items[0]["source"] != "global" {
+			t.Errorf("expected source=global, got: %v", items[0]["source"])
+		}
+		for _, key := range []string{"name", "category", "source"} {
+			if items[0][key] == nil || items[0][key] == "" {
+				t.Errorf("required JSON field %q missing", key)
+			}
+		}
+	})
+}
+
+func TestConfigGetScope_GlobalMissingFromLocalOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	localDir := filepath.Join(tmpDir, ".start")
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	localOnly := `agents: {
+	"only-local": {
+		bin: "only-local"
+		command: "only-local \"{{.prompt}}\""
+	}
+}`
+	if err := os.WriteFile(filepath.Join(localDir, "agents.cue"), []byte(localOnly), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"config", "get", "only-local", "--global"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected 'not found' error when item lives only in local")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+	if stdout.String() != "" {
+		t.Errorf("expected empty stdout on not-found, got: %q", stdout.String())
+	}
+}
+
 func TestConfigRemovedCommandPaths(t *testing.T) {
 	cases := []struct {
 		name string
