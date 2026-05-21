@@ -321,37 +321,19 @@ func editSettings(localOnly bool) error {
 
 // loadSettingsForScope loads settings from the appropriate scope.
 // Returns an empty map if no settings are configured.
-func loadSettingsForScope(localOnly bool) (map[string]string, error) {
+func loadSettingsForScope(scope config.Scope) (map[string]string, error) {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return nil, fmt.Errorf("resolving config paths: %w", err)
 	}
 
 	settings := make(map[string]string)
-
-	if localOnly {
-		if paths.LocalExists {
-			localSettings, err := config.LoadSettingsFromDir(paths.Local)
-			if err != nil {
-				return nil, err
-			}
-			maps.Copy(settings, localSettings)
+	for _, dir := range paths.ForScope(scope) {
+		dirSettings, err := config.LoadSettingsFromDir(dir)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		if paths.GlobalExists {
-			globalSettings, err := config.LoadSettingsFromDir(paths.Global)
-			if err != nil {
-				return nil, err
-			}
-			maps.Copy(settings, globalSettings)
-		}
-		if paths.LocalExists {
-			localSettings, err := config.LoadSettingsFromDir(paths.Local)
-			if err != nil {
-				return nil, err
-			}
-			maps.Copy(settings, localSettings)
-		}
+		maps.Copy(settings, dirSettings)
 	}
 
 	return settings, nil

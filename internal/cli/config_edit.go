@@ -128,7 +128,7 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 	}
 
 	// Resolve from all scopes so we find the agent regardless of which dir it lives in.
-	allAgents, _, err := loadAgentsForScope(local)
+	allAgents, _, err := loadAgentsForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return fmt.Errorf("loading agents: %w", err)
 	}
@@ -209,7 +209,7 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	allRoles, _, err := loadRolesForScope(local)
+	allRoles, _, err := loadRolesForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
 	}
@@ -313,7 +313,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	allContexts, _, err := loadContextsForScope(local)
+	allContexts, _, err := loadContextsForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return fmt.Errorf("loading contexts: %w", err)
 	}
@@ -426,7 +426,7 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	allTasks, _, err := loadTasksForScope(local)
+	allTasks, _, err := loadTasksForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return fmt.Errorf("loading tasks: %w", err)
 	}

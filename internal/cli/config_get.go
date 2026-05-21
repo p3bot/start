@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -148,7 +149,7 @@ func printConfigGet(w io.Writer, local bool, m configMatch) error {
 // shared writer); the writer owns its own leading blank line and renders
 // the rest.
 func printAgentGet(w io.Writer, local bool, name string) error {
-	agents, _, err := loadAgentsForScope(local)
+	agents, _, err := loadAgentsForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,7 @@ func printAgentGet(w io.Writer, local bool, name string) error {
 // owned by the shared writer (Description -> File -> Command -> Prompt ->
 // Optional -> Tags).
 func printRoleGet(w io.Writer, local bool, name string) error {
-	roles, _, err := loadRolesForScope(local)
+	roles, _, err := loadRolesForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}
@@ -215,7 +216,7 @@ func printRoleGet(w io.Writer, local bool, name string) error {
 // emits Source / Origin; everything below — including the leading blank
 // line — is owned by the shared writer.
 func printContextGet(w io.Writer, local bool, name string) error {
-	contexts, _, err := loadContextsForScope(local)
+	contexts, _, err := loadContextsForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}
@@ -247,7 +248,7 @@ func printContextGet(w io.Writer, local bool, name string) error {
 // Source / Origin; everything below — including the leading blank line —
 // is owned by the shared writer.
 func printTaskGet(w io.Writer, local bool, name string) error {
-	tasks, _, err := loadTasksForScope(local)
+	tasks, _, err := loadTasksForScope(config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}

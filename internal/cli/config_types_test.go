@@ -2,11 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/start-cli/start/internal/config"
 )
 
 func TestDecodeAgentValue_FullMetadata(t *testing.T) {
@@ -333,7 +336,7 @@ func TestConfigList_ObjectFormAgent_JSON_EmitsAliases(t *testing.T) {
 func TestPromptModels_ObjectFormAgent_ListsAllAliases(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
-	agents, _, err := loadAgentsForScope(false)
+	agents, _, err := loadAgentsForScope(config.ScopeMerged)
 	if err != nil {
 		t.Fatalf("loadAgentsForScope: %v", err)
 	}
@@ -362,5 +365,107 @@ func TestPromptModels_ObjectFormAgent_ListsAllAliases(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result, wantMap) {
 		t.Errorf("promptModels result: got %v want %v", result, wantMap)
+	}
+}
+
+// TestLoadAgentsForScope_ScopeMatrix exercises loadForScope[T]'s path-based
+// source labelling across all three scopes. The fixture stages "alpha" and
+// "beta" globally and "beta" (override) plus "gamma" locally. ScopeMerged
+// must report alpha=global, beta=local (override), gamma=local with order
+// [alpha, beta, gamma]; ScopeGlobal must yield only the global pair;
+// ScopeLocal must yield only the local pair. Locking ScopeGlobal here
+// prevents drift before --global is rolled out to any CLI surface.
+//
+// Tests in this function use os.Chdir (via the chdir helper) and modify
+// $HOME / $XDG_CONFIG_HOME; they cannot run in parallel.
+func TestLoadAgentsForScope_ScopeMatrix(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
+
+	globalDir := filepath.Join(dir, ".config", "start")
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatalf("creating global dir: %v", err)
+	}
+	globalCUE := `agents: {
+	"alpha": { bin: "alpha-bin" }
+	"beta":  { bin: "beta-global" }
+}
+`
+	if err := os.WriteFile(filepath.Join(globalDir, "agents.cue"), []byte(globalCUE), 0644); err != nil {
+		t.Fatalf("writing global agents.cue: %v", err)
+	}
+
+	localDir := filepath.Join(dir, "project", ".start")
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		t.Fatalf("creating local dir: %v", err)
+	}
+	localCUE := `agents: {
+	"beta":  { bin: "beta-local" }
+	"gamma": { bin: "gamma-bin" }
+}
+`
+	if err := os.WriteFile(filepath.Join(localDir, "agents.cue"), []byte(localCUE), 0644); err != nil {
+		t.Fatalf("writing local agents.cue: %v", err)
+	}
+
+	chdir(t, filepath.Join(dir, "project"))
+
+	tests := []struct {
+		name        string
+		scope       config.Scope
+		wantOrder   []string
+		wantSources map[string]string
+		wantBins    map[string]string
+	}{
+		{
+			name:        "merged",
+			scope:       config.ScopeMerged,
+			wantOrder:   []string{"alpha", "beta", "gamma"},
+			wantSources: map[string]string{"alpha": "global", "beta": "local", "gamma": "local"},
+			wantBins:    map[string]string{"alpha": "alpha-bin", "beta": "beta-local", "gamma": "gamma-bin"},
+		},
+		{
+			name:        "global",
+			scope:       config.ScopeGlobal,
+			wantOrder:   []string{"alpha", "beta"},
+			wantSources: map[string]string{"alpha": "global", "beta": "global"},
+			wantBins:    map[string]string{"alpha": "alpha-bin", "beta": "beta-global"},
+		},
+		{
+			name:        "local",
+			scope:       config.ScopeLocal,
+			wantOrder:   []string{"beta", "gamma"},
+			wantSources: map[string]string{"beta": "local", "gamma": "local"},
+			wantBins:    map[string]string{"beta": "beta-local", "gamma": "gamma-bin"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			agents, order, err := loadAgentsForScope(tc.scope)
+			if err != nil {
+				t.Fatalf("loadAgentsForScope(%s): %v", tc.scope, err)
+			}
+			if !reflect.DeepEqual(order, tc.wantOrder) {
+				t.Errorf("order: got %v want %v", order, tc.wantOrder)
+			}
+			if len(agents) != len(tc.wantSources) {
+				t.Errorf("agent count: got %d want %d", len(agents), len(tc.wantSources))
+			}
+			for name, wantSource := range tc.wantSources {
+				agent, ok := agents[name]
+				if !ok {
+					t.Errorf("missing agent %q", name)
+					continue
+				}
+				if agent.Source != wantSource {
+					t.Errorf("agent %q Source: got %q want %q", name, agent.Source, wantSource)
+				}
+				if agent.Bin != tc.wantBins[name] {
+					t.Errorf("agent %q Bin: got %q want %q", name, agent.Bin, tc.wantBins[name])
+				}
+			}
+		})
 	}
 }

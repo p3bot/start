@@ -745,7 +745,7 @@ func (r *resolver) ensureIndex() (*registry.Index, *registry.Client, error) {
 // or empty string if not set or on any error. Callers should pass the result
 // to registry.EffectiveIndexPath to get the final module path.
 func resolveLibraryIndexPath() string {
-	settings, err := loadSettingsForScope(false)
+	settings, err := loadSettingsForScope(config.ScopeMerged)
 	if err != nil {
 		return ""
 	}

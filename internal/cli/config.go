@@ -48,7 +48,6 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 
 	w := cmd.OutOrStdout()
 	flags := getFlags(cmd)
-	local := flags.Local
 
 	// Show config paths
 	paths, err := config.ResolvePaths("")
@@ -74,7 +73,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	_, _ = fmt.Fprintln(w, tui.Annotate("%s", localStatus))
 
 	// Determine scope for listing
-	scope := config.ScopeFromLocal(local)
+	scope := config.ScopeFromLocal(flags.Local)
 	scopeLabel := scope.String()
 
 	stderr := cmd.ErrOrStderr()
@@ -94,7 +93,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Agents
-	agents, agentOrder, err := loadAgentsForScope(local)
+	agents, agentOrder, err := loadAgentsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load agents: %s", err)
 	}
@@ -106,7 +105,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	_, _ = tui.ColorDim.Fprintf(w, ": %d\n", len(agents))
 	if len(agents) > 0 {
 		defaultAgent := ""
-		if cfg, err := loadConfigForScope(local); err == nil {
+		if cfg, err := loadConfigForScope(scope); err == nil {
 			defaultAgent = getDefaultAgentFromConfig(cfg)
 		}
 		for _, name := range agentOrder {
@@ -121,7 +120,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Roles
-	roles, roleOrder, err := loadRolesForScope(local)
+	roles, roleOrder, err := loadRolesForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load roles: %s", err)
 	}
@@ -141,7 +140,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Contexts
-	contexts, contextOrder, err := loadContextsForScope(local)
+	contexts, contextOrder, err := loadContextsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load contexts: %s", err)
 	}
@@ -173,7 +172,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Tasks
-	tasks, taskOrder, err := loadTasksForScope(local)
+	tasks, taskOrder, err := loadTasksForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load tasks: %s", err)
 	}

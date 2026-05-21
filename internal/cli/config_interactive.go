@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"sort"
+
+	"github.com/start-cli/start/internal/config"
 )
 
 // allConfigCategories is the ordered set of interactive config categories.
@@ -13,19 +15,20 @@ var allConfigCategories = []string{"agents", "roles", "contexts", "tasks"}
 // meaningful). Roles and contexts preserve config order, which is managed by
 // "start config order".
 func loadNamesForCategory(category string, local bool) ([]string, error) {
+	scope := config.ScopeFromLocal(local)
 	switch category {
 	case "agents":
-		_, order, err := loadAgentsForScope(local)
+		_, order, err := loadAgentsForScope(scope)
 		sort.Strings(order)
 		return order, err
 	case "roles":
-		_, order, err := loadRolesForScope(local)
+		_, order, err := loadRolesForScope(scope)
 		return order, err
 	case "contexts":
-		_, order, err := loadContextsForScope(local)
+		_, order, err := loadContextsForScope(scope)
 		return order, err
 	case "tasks":
-		_, order, err := loadTasksForScope(local)
+		_, order, err := loadTasksForScope(scope)
 		sort.Strings(order)
 		return order, err
 	default:

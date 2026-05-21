@@ -76,8 +76,8 @@ func decodeAgentValue(val cue.Value) AgentConfig {
 
 // loadAgentsForScope loads agents from the appropriate scope.
 // Returns the agents map, names in definition order, and any error.
-func loadAgentsForScope(localOnly bool) (map[string]AgentConfig, []string, error) {
-	return loadForScope(localOnly, loadAgentsFromDir, func(a *AgentConfig, s string) { a.Source = s })
+func loadAgentsForScope(scope config.Scope) (map[string]AgentConfig, []string, error) {
+	return loadForScope(scope, loadAgentsFromDir, func(a *AgentConfig, s string) { a.Source = s })
 }
 
 // loadAgentsFromDir loads agents from a specific directory.
@@ -177,27 +177,18 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 }
 
 // loadConfigForScope loads the settings.cue settings for the scope.
-func loadConfigForScope(localOnly bool) (cue.Value, error) {
+func loadConfigForScope(scope config.Scope) (cue.Value, error) {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return cue.Value{}, err
 	}
 
-	loader := internalcue.NewLoader()
-
-	var dirs []string
-	if localOnly {
-		if paths.LocalExists {
-			dirs = []string{paths.Local}
-		}
-	} else {
-		dirs = paths.ForScope(config.ScopeMerged)
-	}
-
+	dirs := paths.ForScope(scope)
 	if len(dirs) == 0 {
 		return cue.Value{}, fmt.Errorf("no config found")
 	}
 
+	loader := internalcue.NewLoader()
 	result, err := loader.Load(dirs)
 	if err != nil {
 		return cue.Value{}, err
@@ -261,8 +252,8 @@ func decodeRoleValue(val cue.Value) RoleConfig {
 
 // loadRolesForScope loads roles from the appropriate scope.
 // Returns the roles map, names in definition order, and any error.
-func loadRolesForScope(localOnly bool) (map[string]RoleConfig, []string, error) {
-	return loadForScope(localOnly, loadRolesFromDir, func(r *RoleConfig, s string) { r.Source = s })
+func loadRolesForScope(scope config.Scope) (map[string]RoleConfig, []string, error) {
+	return loadForScope(scope, loadRolesFromDir, func(r *RoleConfig, s string) { r.Source = s })
 }
 
 // loadRolesFromDir loads roles from a specific directory.
@@ -391,8 +382,8 @@ func decodeContextValue(val cue.Value) ContextConfig {
 
 // loadContextsForScope loads contexts from the appropriate scope.
 // Returns the contexts map, names in definition order, and any error.
-func loadContextsForScope(localOnly bool) (map[string]ContextConfig, []string, error) {
-	return loadForScope(localOnly, loadContextsFromDir, func(c *ContextConfig, s string) { c.Source = s })
+func loadContextsForScope(scope config.Scope) (map[string]ContextConfig, []string, error) {
+	return loadForScope(scope, loadContextsFromDir, func(c *ContextConfig, s string) { c.Source = s })
 }
 
 // loadContextsFromDir loads contexts from a specific directory.
@@ -520,8 +511,8 @@ func decodeTaskValue(val cue.Value) TaskConfig {
 
 // loadTasksForScope loads tasks from the appropriate scope.
 // Returns the tasks map, names in definition order, and any error.
-func loadTasksForScope(localOnly bool) (map[string]TaskConfig, []string, error) {
-	return loadForScope(localOnly, loadTasksFromDir, func(t *TaskConfig, s string) { t.Source = s })
+func loadTasksForScope(scope config.Scope) (map[string]TaskConfig, []string, error) {
+	return loadForScope(scope, loadTasksFromDir, func(t *TaskConfig, s string) { t.Source = s })
 }
 
 // loadTasksFromDir loads tasks from a specific directory.

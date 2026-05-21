@@ -23,7 +23,7 @@ import (
 // Order: global entries first (in definition order), then local entries (in definition order).
 // Local entries override global entries with the same name but retain their global position.
 func loadForScope[T any](
-	localOnly bool,
+	scope config.Scope,
 	loadFromDir func(string) (map[string]T, []string, error),
 	setSource func(*T, string),
 ) (map[string]T, []string, error) {
@@ -36,46 +36,22 @@ func loadForScope[T any](
 	var order []string
 	seen := make(map[string]bool)
 
-	if localOnly {
-		if paths.LocalExists {
-			localItems, localOrder, err := loadFromDir(paths.Local)
-			if err != nil && !os.IsNotExist(err) {
-				return nil, nil, err
-			}
-			for _, name := range localOrder {
-				item := localItems[name]
-				setSource(&item, "local")
-				items[name] = item
-				order = append(order, name)
-			}
+	for _, dir := range paths.ForScope(scope) {
+		source := "global"
+		if dir == paths.Local {
+			source = "local"
 		}
-	} else {
-		if paths.GlobalExists {
-			globalItems, globalOrder, err := loadFromDir(paths.Global)
-			if err != nil && !os.IsNotExist(err) {
-				return nil, nil, err
-			}
-			for _, name := range globalOrder {
-				item := globalItems[name]
-				setSource(&item, "global")
-				items[name] = item
+		dirItems, dirOrder, err := loadFromDir(dir)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, nil, err
+		}
+		for _, name := range dirOrder {
+			item := dirItems[name]
+			setSource(&item, source)
+			items[name] = item
+			if !seen[name] {
 				order = append(order, name)
 				seen[name] = true
-			}
-		}
-		if paths.LocalExists {
-			localItems, localOrder, err := loadFromDir(paths.Local)
-			if err != nil && !os.IsNotExist(err) {
-				return nil, nil, err
-			}
-			for _, name := range localOrder {
-				item := localItems[name]
-				setSource(&item, "local")
-				items[name] = item
-				// Only add to order if not already present from global
-				if !seen[name] {
-					order = append(order, name)
-				}
 			}
 		}
 	}
@@ -862,8 +838,9 @@ type configMatch struct {
 // Zero matches in a category is not an error; the returned slice may be empty.
 func searchAllConfigCategories(query string, local bool) ([]configMatch, error) {
 	var results []configMatch
+	scope := config.ScopeFromLocal(local)
 
-	agents, _, err := loadAgentsForScope(local)
+	agents, _, err := loadAgentsForScope(scope)
 	if err != nil {
 		return nil, fmt.Errorf("loading agents: %w", err)
 	}
@@ -873,7 +850,7 @@ func searchAllConfigCategories(query string, local bool) ([]configMatch, error) 
 		}
 	}
 
-	roles, _, err := loadRolesForScope(local)
+	roles, _, err := loadRolesForScope(scope)
 	if err != nil {
 		return nil, fmt.Errorf("loading roles: %w", err)
 	}
@@ -883,7 +860,7 @@ func searchAllConfigCategories(query string, local bool) ([]configMatch, error) 
 		}
 	}
 
-	contexts, _, err := loadContextsForScope(local)
+	contexts, _, err := loadContextsForScope(scope)
 	if err != nil {
 		return nil, fmt.Errorf("loading contexts: %w", err)
 	}
@@ -893,7 +870,7 @@ func searchAllConfigCategories(query string, local bool) ([]configMatch, error) 
 		}
 	}
 
-	tasks, _, err := loadTasksForScope(local)
+	tasks, _, err := loadTasksForScope(scope)
 	if err != nil {
 		return nil, fmt.Errorf("loading tasks: %w", err)
 	}

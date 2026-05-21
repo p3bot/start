@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -35,9 +36,10 @@ type ConfigListItem struct {
 // Used by config get and config list JSON paths.
 func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
 	item := ConfigListItem{Category: m.Category, Name: m.Name}
+	scope := config.ScopeFromLocal(local)
 	switch m.Category {
 	case "agent":
-		agents, _, err := loadAgentsForScope(local)
+		agents, _, err := loadAgentsForScope(scope)
 		if err != nil {
 			return item, err
 		}
@@ -54,7 +56,7 @@ func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
 		item.Source = agent.Source
 		item.Origin = agent.Origin
 	case "role":
-		roles, _, err := loadRolesForScope(local)
+		roles, _, err := loadRolesForScope(scope)
 		if err != nil {
 			return item, err
 		}
@@ -71,7 +73,7 @@ func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
 		item.Source = role.Source
 		item.Origin = role.Origin
 	case "context":
-		contexts, _, err := loadContextsForScope(local)
+		contexts, _, err := loadContextsForScope(scope)
 		if err != nil {
 			return item, err
 		}
@@ -89,7 +91,7 @@ func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
 		item.Source = ctx.Source
 		item.Origin = ctx.Origin
 	case "task":
-		tasks, _, err := loadTasksForScope(local)
+		tasks, _, err := loadTasksForScope(scope)
 		if err != nil {
 			return item, err
 		}
@@ -116,9 +118,10 @@ func buildConfigListItem(m configMatch, local bool) (ConfigListItem, error) {
 // The human-readable display preserves injection order for roles and contexts.
 func collectConfigListItems(local bool, category string) ([]ConfigListItem, error) {
 	var items []ConfigListItem
+	scope := config.ScopeFromLocal(local)
 
 	if category == "" || category == "agent" {
-		agents, order, err := loadAgentsForScope(local)
+		agents, order, err := loadAgentsForScope(scope)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +137,7 @@ func collectConfigListItems(local bool, category string) ([]ConfigListItem, erro
 	}
 
 	if category == "" || category == "role" {
-		roles, order, err := loadRolesForScope(local)
+		roles, order, err := loadRolesForScope(scope)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +153,7 @@ func collectConfigListItems(local bool, category string) ([]ConfigListItem, erro
 	}
 
 	if category == "" || category == "context" {
-		contexts, order, err := loadContextsForScope(local)
+		contexts, order, err := loadContextsForScope(scope)
 		if err != nil {
 			return nil, err
 		}
@@ -166,7 +169,7 @@ func collectConfigListItems(local bool, category string) ([]ConfigListItem, erro
 	}
 
 	if category == "" || category == "task" {
-		tasks, order, err := loadTasksForScope(local)
+		tasks, order, err := loadTasksForScope(scope)
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +277,8 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 
 // listAgents prints the agents section to w.
 func listAgents(w io.Writer, stderr io.Writer, local bool) error {
-	agents, order, err := loadAgentsForScope(local)
+	scope := config.ScopeFromLocal(local)
+	agents, order, err := loadAgentsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load agents: %s", err)
 	}
@@ -289,7 +293,7 @@ func listAgents(w io.Writer, stderr io.Writer, local bool) error {
 	}
 
 	defaultAgent := ""
-	if cfg, err := loadConfigForScope(local); err == nil {
+	if cfg, err := loadConfigForScope(scope); err == nil {
 		defaultAgent = getDefaultAgentFromConfig(cfg)
 	}
 
@@ -317,7 +321,8 @@ func listAgents(w io.Writer, stderr io.Writer, local bool) error {
 
 // listRoles prints the roles section to w.
 func listRoles(w io.Writer, stderr io.Writer, local bool) error {
-	roles, order, err := loadRolesForScope(local)
+	scope := config.ScopeFromLocal(local)
+	roles, order, err := loadRolesForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load roles: %s", err)
 	}
@@ -351,7 +356,8 @@ func listRoles(w io.Writer, stderr io.Writer, local bool) error {
 
 // listContexts prints the contexts section to w.
 func listContexts(w io.Writer, stderr io.Writer, local bool) error {
-	contexts, order, err := loadContextsForScope(local)
+	scope := config.ScopeFromLocal(local)
+	contexts, order, err := loadContextsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load contexts: %s", err)
 	}
@@ -403,7 +409,8 @@ func runConfigTaskList(cmd *cobra.Command, _ []string) error {
 
 // listTasks prints the tasks section to w.
 func listTasks(w io.Writer, stderr io.Writer, local bool) error {
-	tasks, order, err := loadTasksForScope(local)
+	scope := config.ScopeFromLocal(local)
+	tasks, order, err := loadTasksForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load tasks: %s", err)
 	}
