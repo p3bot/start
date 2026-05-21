@@ -115,9 +115,8 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 // collectConfigListItems loads all configured items for the given category (or all if "").
 // All categories are sorted alphabetically for consistent, analysis-friendly JSON output.
 // The human-readable display preserves injection order for roles and contexts.
-func collectConfigListItems(local bool, category string) ([]ConfigListItem, error) {
+func collectConfigListItems(scope config.Scope, category string) ([]ConfigListItem, error) {
 	var items []ConfigListItem
-	scope := config.ScopeFromLocal(local)
 
 	if category == "" || category == "agent" {
 		agents, order, err := loadAgentsForScope(scope)
@@ -212,7 +211,7 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	_, _ = fmt.Fprintln(cmd.OutOrStdout())
-	local := getFlags(cmd).Local
+	scope := config.ScopeFromLocal(getFlags(cmd).Local)
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
 	if jsonFlag {
@@ -223,7 +222,7 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("unknown category %q: expected agent, role, context, or task", args[0])
 			}
 		}
-		items, err := collectConfigListItems(local, category)
+		items, err := collectConfigListItems(scope, category)
 		if err != nil {
 			return err
 		}
@@ -241,19 +240,19 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 0 {
 		// List all categories
-		if err := listAgents(w, stderr, local); err != nil {
+		if err := listAgents(w, stderr, scope); err != nil {
 			return err
 		}
 		_, _ = fmt.Fprintln(w)
-		if err := listRoles(w, stderr, local); err != nil {
+		if err := listRoles(w, stderr, scope); err != nil {
 			return err
 		}
 		_, _ = fmt.Fprintln(w)
-		if err := listContexts(w, stderr, local); err != nil {
+		if err := listContexts(w, stderr, scope); err != nil {
 			return err
 		}
 		_, _ = fmt.Fprintln(w)
-		return listTasks(w, stderr, local)
+		return listTasks(w, stderr, scope)
 	}
 
 	category := normalizeCategoryArg(args[0])
@@ -263,20 +262,19 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 
 	switch category {
 	case "agent":
-		return listAgents(w, stderr, local)
+		return listAgents(w, stderr, scope)
 	case "role":
-		return listRoles(w, stderr, local)
+		return listRoles(w, stderr, scope)
 	case "context":
-		return listContexts(w, stderr, local)
+		return listContexts(w, stderr, scope)
 	case "task":
-		return listTasks(w, stderr, local)
+		return listTasks(w, stderr, scope)
 	}
 	return nil
 }
 
 // listAgents prints the agents section to w.
-func listAgents(w io.Writer, stderr io.Writer, local bool) error {
-	scope := config.ScopeFromLocal(local)
+func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	agents, order, err := loadAgentsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load agents: %s", err)
@@ -319,8 +317,7 @@ func listAgents(w io.Writer, stderr io.Writer, local bool) error {
 }
 
 // listRoles prints the roles section to w.
-func listRoles(w io.Writer, stderr io.Writer, local bool) error {
-	scope := config.ScopeFromLocal(local)
+func listRoles(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	roles, order, err := loadRolesForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load roles: %s", err)
@@ -354,8 +351,7 @@ func listRoles(w io.Writer, stderr io.Writer, local bool) error {
 }
 
 // listContexts prints the contexts section to w.
-func listContexts(w io.Writer, stderr io.Writer, local bool) error {
-	scope := config.ScopeFromLocal(local)
+func listContexts(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	contexts, order, err := loadContextsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load contexts: %s", err)
@@ -403,12 +399,12 @@ func listContexts(w io.Writer, stderr io.Writer, local bool) error {
 // runConfigTaskList is a Cobra-compatible wrapper used by task.go.
 func runConfigTaskList(cmd *cobra.Command, _ []string) error {
 	_, _ = fmt.Fprintln(cmd.OutOrStdout())
-	return listTasks(cmd.OutOrStdout(), cmd.ErrOrStderr(), getFlags(cmd).Local)
+	scope := config.ScopeFromLocal(getFlags(cmd).Local)
+	return listTasks(cmd.OutOrStdout(), cmd.ErrOrStderr(), scope)
 }
 
 // listTasks prints the tasks section to w.
-func listTasks(w io.Writer, stderr io.Writer, local bool) error {
-	scope := config.ScopeFromLocal(local)
+func listTasks(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	tasks, order, err := loadTasksForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load tasks: %s", err)

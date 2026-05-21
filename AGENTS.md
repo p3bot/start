@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: [04-retire-localonly-bool-pattern.md](./04-retire-localonly-bool-pattern.md)
+Active Project: [05-doctor-verify-module-paths.md](./05-doctor-verify-module-paths.md)
 
 When a project is complete, update this file to point to the next active project
 

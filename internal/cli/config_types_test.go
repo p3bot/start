@@ -300,7 +300,7 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 func TestConfigList_ObjectFormAgent_JSON_EmitsAliases(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
-	items, err := collectConfigListItems(false, "agent")
+	items, err := collectConfigListItems(config.ScopeMerged, "agent")
 	if err != nil {
 		t.Fatalf("collectConfigListItems: %v", err)
 	}

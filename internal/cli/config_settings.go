@@ -61,7 +61,7 @@ func executeConfigSettings(cmd *cobra.Command, args []string) error {
 
 	stdout := cmd.OutOrStdout()
 	flags := getFlags(cmd)
-	local := flags.Local
+	scope := config.ScopeFromLocal(flags.Local)
 	unset, _ := cmd.Flags().GetBool("unset")
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
@@ -72,41 +72,41 @@ func executeConfigSettings(cmd *cobra.Command, args []string) error {
 		if len(args) > 1 {
 			return fmt.Errorf("--unset takes only one argument")
 		}
-		return unsetSetting(stdout, flags, args[0], local)
+		return unsetSetting(stdout, flags, args[0], flags.Local)
 	}
 
 	switch len(args) {
 	case 0:
 		if jsonFlag {
-			return listSettingsJSON(stdout, local)
+			return listSettingsJSON(stdout, scope)
 		}
 		// List all settings
-		return listSettings(stdout, local)
+		return listSettings(stdout, scope)
 	case 1:
 		if args[0] == "list" || args[0] == "ls" {
 			if jsonFlag {
-				return listSettingsJSON(stdout, local)
+				return listSettingsJSON(stdout, scope)
 			}
-			return listSettings(stdout, local)
+			return listSettings(stdout, scope)
 		}
 		if args[0] == "edit" {
-			return editSettings(local)
+			return editSettings(flags.Local)
 		}
 		if jsonFlag {
-			return showSettingJSON(stdout, args[0], local)
+			return showSettingJSON(stdout, args[0], scope)
 		}
 		// Show single setting
-		return showSetting(stdout, args[0], local)
+		return showSetting(stdout, args[0], scope)
 	case 2:
 		// Set setting
-		return setSetting(stdout, flags, args[0], args[1], local)
+		return setSetting(stdout, flags, args[0], args[1], flags.Local)
 	default:
 		return fmt.Errorf("too many arguments")
 	}
 }
 
 // listSettings displays all settings with their values and sources.
-func listSettings(w io.Writer, localOnly bool) error {
+func listSettings(w io.Writer, scope config.Scope) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -117,7 +117,7 @@ func listSettings(w io.Writer, localOnly bool) error {
 	printConfigPaths(w, paths)
 	_, _ = fmt.Fprintln(w)
 
-	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
+	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func printSettingsEntries(w io.Writer, entries map[string]config.SettingEntry) {
 }
 
 // showSetting displays a single setting value with its source.
-func showSetting(w io.Writer, key string, localOnly bool) error {
+func showSetting(w io.Writer, key string, scope config.Scope) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
 		return fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString())
 	}
@@ -188,7 +188,7 @@ func showSetting(w io.Writer, key string, localOnly bool) error {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
+	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}
@@ -205,13 +205,13 @@ func showSetting(w io.Writer, key string, localOnly bool) error {
 }
 
 // listSettingsJSON outputs all settings as a JSON object keyed by setting name.
-func listSettingsJSON(w io.Writer, localOnly bool) error {
+func listSettingsJSON(w io.Writer, scope config.Scope) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
+	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func listSettingsJSON(w io.Writer, localOnly bool) error {
 }
 
 // showSettingJSON outputs a single setting as a JSON object.
-func showSettingJSON(w io.Writer, key string, localOnly bool) error {
+func showSettingJSON(w io.Writer, key string, scope config.Scope) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
 		return fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString())
 	}
@@ -233,7 +233,7 @@ func showSettingJSON(w io.Writer, key string, localOnly bool) error {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	entries, err := config.ResolveAllSettings(paths, config.ScopeFromLocal(localOnly))
+	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}
