@@ -14,6 +14,7 @@ import (
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/orchestration"
 )
 
 // CheckIntro returns the intro section with repository info.
@@ -450,12 +451,54 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 		}
 	}
 
-	// @module/ paths are resolved at runtime via the CUE module cache
+	// @module/ paths resolve via the role/context/task's origin field against
+	// the CUE module cache. Honestly report whether the extract is present.
 	if strings.HasPrefix(filePath, "@module/") {
+		origin := orchestration.ExtractOrigin(v)
+		if origin == "" {
+			return &CheckResult{
+				Status:  StatusFail,
+				Label:   name,
+				Message: "@module/ path without origin field",
+				Fix:     fmt.Sprintf("Add an origin field to %q, or replace the @module/ path with a local file", name),
+			}
+		}
+		resolved, err := orchestration.ResolveModulePath(filePath, origin)
+		if err != nil {
+			// Extract dir is genuinely missing from the cache.
+			return &CheckResult{
+				Status:  StatusNotFound,
+				Label:   name,
+				Message: fmt.Sprintf("module not extracted (%s)", originVersion(origin)),
+				Fix:     fmt.Sprintf("Run 'start modules install %s' to fetch the module", name),
+			}
+		}
+		if _, err := os.Stat(resolved); os.IsNotExist(err) {
+			// Extract dir is present but the declared file is missing
+			// from it — config path is wrong, or the module shipped
+			// without the file. Reinstall will not help.
+			return &CheckResult{
+				Status:  StatusNotFound,
+				Label:   name,
+				Message: fmt.Sprintf("%s not in module (%s)", filePath, originVersion(origin)),
+				Fix:     fmt.Sprintf("Verify %q exists in module %s, or update the file field on %q", filePath, origin, name),
+			}
+		} else if err != nil {
+			return &CheckResult{
+				Status:  StatusFail,
+				Label:   name,
+				Message: fmt.Sprintf("%s (%v)", filePath, err),
+			}
+		}
+		// Source the version from the resolved path: ResolveModulePath
+		// can fall back to a different cached version than declared, and
+		// the user needs to see what they will actually get.
+		relativePath := strings.TrimPrefix(filePath, "@module/")
+		versionedDir := filepath.Base(strings.TrimSuffix(resolved, string(filepath.Separator)+relativePath))
 		return &CheckResult{
 			Status:  StatusPass,
 			Label:   name,
-			Message: "(registry module)",
+			Message: fmt.Sprintf("(registry module %s)", originVersion(versionedDir)),
 		}
 	}
 
@@ -719,6 +762,15 @@ func formatDuration(d time.Duration) string {
 		return "1 day"
 	}
 	return fmt.Sprintf("%d days", days)
+}
+
+// originVersion returns the version suffix from an origin string, or the
+// origin itself if no version is present.
+func originVersion(origin string) string {
+	if idx := strings.LastIndex(origin, "@"); idx != -1 {
+		return origin[idx+1:]
+	}
+	return origin
 }
 
 // expandPath expands ~ to the user's home directory.

@@ -136,8 +136,10 @@ func (r *Reporter) printResult(result CheckResult, noIcons bool) {
 		_, _ = fmt.Fprintln(r.w)
 	}
 
-	// Print fix suggestion if present and there's an issue
-	if result.Fix != "" && (result.Status == StatusFail || result.Status == StatusWarn) {
+	// Print fix suggestion if present and the result is actionable.
+	// IsIssue treats NotFound as actionable only when Fix is non-empty,
+	// so the explicit Fix != "" guard here covers Fail/Warn alone.
+	if result.Fix != "" && result.IsIssue() {
 		fixIndent := strings.Repeat("  ", result.Indent+2)
 		_, _ = fmt.Fprint(r.w, fixIndent)
 		fprintDim(r.w, "Fix: "+result.Fix)
@@ -160,31 +162,39 @@ func (r *Reporter) printSummary(report Report) {
 
 	errCount := report.ErrorCount()
 	warnings := report.WarnCount()
+	missing := report.MissingCount()
 
-	if errCount == 0 && warnings == 0 {
+	if errCount == 0 && warnings == 0 && missing == 0 {
 		_, _ = tui.ColorSuccess.Fprintln(r.w, "  No issues found")
 		_, _ = fmt.Fprintln(r.w)
 		return
 	}
 
-	// Count summary
+	// Count summary. Sep tracks whether the next segment needs a leading
+	// ", " so segments compose cleanly regardless of which are non-zero.
 	_, _ = fmt.Fprint(r.w, "  ")
+	sep := ""
 	if errCount > 0 {
 		label := "error"
 		if errCount > 1 {
 			label = "errors"
 		}
 		_, _ = tui.ColorError.Fprintf(r.w, "%d %s", errCount, label)
-		if warnings > 0 {
-			_, _ = fmt.Fprint(r.w, ", ")
-		}
+		sep = ", "
 	}
 	if warnings > 0 {
+		_, _ = fmt.Fprint(r.w, sep)
 		label := "warning"
 		if warnings > 1 {
 			label = "warnings"
 		}
 		_, _ = tui.ColorWarning.Fprintf(r.w, "%d %s", warnings, label)
+		sep = ", "
+	}
+	if missing > 0 {
+		_, _ = fmt.Fprint(r.w, sep)
+		label := "missing"
+		_, _ = tui.ColorDim.Fprintf(r.w, "%d %s", missing, label)
 	}
 	_, _ = fmt.Fprintln(r.w, " found")
 	_, _ = fmt.Fprintln(r.w)
@@ -215,8 +225,11 @@ func (r *Reporter) printQuiet(report Report) {
 	for _, issue := range issues {
 		sc := statusColor(issue.Status)
 		prefix := "Warning"
-		if issue.Status == StatusFail {
+		switch issue.Status {
+		case StatusFail:
 			prefix = "Error"
+		case StatusNotFound:
+			prefix = "Missing"
 		}
 
 		_, _ = sc.Fprintf(r.w, "%s: ", prefix)

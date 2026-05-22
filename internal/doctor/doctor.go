@@ -83,11 +83,27 @@ type Report struct {
 	Sections []SectionResult `json:"sections"`
 }
 
-// HasIssues returns true if the report contains any failures or warnings.
+// IsIssue reports whether a check result is an actionable issue.
+// Failures and warnings always are. NotFound results are issues only when
+// they carry a Fix string — bare NotFound (e.g. an optional local file
+// the user has not created) stays informational and must not force a
+// non-zero exit code.
+func (c CheckResult) IsIssue() bool {
+	switch c.Status {
+	case StatusFail, StatusWarn:
+		return true
+	case StatusNotFound:
+		return c.Fix != ""
+	default:
+		return false
+	}
+}
+
+// HasIssues returns true if the report contains any actionable issues.
 func (r Report) HasIssues() bool {
 	for _, s := range r.Sections {
 		for _, c := range s.Results {
-			if c.Status == StatusFail || c.Status == StatusWarn {
+			if c.IsIssue() {
 				return true
 			}
 		}
@@ -95,12 +111,12 @@ func (r Report) HasIssues() bool {
 	return false
 }
 
-// Issues returns all check results that are failures or warnings.
+// Issues returns all actionable check results (see CheckResult.IsIssue).
 func (r Report) Issues() []CheckResult {
 	var issues []CheckResult
 	for _, s := range r.Sections {
 		for _, c := range s.Results {
-			if c.Status == StatusFail || c.Status == StatusWarn {
+			if c.IsIssue() {
 				issues = append(issues, c)
 			}
 		}
@@ -127,6 +143,21 @@ func (r Report) WarnCount() int {
 	for _, s := range r.Sections {
 		for _, c := range s.Results {
 			if c.Status == StatusWarn {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// MissingCount returns the number of actionable missing-artifact results
+// (StatusNotFound with a non-empty Fix). Bare NotFound results are
+// excluded so optional local files do not inflate the count.
+func (r Report) MissingCount() int {
+	count := 0
+	for _, s := range r.Sections {
+		for _, c := range s.Results {
+			if c.Status == StatusNotFound && c.Fix != "" {
 				count++
 			}
 		}

@@ -514,6 +514,164 @@ func TestCheckRoles_PromptFallback(t *testing.T) {
 	}
 }
 
+// TestCheckRoles_ModulePath covers the three @module/ outcomes:
+// extract present (StatusPass), extract missing with origin (StatusNotFound),
+// and origin missing (StatusFail). Each scenario is the only legitimate
+// answer doctor can give without lying, and the Fix string is the user's
+// recovery path. t.Setenv precludes t.Parallel.
+func TestCheckRoles_ModulePath(t *testing.T) {
+	cacheDir := t.TempDir()
+	t.Setenv("CUE_CACHE_DIR", cacheDir)
+
+	moduleDir := filepath.Join(cacheDir, "mod", "extract",
+		"github.com", "test", "roles", "library", "assistant@v1.0.0")
+	if err := os.MkdirAll(moduleDir, 0755); err != nil {
+		t.Fatalf("mkdir module cache: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "role.md"),
+		[]byte("Module role"), 0644); err != nil {
+		t.Fatalf("write role.md: %v", err)
+	}
+
+	t.Run("extract present", func(t *testing.T) {
+		cctx := cuecontext.New()
+		v := cctx.CompileString(`roles: { myrole: {
+			origin: "github.com/test/roles/library/assistant@v1.0.0"
+			file: "@module/role.md"
+		} }`)
+
+		section := CheckRoles(v)
+		if len(section.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(section.Results))
+		}
+		r := section.Results[0]
+		if r.Status != StatusPass {
+			t.Errorf("status = %v, want StatusPass", r.Status)
+		}
+		if !strings.Contains(r.Message, "v1.0.0") {
+			t.Errorf("message = %q, want it to include the version", r.Message)
+		}
+		if r.Message == "(registry module)" {
+			t.Errorf("message = %q, must differ from the legacy unverified placeholder", r.Message)
+		}
+	})
+
+	t.Run("fallback resolves to cached version", func(t *testing.T) {
+		// Config declares v2.0.0 but the only cached version is the
+		// v1.0.0 fabricated at parent test setup. ResolveModulePath falls
+		// back to v1.0.0. The pass-case message must reflect what was
+		// actually resolved, not the version declared in config.
+		cctx := cuecontext.New()
+		v := cctx.CompileString(`roles: { myrole: {
+			origin: "github.com/test/roles/library/assistant@v2.0.0"
+			file: "@module/role.md"
+		} }`)
+
+		section := CheckRoles(v)
+		if len(section.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(section.Results))
+		}
+		r := section.Results[0]
+		if r.Status != StatusPass {
+			t.Errorf("status = %v, want StatusPass", r.Status)
+		}
+		if strings.Contains(r.Message, "v2.0.0") {
+			t.Errorf("message = %q, must not claim the declared v2.0.0 when the fallback resolved to v1.0.0", r.Message)
+		}
+		if !strings.Contains(r.Message, "v1.0.0") {
+			t.Errorf("message = %q, want it to include the resolved version v1.0.0", r.Message)
+		}
+	})
+
+	t.Run("extract present but file missing", func(t *testing.T) {
+		// Same extract dir as the happy path, but the role's file: field
+		// references a file that the module does not contain. Install
+		// will not fix this — the Fix must point at the file path, not
+		// the module.
+		cctx := cuecontext.New()
+		v := cctx.CompileString(`roles: { myrole: {
+			origin: "github.com/test/roles/library/assistant@v1.0.0"
+			file: "@module/nonexistent.md"
+		} }`)
+
+		section := CheckRoles(v)
+		if len(section.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(section.Results))
+		}
+		r := section.Results[0]
+		if r.Status != StatusNotFound {
+			t.Errorf("status = %v, want StatusNotFound", r.Status)
+		}
+		if strings.Contains(r.Fix, "modules install") {
+			t.Errorf("fix = %q, must not advise reinstall when the extract is present", r.Fix)
+		}
+		if !strings.Contains(r.Fix, "@module/nonexistent.md") {
+			t.Errorf("fix = %q, want it to mention the offending file path", r.Fix)
+		}
+	})
+
+	t.Run("stat returns non-IsNotExist error", func(t *testing.T) {
+		// role.md exists as a regular file, so traversing through it as
+		// "role.md/sub.md" returns ENOTDIR — distinct from IsNotExist.
+		// Doctor must classify this as a real failure (StatusFail), not
+		// a missing-file misconfiguration, since the recovery path is
+		// different.
+		cctx := cuecontext.New()
+		v := cctx.CompileString(`roles: { myrole: {
+			origin: "github.com/test/roles/library/assistant@v1.0.0"
+			file: "@module/role.md/sub.md"
+		} }`)
+
+		section := CheckRoles(v)
+		if len(section.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(section.Results))
+		}
+		r := section.Results[0]
+		if r.Status != StatusFail {
+			t.Errorf("status = %v, want StatusFail for non-IsNotExist stat error", r.Status)
+		}
+	})
+
+	t.Run("extract missing with origin", func(t *testing.T) {
+		cctx := cuecontext.New()
+		v := cctx.CompileString(`roles: { myrole: {
+			origin: "github.com/test/roles/missing/mod@v9.9.9"
+			file: "@module/role.md"
+		} }`)
+
+		section := CheckRoles(v)
+		if len(section.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(section.Results))
+		}
+		r := section.Results[0]
+		if r.Status != StatusNotFound {
+			t.Errorf("status = %v, want StatusNotFound", r.Status)
+		}
+		if !strings.Contains(r.Fix, "modules install") {
+			t.Errorf("fix = %q, want it to mention 'modules install'", r.Fix)
+		}
+	})
+
+	t.Run("origin missing", func(t *testing.T) {
+		cctx := cuecontext.New()
+		v := cctx.CompileString(`roles: { myrole: {
+			file: "@module/role.md"
+		} }`)
+
+		section := CheckRoles(v)
+		if len(section.Results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(section.Results))
+		}
+		r := section.Results[0]
+		if r.Status != StatusFail {
+			t.Errorf("status = %v, want StatusFail", r.Status)
+		}
+		if !strings.Contains(r.Fix, "origin") {
+			t.Errorf("fix = %q, want it to mention the origin field", r.Fix)
+		}
+	})
+}
+
 func TestCheckRoles_NoFileOrPrompt(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
@@ -707,7 +865,10 @@ func TestCheckTasks_InlinePrompt(t *testing.T) {
 	}
 }
 
-func TestCheckTasks_ModulePath(t *testing.T) {
+// TestCheckTasks_ModulePathNoOrigin covers the failure case where an
+// @module/ task path is declared without an origin field. The runtime
+// cannot resolve such a path, so doctor must fail loudly rather than pass.
+func TestCheckTasks_ModulePathNoOrigin(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
 	v := cctx.CompileString(`tasks: { modtask: { file: "@module/task.md" } }`)
@@ -717,11 +878,11 @@ func TestCheckTasks_ModulePath(t *testing.T) {
 	if len(section.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(section.Results))
 	}
-	if section.Results[0].Status != StatusPass {
-		t.Errorf("status = %v, want StatusPass", section.Results[0].Status)
+	if section.Results[0].Status != StatusFail {
+		t.Errorf("status = %v, want StatusFail", section.Results[0].Status)
 	}
-	if section.Results[0].Message != "(registry module)" {
-		t.Errorf("message = %q, want %q", section.Results[0].Message, "(registry module)")
+	if !strings.Contains(section.Results[0].Fix, "origin") {
+		t.Errorf("fix = %q, want it to mention the origin field", section.Results[0].Fix)
 	}
 }
 
