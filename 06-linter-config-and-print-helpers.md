@@ -1,224 +1,201 @@
-# Add linter config and refactor print-with-discard pattern
+# Add linter config and strip print-with-discard prefix
 
 ## Goal
 
-Install a linter configuration that catches discarded write errors, then
-retire the repeated `_, _ = fmt.Fprintln(w, ...)` pattern that exists
-across the CLI so write calls read cleanly instead of trailing the
-`_, _ =` discard. The pattern appears 576 times across roughly 30 files
-today; left as-is it dominates the visual texture of every command
-implementation and tempts copy-paste mistakes when error handling
-actually matters.
+Install a Go linter at the repo root that catches unchecked errors
+generally, with the `Fprint*` family excluded so the historical
+`_, _ = fmt.Fprintln(w, ...)` pattern can drop its discard prefix and
+read as a bare stdlib call. The pattern appears at roughly 700 sites
+across the CLI today; left as-is it dominates the visual texture of
+every command implementation and tempts copy-paste mistakes when error
+handling actually matters. The linter is the durable safety net for
+unchecked errors elsewhere in the codebase; the strip is a one-time
+cleanup that lets the print sites read normally.
 
 ## Scope
 
 In scope:
 
-- Add a `.golangci.yml` (or equivalent) at the repo root that runs
-  `errcheck` against the codebase with rules tuned so write-to-stdout
-  calls funnel through helpers rather than being discarded inline.
-- Wire the linter into `scripts/invoke-tests` (or add a sibling script)
-  so CI catches future regressions.
-- Add or extend print helpers in `internal/cli/output.go` (and an
-  equivalent helper for `internal/orchestration` and `internal/tui`
-  where the same pattern appears) that absorb the discard, so callers
-  write `out.Println(w, ...)` or similar instead of
-  `_, _ = fmt.Fprintln(w, ...)`.
-- Refactor every existing `_, _ = fmt.Fprint*` call in production code
-  under `cmd/` and `internal/` to use the new helpers.
-- Update unit tests where they assert on output to confirm the
-  refactor preserves byte-for-byte behaviour.
+- Add a `.golangci.yml` at the repo root that runs `errcheck` against
+  the codebase, with `fmt.Fprint`, `fmt.Fprintf`, `fmt.Fprintln`, and
+  the fatih/color `Fprint*` methods listed under `exclude-functions`
+  so bare calls to those functions do not trip the linter.
+- Wire the linter into `scripts/invoke-tests` (or add a sibling
+  script) so the lint runs alongside `go test`.
+- Strip the `_, _ = ` prefix from every `_, _ = fmt.Fprint*` and
+  `_, _ = tui.Color*.Fprint*` site in production code under `cmd/` and
+  `internal/`, leaving the bare call (e.g.
+  `fmt.Fprintln(w, "text")`).
+- Update unit tests where they assert on output to confirm the strip
+  preserves byte-for-byte behaviour.
 
 Out of scope:
 
-- Refactoring `_ = root.Help()` and similar error-ignoring patterns
-  that are not print calls.
-- Adding new linters beyond what is needed for the discard pattern
-  (e.g. no `gosec`, `revive`, `staticcheck` rule expansion in this
-  project). The linter config is minimal and focused.
+- Refactoring `_ = root.Help()`, `_ = cmd.Usage()`,
+  `_ = cmd.Flags().MarkHidden(...)`, or other explicit single-blank
+  discards. errcheck's default behaviour ignores `_ = ...`
+  assignments, so these stay as-is naturally.
+- Adding new linters beyond `errcheck` (no `gosec`, `revive`,
+  `staticcheck` rule expansion in this project). The linter config is
+  minimal and focused.
+- Adding new print helpers. The existing helpers
+  (`printWarning`, `printHeader`, `printSeparator`,
+  `printContextTable`, `printAgentModel`, `printRoleTable`, the
+  `Progress` methods, etc.) keep their current shape; only their
+  internal `_, _ = ` prefixes are stripped.
 - Restructuring command output, colour usage, or the `tui` package's
   public API.
 - Library or homebrew-tap changes.
-- Touching test files purely to swap the print pattern — refactor test
+- Touching test files purely to swap the print pattern — strip test
   files only where the production change forces it.
 
 ## Current State
 
 Production code uses the `_, _ = fmt.Fprintln(w, ...)` /
-`_, _ = fmt.Fprintf(w, ...)` / `_, _ = fmt.Fprint(w, ...)` pattern in
-576 sites across roughly 30 files. Representative files:
+`_, _ = fmt.Fprintf(w, ...)` / `_, _ = fmt.Fprint(w, ...)` pattern at
+roughly 700 sites across 30 files under `cmd/` and `internal/`.
+Representative files:
 
 - `internal/cli/start.go` — heavy user (interactive prompts, status
   output, prompt preview).
-- `internal/cli/output.go` — already hosts `printWarning`,
-  `printHeader`, `printSeparator`, `printContextTable`. These helpers
-  themselves contain the discard pattern internally, but absorb it
-  away from their callers.
+- `internal/cli/output.go` — hosts `printWarning`, `printHeader`,
+  `printSeparator`, `printContextTable`, `printAgentModel`,
+  `printRoleTable`. These call `fmt.Fprint*` and
+  `tui.Color*.Fprint*` internally with the discard prefix.
 - `internal/cli/config_*.go` — every config subcommand writes to its
   `cmd.OutOrStdout()` via the discard pattern.
 - `internal/cli/describe.go`, `internal/cli/get.go`,
   `internal/cli/task.go`, `internal/cli/modules_*.go` — same pattern.
-- `internal/orchestration/autosetup.go` — eleven sites on
+- `internal/orchestration/autosetup.go` — multiple sites on
   `a.stdout`.
-- `internal/doctor/reporter.go` — twelve sites on the report writer.
-- `internal/tui/tui.go` — two sites inside `progress` formatting.
+- `internal/doctor/reporter.go` — multiple sites on the report
+  writer.
+- `internal/tui/tui.go` — two sites inside `Progress.Update` and
+  `Progress.Done`.
 - `cmd/start/main.go` — one site writing the top-level error to
   `os.Stderr`.
 
-Helpers already present in `internal/cli/output.go`:
-
-- `writeJSON(w io.Writer, v any) error` — returns the error.
-- `printWarning(w io.Writer, format string, args ...any)`.
-- `printHeader(w io.Writer, text string)`.
-- `printSeparator(w io.Writer)`.
-- `printContextTable(...)` and other table helpers.
-
 The colour-aware helpers in `internal/tui` (`ColorWarning`,
 `ColorHeader`, `ColorSeparator`, `ColorAgents`, `ColorContexts`,
-`ColorDim`, `ColorSuccess`, `ColorTasks`) all expose `Fprint`,
-`Fprintf`, `Fprintln` methods that also return `(int, error)` and are
-currently discarded inline. The refactor must cover the
-`_, _ = tui.ColorX.Fprint*` variant as well as the bare `fmt.Fprint*`
-variant.
+`ColorDim`, `ColorSuccess`, `ColorTasks`, and the rest) all expose
+`Fprint`, `Fprintf`, `Fprintln` methods that return `(int, error)`.
+The strip applies to these the same way as to bare `fmt.Fprint*`
+calls; the `.golangci.yml` `exclude-functions` list names the
+fatih/color methods so the bare calls are not flagged.
 
-There is no `.golangci.yml`, `.golangci.toml`, or any linter config at
-the repo root today. `scripts/invoke-tests` runs `go test` only — no
-`go vet`, no `errcheck`.
+There is no `.golangci.yml` or any linter config at the repo root
+today. `scripts/invoke-tests` runs `go test` only — no `go vet`, no
+`errcheck`.
 
 Go version: 1.25.0 (`go.mod`). Module path:
-`github.com/start-cli/start`.
+`github.com/start-cli/start`. fatih/color is at v1.18.0.
 
 ## References
 
 - Project writing guide: `~/.ai/docs/project-writing-guide.md`
-- `start/AGENTS.md` for build, test invocation, and project conventions.
+- `start/AGENTS.md` for build, test invocation, and project
+  conventions.
 - golangci-lint documentation: https://golangci-lint.run/
-- `errcheck` linter (the closest fit for the discard pattern):
+- `errcheck` linter and its `exclude-functions` config:
   https://github.com/kisielk/errcheck
 
 ## Requirements
 
-1. A linter configuration file exists at the repo root and configures
-   `errcheck` (or an equivalent rule from the chosen linter) so that
-   discarded `Fprint*` errors fail the check.
+1. A `.golangci.yml` (or equivalent) exists at the repo root with
+   `errcheck` enabled. The `exclude-functions` list includes
+   `fmt.Fprint`, `fmt.Fprintf`, `fmt.Fprintln`, and the fatih/color
+   `Fprint*` methods so bare calls to those functions do not trigger
+   errcheck.
 2. The linter is invokable via a single command from `scripts/`
-   (either folded into `invoke-tests` or as `scripts/invoke-lint` —
-   the implementer chooses).
+   (folded into `invoke-tests` or as `scripts/invoke-lint` — the
+   implementer chooses).
 3. The number of `_, _ = fmt.Fprint*` and `_, _ = tui.Color*.Fprint*`
-   sites in production code under `cmd/` and `internal/` is reduced
-   to zero, with the exception of the helper bodies themselves.
-4. New print helpers exist in `internal/cli/output.go` (and any
-   sibling package where the pattern occurs — `internal/orchestration`,
-   `internal/doctor`, `internal/tui`) that absorb the write-error
-   discard. Callers write a single function call, not a `_, _ =` line.
-5. Helpers compose with the colour API in `internal/tui` so callers
-   that want coloured output do not regress to inlining
-   `tui.ColorX.Fprint*` with a discard.
-6. Existing unit-test assertions on command output continue to pass.
-   The refactor produces byte-identical output for every command.
-7. The linter is clean: `errcheck` (or chosen rule) reports zero
-   issues after the refactor.
-8. `go test ./...` and `go vet ./...` pass.
+   sites in production code under `cmd/` and `internal/` is zero.
+4. Existing unit-test assertions on command output continue to pass.
+   The strip produces byte-identical output for every command.
+5. The linter is clean: errcheck reports zero issues against the
+   codebase after the strip.
+6. `go test ./...` and `go vet ./...` pass.
 
 ## Implementation Plan
 
-1. Pick the linter tool. Default to `golangci-lint` with `errcheck`
-   enabled and tuned to flag `(*os.File).Write`, `fmt.Fprint`,
-   `fmt.Fprintf`, `fmt.Fprintln`, and the `fatih/color` `Fprint*`
-   methods. Alternatives (standalone `errcheck`, `staticcheck`) are
-   acceptable if the implementer prefers; document the choice in the
-   config file header.
-2. Add the linter config at the repo root. Configure it to scan
-   `./cmd/...` and `./internal/...`. Exclude `_test.go` files from
-   the discard-error rule (tests legitimately ignore writes to test
-   buffers).
-3. Wire the linter into `scripts/invoke-tests` (or
+1. Add `.golangci.yml` at the repo root. Enable `errcheck`.
+   Configure `linters-settings.errcheck.exclude-functions` to list:
+   - `fmt.Fprint`
+   - `fmt.Fprintf`
+   - `fmt.Fprintln`
+   - `(*github.com/fatih/color.Color).Fprint`
+   - `(*github.com/fatih/color.Color).Fprintf`
+   - `(*github.com/fatih/color.Color).Fprintln`
+
+   Leave errcheck's `check-blank` flag at its default (false) so
+   existing `_ = root.Help()`-style discards are not flagged.
+2. Wire the linter into `scripts/invoke-tests` (or
    `scripts/invoke-lint`). Run it before `go test` so a clean lint
    gates the test run; failing lint exits non-zero with a clear
    message. Match the existing script's bash style (set -o
-   nounset/pipefail, declared functions, etc.).
-4. Design the helper API. Sketch options:
-   - A `Writer` wrapper type in `internal/cli/output.go` exposing
-     `Println`, `Printf`, `Print` methods that absorb the error.
-   - Free functions `output.Println(w, ...)`, `output.Printf(w, ...)`,
-     `output.Print(w, ...)` in the same file.
-   - A package-level `Out` value bound to `os.Stdout` at init, with
-     methods that delegate to an injected writer.
-   The implementer picks the shape that minimises churn at call
-   sites while staying explicit about the target writer.
-5. Mirror the helper for coloured output. Either add `output.Println`
-   variants that accept an optional `*color.Color`, or extend
-   `internal/tui` with discard-absorbing `Println`/`Printf`/`Print`
-   methods on the existing `Color*` values.
-6. Refactor in batches by package. Suggested order:
-   - `internal/orchestration/autosetup.go` (11 sites).
-   - `internal/doctor/reporter.go` (12 sites).
-   - `internal/tui/tui.go` (2 sites).
-   - `internal/cli/output.go` (the helpers themselves move to the
-     new pattern).
-   - `internal/cli/` — remaining files alphabetically.
-   - `cmd/start/main.go`.
-   After each batch, run `go build ./...`, `go vet ./...`, and the
-   relevant package tests. Don't move to the next batch until the
-   current one is clean.
-7. Run `go test ./...` and the linter. Both must be clean before the
-   project is complete.
-8. Manually smoke-test the common commands to confirm output is
-   visually identical: `start`, `start describe`, `start config list`,
-   `start doctor`, `start modules list`, and one task invocation.
+   nounset/pipefail, declared functions, etc.). If `golangci-lint`
+   is not on the PATH, fail with a clear install hint.
+3. Strip the `_, _ = ` prefix from every `Fprint*` site in
+   production code. Suggested batch order:
+   - `internal/orchestration/autosetup.go`
+   - `internal/doctor/reporter.go`
+   - `internal/tui/tui.go`
+   - `internal/cli/output.go` (the existing helpers' internal
+     `_, _ = ` prefixes strip too)
+   - `internal/cli/` — remaining files alphabetically
+   - `cmd/start/main.go`
+
+   After each batch, run `go build ./...`, `go vet ./...`,
+   `golangci-lint run ./...`, and the relevant package tests. Don't
+   move to the next batch until the current one is clean.
+4. Run `go test ./...` and the linter against the whole module.
+   Both must be clean before the project is complete.
+5. Manually smoke-test the common commands to confirm output is
+   visually identical: `start`, `start describe`, `start config
+   list`, `start doctor`, `start modules list`, and one task
+   invocation.
 
 ## Constraints
 
 - Go 1.25, module `github.com/start-cli/start`.
-- The linter must run in CI (folded into `scripts/invoke-tests` or
-  added as a peer script that the existing test workflow invokes).
-- No new external dependencies in `go.mod` unless the chosen helper
-  approach genuinely needs one. The standard library is sufficient
-  for the helper API.
-- The refactor is mechanical and must not alter output bytes. Every
+- The linter must run in `scripts/invoke-tests` (or in a peer
+  script that the existing test workflow invokes).
+- No new external dependencies in `go.mod`. The strip introduces no
+  new code; the linter is invoked as an external binary.
+- The strip is mechanical and must not alter output bytes. Every
   test that asserts on command output continues to pass without
   assertion changes.
-- Do not refactor `_ = root.Help()`, `_ = cmd.Usage()`, or other
-  non-print error discards. They are out of scope and the linter
-  rule must allow them (either via the rule's default exclusions or
-  an explicit allowlist in the config).
-- The helper functions absorb the write error silently. Do not
-  redirect it to a logger, return it, or panic — the existing code
-  already discards it, and changing that behaviour is out of scope.
 - Do not modify any file under `library/` or `homebrew-tap/`.
 
 ## Implementation Guidance
 
-- The refactor is repetitive and high-volume. Use `gofmt`, `goimports`,
-  and editor multi-cursor or `sed` carefully; verify each batch
-  compiles before moving on. A single missed pattern means the linter
-  fails and the whole batch needs revisiting.
+- The strip is repetitive and high-volume. Use `sed` or editor
+  multi-cursor carefully; verify each batch compiles and lints
+  before moving on. A single missed `_, _ = ` means the strip is
+  incomplete and the codebase is inconsistent.
 - Resist the temptation to fold in unrelated cleanups (renames,
-  rewording log messages, restructuring helpers). The diff is already
-  large; keeping it mechanical makes review tractable.
-- If the helper signature decision drifts during implementation,
-  decide once and stick with it. Mixing `output.Println(w, ...)` in
-  some files and `out.Println(...)` in others is worse than either
-  choice consistently applied.
-- Test files retain the `_, _ = fmt.Fprint*` pattern unless the
-  refactor of production code forces a test change. Test
-  refactoring is a separate, optional cleanup.
-- The linter is the durable enforcement mechanism. The refactor is a
-  one-time cleanup. Without the linter, the pattern returns within a
-  few PRs.
+  rewording log messages, restructuring helpers). The diff is
+  already large; keeping it mechanical makes review tractable.
+- Test files retain any `_, _ = fmt.Fprint*` pattern they currently
+  have unless the strip of production code forces a test change.
+  Test refactoring is a separate, optional cleanup.
+- The linter is the durable enforcement mechanism for unchecked
+  errors elsewhere in the codebase. The strip is a one-time cleanup
+  that lets the Fprint sites read normally now that the linter
+  doesn't demand the discard.
 
 ## Acceptance Criteria
 
-- A linter config file exists at the repo root and is referenced from
-  `scripts/invoke-tests` (or `scripts/invoke-lint`).
-- Running the linter against the codebase reports zero issues.
-- `rg "_, _ = (fmt\.Fprint|.*\.Fprint)" cmd/ internal/` returns only
-  helper-body sites (the discard-absorbing helpers themselves), and
-  nothing in callers.
+- `.golangci.yml` exists at the repo root with errcheck enabled and
+  the `exclude-functions` list naming the print family.
+- `scripts/invoke-tests` (or `scripts/invoke-lint`) runs the linter;
+  it exits non-zero on lint failure.
+- `golangci-lint run ./...` reports zero issues.
+- `rg "_, _ = (fmt\.Fprint|.*\.Fprint)" cmd/ internal/` returns no
+  matches.
 - `go test ./...` and `go vet ./...` pass.
-- `scripts/invoke-tests` runs the linter and the tests, exiting
-  non-zero on linter failure.
-- Manual smoke test of `start`, `start describe`, `start config list`,
-  `start doctor`, and `start modules list` shows visually identical
-  output before and after the refactor.
+- Manual smoke test of `start`, `start describe`, `start config
+  list`, `start doctor`, and `start modules list` shows visually
+  identical output before and after the strip.
 - No changes under `library/` or `homebrew-tap/`.
