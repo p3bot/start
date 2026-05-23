@@ -1020,6 +1020,97 @@ func TestRoleFileAvailable(t *testing.T) {
 	}
 }
 
+// TestResolveModuleFile covers the helper that all three resolver methods
+// delegate to for @module/ paths. Uses t.Setenv for the cached-resolution
+// case, so this function does not call t.Parallel.
+func TestResolveModuleFile(t *testing.T) {
+	cacheDir := t.TempDir()
+	t.Setenv("CUE_CACHE_DIR", cacheDir)
+
+	moduleDir := filepath.Join(cacheDir, "mod", "extract",
+		"github.com", "test", "mod", "example@v1.0.0")
+	if err := os.MkdirAll(moduleDir, 0755); err != nil {
+		t.Fatalf("mkdir module cache: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "role.md"),
+		[]byte("Module role"), 0644); err != nil {
+		t.Fatalf("write role.md: %v", err)
+	}
+	cachedFile := filepath.Join(moduleDir, "role.md")
+
+	ctx := cuecontext.New()
+
+	cueVal := func(t *testing.T, config string) cue.Value {
+		t.Helper()
+		v := ctx.CompileString(config)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		return v
+	}
+
+	const installHint = "Run 'start modules install' to reinstall"
+
+	tests := []struct {
+		name      string
+		file      string
+		cfg       string
+		wantFile  string
+		wantErrIn []string
+	}{
+		{
+			name:     "non-module path returns unchanged",
+			file:     "/abs/path/foo.md",
+			cfg:      `{}`,
+			wantFile: "/abs/path/foo.md",
+		},
+		{
+			name:      "missing origin returns actionable error",
+			file:      "@module/role.md",
+			cfg:       `{}`,
+			wantErrIn: []string{"missing origin for @module/ path", installHint},
+		},
+		{
+			name:     "resolves via origin when cached",
+			file:     "@module/role.md",
+			cfg:      `{ origin: "github.com/test/mod/example@v1.0.0" }`,
+			wantFile: cachedFile,
+		},
+		{
+			name:      "surfaces resolver error when module not cached",
+			file:      "@module/role.md",
+			cfg:       `{ origin: "github.com/test/missing/mod@v9.9.9" }`,
+			wantErrIn: []string{"resolving module path", installHint},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveModuleFile(tc.file, cueVal(t, tc.cfg))
+			if len(tc.wantErrIn) > 0 {
+				if err == nil {
+					t.Fatalf("err = nil, want error containing %v", tc.wantErrIn)
+				}
+				for _, want := range tc.wantErrIn {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("err = %q, want substring %q", err.Error(), want)
+					}
+				}
+				if got != "" {
+					t.Errorf("got = %q, want empty on error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if got != tc.wantFile {
+				t.Errorf("got = %q, want %q", got, tc.wantFile)
+			}
+		})
+	}
+}
+
 func TestComposeWithRole_OptionalBehavior(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()

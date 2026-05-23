@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: [07-extract-resolve-module-file-helper.md](./07-extract-resolve-module-file-helper.md)
+Active Project: None
 
 When a project is complete, update this file to point to the next active project
 
