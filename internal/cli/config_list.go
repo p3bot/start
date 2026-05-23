@@ -210,7 +210,7 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout())
 	scope := config.ScopeFromLocal(getFlags(cmd).Local)
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
@@ -243,15 +243,15 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 		if err := listAgents(w, stderr, scope); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 		if err := listRoles(w, stderr, scope); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 		if err := listContexts(w, stderr, scope); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 		return listTasks(w, stderr, scope)
 	}
 
@@ -281,11 +281,11 @@ func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	}
 	sort.Strings(order)
 
-	_, _ = tui.ColorAgents.Fprint(w, "agents")
-	_, _ = fmt.Fprintln(w, "/")
+	tui.ColorAgents.Fprint(w, "agents")
+	fmt.Fprintln(w, "/")
 
 	if len(agents) == 0 {
-		_, _ = tui.ColorDim.Fprintln(w, "  none")
+		tui.ColorDim.Fprintln(w, "  none")
 		return nil
 	}
 
@@ -305,12 +305,12 @@ func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 			source += ", registry"
 		}
 		if agent.Description != "" {
-			_, _ = fmt.Fprintf(w, "%s%s ", marker, name)
-			_, _ = tui.ColorDim.Fprint(w, "- "+agent.Description+" ")
-			_, _ = fmt.Fprintln(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "%s%s ", marker, name)
+			tui.ColorDim.Fprint(w, "- "+agent.Description+" ")
+			fmt.Fprintln(w, tui.Annotate("%s", source))
 		} else {
-			_, _ = fmt.Fprintf(w, "%s%s ", marker, name)
-			_, _ = fmt.Fprintln(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "%s%s ", marker, name)
+			fmt.Fprintln(w, tui.Annotate("%s", source))
 		}
 	}
 	return nil
@@ -323,12 +323,12 @@ func listRoles(w io.Writer, stderr io.Writer, scope config.Scope) error {
 		printWarning(stderr, "failed to load roles: %s", err)
 	}
 
-	_, _ = tui.ColorRoles.Fprint(w, "roles")
-	_, _ = fmt.Fprint(w, "/ ")
-	_, _ = fmt.Fprintln(w, tui.Annotate("injection order"))
+	tui.ColorRoles.Fprint(w, "roles")
+	fmt.Fprint(w, "/ ")
+	fmt.Fprintln(w, tui.Annotate("injection order"))
 
 	if len(roles) == 0 {
-		_, _ = tui.ColorDim.Fprintln(w, "  none")
+		tui.ColorDim.Fprintln(w, "  none")
 		return nil
 	}
 
@@ -339,12 +339,12 @@ func listRoles(w io.Writer, stderr io.Writer, scope config.Scope) error {
 			source += ", registry"
 		}
 		if role.Description != "" {
-			_, _ = fmt.Fprintf(w, "  %s ", name)
-			_, _ = tui.ColorDim.Fprint(w, "- "+role.Description+" ")
-			_, _ = fmt.Fprintln(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "  %s ", name)
+			tui.ColorDim.Fprint(w, "- "+role.Description+" ")
+			fmt.Fprintln(w, tui.Annotate("%s", source))
 		} else {
-			_, _ = fmt.Fprintf(w, "  %s ", name)
-			_, _ = fmt.Fprintln(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "  %s ", name)
+			fmt.Fprintln(w, tui.Annotate("%s", source))
 		}
 	}
 	return nil
@@ -357,12 +357,12 @@ func listContexts(w io.Writer, stderr io.Writer, scope config.Scope) error {
 		printWarning(stderr, "failed to load contexts: %s", err)
 	}
 
-	_, _ = tui.ColorContexts.Fprint(w, "contexts")
-	_, _ = fmt.Fprint(w, "/ ")
-	_, _ = fmt.Fprintln(w, tui.Annotate("injection order"))
+	tui.ColorContexts.Fprint(w, "contexts")
+	fmt.Fprint(w, "/ ")
+	fmt.Fprintln(w, tui.Annotate("injection order"))
 
 	if len(contexts) == 0 {
-		_, _ = tui.ColorDim.Fprintln(w, "  none")
+		tui.ColorDim.Fprintln(w, "  none")
 		return nil
 	}
 
@@ -373,32 +373,32 @@ func listContexts(w io.Writer, stderr io.Writer, scope config.Scope) error {
 			source += ", registry"
 		}
 		if ctx.Description != "" {
-			_, _ = fmt.Fprintf(w, "  %s ", name)
-			_, _ = tui.ColorDim.Fprint(w, "- "+ctx.Description+" ")
-			_, _ = fmt.Fprint(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "  %s ", name)
+			tui.ColorDim.Fprint(w, "- "+ctx.Description+" ")
+			fmt.Fprint(w, tui.Annotate("%s", source))
 		} else {
-			_, _ = fmt.Fprintf(w, "  %s ", name)
-			_, _ = fmt.Fprint(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "  %s ", name)
+			fmt.Fprint(w, tui.Annotate("%s", source))
 		}
 		if ctx.Required {
-			_, _ = fmt.Fprintf(w, " %s", tui.Bracket("required"))
+			fmt.Fprintf(w, " %s", tui.Bracket("required"))
 		}
 		if ctx.Default {
-			_, _ = fmt.Fprintf(w, " %s", tui.Bracket("default"))
+			fmt.Fprintf(w, " %s", tui.Bracket("default"))
 		}
 		if len(ctx.Tags) > 0 {
-			_, _ = fmt.Fprint(w, " ")
-			_, _ = tui.ColorDim.Fprint(w, "tags:")
-			_, _ = fmt.Fprint(w, tui.Bracket("%s", strings.Join(ctx.Tags, ", ")))
+			fmt.Fprint(w, " ")
+			tui.ColorDim.Fprint(w, "tags:")
+			fmt.Fprint(w, tui.Bracket("%s", strings.Join(ctx.Tags, ", ")))
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 	return nil
 }
 
 // runConfigTaskList is a Cobra-compatible wrapper used by task.go.
 func runConfigTaskList(cmd *cobra.Command, _ []string) error {
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout())
 	scope := config.ScopeFromLocal(getFlags(cmd).Local)
 	return listTasks(cmd.OutOrStdout(), cmd.ErrOrStderr(), scope)
 }
@@ -411,11 +411,11 @@ func listTasks(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	}
 	sort.Strings(order)
 
-	_, _ = tui.ColorTasks.Fprint(w, "tasks")
-	_, _ = fmt.Fprintln(w, "/")
+	tui.ColorTasks.Fprint(w, "tasks")
+	fmt.Fprintln(w, "/")
 
 	if len(tasks) == 0 {
-		_, _ = tui.ColorDim.Fprintln(w, "  none")
+		tui.ColorDim.Fprintln(w, "  none")
 		return nil
 	}
 
@@ -426,12 +426,12 @@ func listTasks(w io.Writer, stderr io.Writer, scope config.Scope) error {
 			source += ", registry"
 		}
 		if task.Description != "" {
-			_, _ = fmt.Fprintf(w, "  %s ", name)
-			_, _ = tui.ColorDim.Fprint(w, "- "+task.Description+" ")
-			_, _ = fmt.Fprintln(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "  %s ", name)
+			tui.ColorDim.Fprint(w, "- "+task.Description+" ")
+			fmt.Fprintln(w, tui.Annotate("%s", source))
 		} else {
-			_, _ = fmt.Fprintf(w, "  %s ", name)
-			_, _ = fmt.Fprintln(w, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "  %s ", name)
+			fmt.Fprintln(w, tui.Annotate("%s", source))
 		}
 	}
 	return nil

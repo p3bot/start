@@ -99,7 +99,7 @@ func (p *Progress) Update(format string, a ...any) {
 		padding = strings.Repeat(" ", p.width-msgWidth)
 	}
 	p.width = msgWidth
-	_, _ = fmt.Fprintf(p.w, "\r%s%s", msg, padding)
+	fmt.Fprintf(p.w, "\r%s%s", msg, padding)
 }
 
 // Done clears the progress line and resets.
@@ -108,6 +108,6 @@ func (p *Progress) Done() {
 	if !p.tty || p.width == 0 {
 		return
 	}
-	_, _ = fmt.Fprintf(p.w, "\r%s\r", strings.Repeat(" ", p.width))
+	fmt.Fprintf(p.w, "\r%s\r", strings.Repeat(" ", p.width))
 	p.width = 0
 }

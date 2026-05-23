@@ -87,7 +87,7 @@ func TestWriteAgentMetadata_ModelsSortedByAlias(t *testing.T) {
 	if haikuIdx == -1 || opusIdx == -1 || sonnetIdx == -1 {
 		t.Fatalf("missing alias in output\n%s", out)
 	}
-	if !(haikuIdx < opusIdx && opusIdx < sonnetIdx) {
+	if haikuIdx >= opusIdx || opusIdx >= sonnetIdx {
 		t.Errorf("aliases not sorted: haiku=%d opus=%d sonnet=%d\n%s",
 			haikuIdx, opusIdx, sonnetIdx, out)
 	}

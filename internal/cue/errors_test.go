@@ -292,7 +292,7 @@ line seven
 		// Create a file with enough lines to test alignment
 		var sb strings.Builder
 		for i := 1; i <= 12; i++ {
-			sb.WriteString(fmt.Sprintf("line %d\n", i))
+			fmt.Fprintf(&sb, "line %d\n", i)
 		}
 		path := filepath.Join(tmpDir, "align.cue")
 		if err := os.WriteFile(path, []byte(sb.String()), 0644); err != nil {

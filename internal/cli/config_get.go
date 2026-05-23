@@ -115,7 +115,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 
 // runConfigGetInteractive prompts for category then item, then shows the entry.
 func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, scope config.Scope) error {
-	_, _ = fmt.Fprintln(stdout, "Get:")
+	fmt.Fprintln(stdout, "Get:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
 	if err != nil || category == "" {
 		return err
@@ -126,12 +126,12 @@ func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, scope config.Sco
 		return err
 	}
 	if len(names) == 0 {
-		_, _ = fmt.Fprintf(stdout, "No %s configured.\n", category)
+		fmt.Fprintf(stdout, "No %s configured.\n", category)
 		return nil
 	}
 
 	singular := strings.TrimSuffix(category, "s")
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	selected, err := promptSelectOneFromList(stdout, stdin, singular, names)
 	if err != nil || selected == "" {
 		return err
@@ -170,19 +170,19 @@ func printAgentGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = tui.ColorAgents.Fprint(w, "agents")
-	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
+	fmt.Fprintln(w)
+	tui.ColorAgents.Fprint(w, "agents")
+	fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
-	_, _ = tui.ColorDim.Fprint(w, "Source:")
-	_, _ = fmt.Fprintf(w, " %s\n", agent.Source)
+	tui.ColorDim.Fprint(w, "Source:")
+	fmt.Fprintf(w, " %s\n", agent.Source)
 	if agent.Origin != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Origin:")
-		_, _ = fmt.Fprintf(w, " %s\n", agent.Origin)
+		tui.ColorDim.Fprint(w, "Origin:")
+		fmt.Fprintf(w, " %s\n", agent.Origin)
 	}
-	_, _ = tui.ColorDim.Fprint(w, "Command:")
-	_, _ = fmt.Fprintf(w, " %s\n", agent.Command)
+	tui.ColorDim.Fprint(w, "Command:")
+	fmt.Fprintf(w, " %s\n", agent.Command)
 
 	writeAgentMetadata(w, agent)
 
@@ -205,16 +205,16 @@ func printRoleGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = tui.ColorRoles.Fprint(w, "roles")
-	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
+	fmt.Fprintln(w)
+	tui.ColorRoles.Fprint(w, "roles")
+	fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
-	_, _ = tui.ColorDim.Fprint(w, "Source:")
-	_, _ = fmt.Fprintf(w, " %s\n", role.Source)
+	tui.ColorDim.Fprint(w, "Source:")
+	fmt.Fprintf(w, " %s\n", role.Source)
 	if role.Origin != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Origin:")
-		_, _ = fmt.Fprintf(w, " %s\n", role.Origin)
+		tui.ColorDim.Fprint(w, "Origin:")
+		fmt.Fprintf(w, " %s\n", role.Origin)
 	}
 
 	writeRoleMetadata(w, role)
@@ -237,16 +237,16 @@ func printContextGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = tui.ColorContexts.Fprint(w, "contexts")
-	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
+	fmt.Fprintln(w)
+	tui.ColorContexts.Fprint(w, "contexts")
+	fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
-	_, _ = tui.ColorDim.Fprint(w, "Source:")
-	_, _ = fmt.Fprintf(w, " %s\n", ctx.Source)
+	tui.ColorDim.Fprint(w, "Source:")
+	fmt.Fprintf(w, " %s\n", ctx.Source)
 	if ctx.Origin != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Origin:")
-		_, _ = fmt.Fprintf(w, " %s\n", ctx.Origin)
+		tui.ColorDim.Fprint(w, "Origin:")
+		fmt.Fprintf(w, " %s\n", ctx.Origin)
 	}
 
 	writeContextMetadata(w, ctx)
@@ -269,16 +269,16 @@ func printTaskGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = tui.ColorTasks.Fprint(w, "tasks")
-	_, _ = fmt.Fprintf(w, ":%s\n", resolvedName)
+	fmt.Fprintln(w)
+	tui.ColorTasks.Fprint(w, "tasks")
+	fmt.Fprintf(w, ":%s\n", resolvedName)
 	printSeparator(w)
 
-	_, _ = tui.ColorDim.Fprint(w, "Source:")
-	_, _ = fmt.Fprintf(w, " %s\n", task.Source)
+	tui.ColorDim.Fprint(w, "Source:")
+	fmt.Fprintf(w, " %s\n", task.Source)
 	if task.Origin != "" {
-		_, _ = tui.ColorDim.Fprint(w, "Origin:")
-		_, _ = fmt.Fprintf(w, " %s\n", task.Origin)
+		tui.ColorDim.Fprint(w, "Origin:")
+		fmt.Fprintf(w, " %s\n", task.Origin)
 	}
 
 	writeTaskMetadata(w, task)

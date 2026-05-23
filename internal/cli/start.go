@@ -68,7 +68,7 @@ const (
 func debugf(stderr io.Writer, flags *Flags, category, format string, args ...any) {
 	if flags.Debug {
 		ts := time.Now().Format("15:04:05.000")
-		_, _ = fmt.Fprintf(stderr, "[DEBUG %s] %s: "+format+"\n", append([]any{ts, category}, args...)...)
+		fmt.Fprintf(stderr, "[DEBUG %s] %s: "+format+"\n", append([]any{ts, category}, args...)...)
 	}
 }
 
@@ -131,7 +131,7 @@ func resolveAgentName(cfg internalcue.LoadResult, flags *Flags, stdout, stderr i
 		name := choices[0].Name
 		debugf(stderr, flags, dbgAgent, "Selected %q (first agent, non-TTY)", name)
 		if !flags.Quiet {
-			_, _ = fmt.Fprintf(stdout, "Using agent %q %s\n", name, tui.Annotate("set default_agent or use --agent to specify"))
+			fmt.Fprintf(stdout, "Using agent %q %s\n", name, tui.Annotate("set default_agent or use --agent to specify"))
 		}
 		return name, nil
 	}
@@ -218,7 +218,7 @@ func getConfiguredAgents(cfg cue.Value) ([]agentChoice, error) {
 // promptAgentSelection prompts the user to select an agent from multiple choices.
 // The caller is responsible for TTY detection; this function assumes interactive input.
 func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoice) (string, error) {
-	_, _ = fmt.Fprintf(w, "Multiple agents configured. Select an agent:\n\n")
+	fmt.Fprintf(w, "Multiple agents configured. Select an agent:\n\n")
 
 	// Find longest name for alignment
 	maxNameLen := 0
@@ -231,14 +231,14 @@ func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoi
 	for i, c := range choices {
 		if c.Description != "" {
 			padding := strings.Repeat(" ", maxNameLen-len(c.Name)+2)
-			_, _ = fmt.Fprintf(w, "  %2d. %s%s%s\n", i+1, c.Name, padding, c.Description)
+			fmt.Fprintf(w, "  %2d. %s%s%s\n", i+1, c.Name, padding, c.Description)
 		} else {
-			_, _ = fmt.Fprintf(w, "  %2d. %s\n", i+1, c.Name)
+			fmt.Fprintf(w, "  %2d. %s\n", i+1, c.Name)
 		}
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", len(choices)))
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", len(choices)))
 
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -282,7 +282,7 @@ func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoi
 // promptSetDefault asks the user whether to set the selected agent as default.
 // The caller is responsible for TTY detection; this function assumes interactive input.
 func promptSetDefault(w io.Writer, reader *bufio.Reader, agentName string) bool {
-	_, _ = fmt.Fprintf(w, "Set %q as default agent? %s: ", agentName, tui.Bracket("y/N"))
+	fmt.Fprintf(w, "Set %q as default agent? %s: ", agentName, tui.Bracket("y/N"))
 
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -516,7 +516,7 @@ func printExecutionInfo(w io.Writer, agent orchestration.Agent, model, modelSour
 	printContextTable(w, result.Contexts, result.Selection)
 	printRoleTable(w, result.RoleResolutions)
 
-	_, _ = fmt.Fprintf(w, "Starting %s - awaiting response...\n", agent.Name)
+	fmt.Fprintf(w, "Starting %s - awaiting response...\n", agent.Name)
 }
 
 // printDryRunSummary prints the dry-run summary.
@@ -531,20 +531,20 @@ func printDryRunSummary(w io.Writer, agent orchestration.Agent, model, modelSour
 	// Show role preview
 	if result.Role != "" {
 		printContentPreview(w, "Role", tui.ColorRoles, result.Role, 5)
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 
 	// Show prompt preview
 	if result.Prompt != "" {
 		printContentPreview(w, "Prompt", tui.ColorPrompts, result.Prompt, 5)
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 
-	_, _ = tui.ColorDim.Fprint(w, "Files:")
-	_, _ = fmt.Fprintf(w, " %s\n", dir)
-	_, _ = fmt.Fprintln(w, "  role.md")
-	_, _ = fmt.Fprintln(w, "  prompt.md")
-	_, _ = fmt.Fprintln(w, "  command.txt")
+	tui.ColorDim.Fprint(w, "Files:")
+	fmt.Fprintf(w, " %s\n", dir)
+	fmt.Fprintln(w, "  role.md")
+	fmt.Fprintln(w, "  prompt.md")
+	fmt.Fprintln(w, "  command.txt")
 }
 
 // printComposeError prints UI before a composition error.
@@ -553,9 +553,9 @@ func printComposeError(w io.Writer, agent orchestration.Agent, result orchestrat
 	printHeader(w, "Starting AI Agent")
 	printSeparator(w)
 
-	_, _ = tui.ColorAgents.Fprint(w, "Agent:")
-	_, _ = fmt.Fprintf(w, " %s\n", agent.Name)
-	_, _ = fmt.Fprintln(w)
+	tui.ColorAgents.Fprint(w, "Agent:")
+	fmt.Fprintf(w, " %s\n", agent.Name)
+	fmt.Fprintln(w)
 
 	printContextTable(w, result.Contexts, result.Selection)
 
@@ -570,21 +570,21 @@ func printContentPreview(w io.Writer, label string, labelColor *color.Color, tex
 	truncated := len(lines) > threshold
 
 	if truncated {
-		_, _ = labelColor.Fprint(w, label)
-		_, _ = fmt.Fprintf(w, " %s:\n", tui.Annotate("%d lines", maxLines))
+		labelColor.Fprint(w, label)
+		fmt.Fprintf(w, " %s:\n", tui.Annotate("%d lines", maxLines))
 	} else {
-		_, _ = labelColor.Fprint(w, label)
-		_, _ = fmt.Fprintln(w, ":")
+		labelColor.Fprint(w, label)
+		fmt.Fprintln(w, ":")
 	}
 
 	if truncated {
 		for i := range maxLines {
-			_, _ = fmt.Fprintf(w, "  %s\n", lines[i])
+			fmt.Fprintf(w, "  %s\n", lines[i])
 		}
-		_, _ = fmt.Fprintf(w, "  ... %s\n", tui.Annotate("%d more lines", len(lines)-maxLines))
+		fmt.Fprintf(w, "  ... %s\n", tui.Annotate("%d more lines", len(lines)-maxLines))
 	} else {
 		for _, line := range lines {
-			_, _ = fmt.Fprintf(w, "  %s\n", line)
+			fmt.Fprintf(w, "  %s\n", line)
 		}
 	}
 }
@@ -683,6 +683,6 @@ func runAutoSetup(stdout, stderr io.Writer, stdin io.Reader) error {
 		return fmt.Errorf("auto-setup failed: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	return nil
 }

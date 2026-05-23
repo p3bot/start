@@ -21,22 +21,23 @@ func writeJSON(w io.Writer, v any) error {
 	return enc.Encode(v)
 }
 
-// printWarning prints a warning message in yellow.
+// printWarning prints a warning message in yellow with exactly one trailing
+// newline regardless of whether the caller included one in the format string.
 func printWarning(w io.Writer, format string, args ...any) {
-	_, _ = tui.ColorWarning.Fprintf(w, "Warning: ")
-	_, _ = fmt.Fprintf(w, format, args...)
-	_, _ = fmt.Fprintln(w)
+	tui.ColorWarning.Fprint(w, "Warning: ")
+	msg := strings.TrimRight(fmt.Sprintf(format, args...), "\n")
+	fmt.Fprintln(w, msg)
 }
 
 // printHeader prints a header/title in green with a leading blank line.
 func printHeader(w io.Writer, text string) {
-	_, _ = fmt.Fprintln(w)
-	_, _ = tui.ColorHeader.Fprintln(w, text)
+	fmt.Fprintln(w)
+	tui.ColorHeader.Fprintln(w, text)
 }
 
 // printSeparator prints a separator line in magenta.
 func printSeparator(w io.Writer) {
-	_, _ = tui.ColorSeparator.Fprintln(w, strings.Repeat("─", 79))
+	tui.ColorSeparator.Fprintln(w, strings.Repeat("─", 79))
 }
 
 // printContextTable prints contexts in a table format.
@@ -60,11 +61,11 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 		}
 	}
 
-	_, _ = tui.ColorContexts.Fprint(w, "Context:")
+	tui.ColorContexts.Fprint(w, "Context:")
 	if len(parts) > 0 {
-		_, _ = fmt.Fprintf(w, " %s", tui.Annotate("%s", strings.Join(parts, ", ")))
+		fmt.Fprintf(w, " %s", tui.Annotate("%s", strings.Join(parts, ", ")))
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	// Calculate column widths
 	nameWidth := 4 // "Name" header
@@ -131,34 +132,34 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 	}
 
 	// Print header
-	_, _ = tui.ColorDim.Fprintf(w, "  %-*s  %s  %-*s  %s\n",
+	tui.ColorDim.Fprintf(w, "  %-*s  %s  %-*s  %s\n",
 		nameWidth, "Name", "Status", tagsWidth, "Tags", "File")
 
 	// Print rows
 	for _, r := range rows {
-		_, _ = fmt.Fprint(w, "  ")
-		_, _ = fmt.Fprintf(w, "%-*s  ", nameWidth, r.name)
+		fmt.Fprint(w, "  ")
+		fmt.Fprintf(w, "%-*s  ", nameWidth, r.name)
 		if r.status == "✓" {
-			_, _ = tui.ColorSuccess.Fprintf(w, "%s", r.status)
+			tui.ColorSuccess.Fprintf(w, "%s", r.status)
 		} else {
-			_, _ = tui.ColorTasks.Fprint(w, r.status)
+			tui.ColorTasks.Fprint(w, r.status)
 		}
-		_, _ = fmt.Fprintf(w, "       %-*s  %s\n", tagsWidth, r.tags, r.file)
+		fmt.Fprintf(w, "       %-*s  %s\n", tagsWidth, r.tags, r.file)
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }
 
 // printAgentModel prints the Agent and Model lines with colour formatting.
 func printAgentModel(w io.Writer, agent orchestration.Agent, model, modelSource string) {
-	_, _ = tui.ColorAgents.Fprint(w, "Agent:")
-	_, _ = fmt.Fprintf(w, " %s\n", agent.Name)
-	_, _ = tui.ColorAgents.Fprint(w, "Model:")
+	tui.ColorAgents.Fprint(w, "Agent:")
+	fmt.Fprintf(w, " %s\n", agent.Name)
+	tui.ColorAgents.Fprint(w, "Model:")
 	if model != "" {
-		_, _ = fmt.Fprintf(w, " %s %s\n", model, tui.Annotate("via %s", modelSource))
+		fmt.Fprintf(w, " %s %s\n", model, tui.Annotate("via %s", modelSource))
 	} else {
-		_, _ = fmt.Fprintln(w, " -")
+		fmt.Fprintln(w, " -")
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }
 
 // printRoleTable prints the role resolution chain in a table format.
@@ -168,8 +169,8 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 		return
 	}
 
-	_, _ = tui.ColorRoles.Fprint(w, "Role:")
-	_, _ = fmt.Fprintln(w)
+	tui.ColorRoles.Fprint(w, "Role:")
+	fmt.Fprintln(w)
 
 	// Calculate column widths
 	nameWidth := 4 // "Name" header
@@ -180,7 +181,7 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 	}
 
 	// Print header
-	_, _ = tui.ColorDim.Fprintf(w, "  %-*s  %s  %s\n", nameWidth, "Name", "Status", "File")
+	tui.ColorDim.Fprintf(w, "  %-*s  %s  %s\n", nameWidth, "Name", "Status", "File")
 
 	// Print rows
 	for _, r := range resolutions {
@@ -209,14 +210,14 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 		}
 
 		// Print row
-		_, _ = fmt.Fprint(w, "  ")
-		_, _ = fmt.Fprintf(w, "%-*s  ", nameWidth, r.Name)
+		fmt.Fprint(w, "  ")
+		fmt.Fprintf(w, "%-*s  ", nameWidth, r.Name)
 		if status == "✓" {
-			_, _ = tui.ColorSuccess.Fprintf(w, "%s", status)
+			tui.ColorSuccess.Fprintf(w, "%s", status)
 		} else {
-			_, _ = tui.ColorTasks.Fprint(w, status)
+			tui.ColorTasks.Fprint(w, status)
 		}
-		_, _ = fmt.Fprintf(w, "       %s\n", file)
+		fmt.Fprintf(w, "       %s\n", file)
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }

@@ -139,7 +139,7 @@ func printJSONIndex(w io.Writer, sourceDir string, reg modconfig.Registry, categ
 		return fmt.Errorf("marshalling index: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(w, string(data))
+	fmt.Fprintln(w, string(data))
 	return nil
 }
 
@@ -164,7 +164,7 @@ func filterIndexByCategory(index *registry.Index, category string) *registry.Ind
 // header always reflects the full index.
 func printIndex(w io.Writer, index *registry.Index, version string, verbose bool, installed map[string]bool, category string) {
 	total := len(index.Agents) + len(index.Roles) + len(index.Contexts) + len(index.Tasks)
-	_, _ = fmt.Fprintf(w, "\nIndex: %s (%d modules)\n\n", version, total)
+	fmt.Fprintf(w, "\nIndex: %s (%d modules)\n\n", version, total)
 
 	categories := []struct {
 		name    string
@@ -191,8 +191,8 @@ func printIndex(w io.Writer, index *registry.Index, version string, verbose bool
 		}
 		sort.Strings(names)
 
-		_, _ = tui.CategoryColor(cat.name).Fprint(w, cat.name)
-		_, _ = fmt.Fprintf(w, "/ %s\n", tui.Annotate("%d", len(cat.entries)))
+		tui.CategoryColor(cat.name).Fprint(w, cat.name)
+		fmt.Fprintf(w, "/ %s\n", tui.Annotate("%d", len(cat.entries)))
 
 		for _, name := range names {
 			entry := cat.entries[name]
@@ -201,15 +201,15 @@ func printIndex(w io.Writer, index *registry.Index, version string, verbose bool
 				marker = tui.ColorInstalled.Sprint("★") + " "
 			}
 
-			_, _ = fmt.Fprintf(w, "  %s%-25s %s\n", marker, name, tui.ColorDim.Sprint(entry.Description))
+			fmt.Fprintf(w, "  %s%-25s %s\n", marker, name, tui.ColorDim.Sprint(entry.Description))
 
 			if verbose {
-				_, _ = fmt.Fprintf(w, "      Module: %s\n", tui.ColorDim.Sprint(entry.Module))
+				fmt.Fprintf(w, "      Module: %s\n", tui.ColorDim.Sprint(entry.Module))
 				if len(entry.Tags) > 0 {
-					_, _ = fmt.Fprintf(w, "      Tags: %s\n", tui.ColorDim.Sprint(strings.Join(entry.Tags, ", ")))
+					fmt.Fprintf(w, "      Tags: %s\n", tui.ColorDim.Sprint(strings.Join(entry.Tags, ", ")))
 				}
 			}
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 }

@@ -64,7 +64,7 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	}
 
 	// Fetch index
-	_, _ = fmt.Fprintln(a.stdout, "Fetching agent index...")
+	fmt.Fprintln(a.stdout, "Fetching agent index...")
 	index, indexVersion, err := client.FetchIndex(ctx, "") // use built-in default; auto-setup runs before user settings exist
 	if err != nil {
 		return nil, fmt.Errorf("fetching index: %w", err)
@@ -83,7 +83,7 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	}
 
 	// Resolve to canonical version and fetch agent module
-	_, _ = fmt.Fprintln(a.stdout, "Fetching configuration...")
+	fmt.Fprintln(a.stdout, "Fetching configuration...")
 	resolvedPath, err := client.ResolveLatestVersion(ctx, selected.Entry.Module)
 	if err != nil {
 		return nil, fmt.Errorf("resolving agent version: %w", err)
@@ -110,15 +110,15 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 		return nil, fmt.Errorf("writing config: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(a.stdout, "Configuration saved to %s\n", configPath)
+	fmt.Fprintf(a.stdout, "Configuration saved to %s\n", configPath)
 
 	// Install default modules (contexts that are commonly needed)
 	a.installDefaultModules(ctx, client, index)
 
-	_, _ = fmt.Fprintln(a.stdout)
-	_, _ = fmt.Fprintln(a.stdout, "Note: The generated configuration uses generic model aliases.")
-	_, _ = fmt.Fprintln(a.stdout, "If using Vertex AI, Bedrock, or other providers, you may need to")
-	_, _ = fmt.Fprintln(a.stdout, "specify explicit model IDs. Edit with: start config edit agent")
+	fmt.Fprintln(a.stdout)
+	fmt.Fprintln(a.stdout, "Note: The generated configuration uses generic model aliases.")
+	fmt.Fprintln(a.stdout, "If using Vertex AI, Bedrock, or other providers, you may need to")
+	fmt.Fprintln(a.stdout, "specify explicit model IDs. Edit with: start config edit agent")
 
 	return &AutoSetupResult{
 		Agent:      agent,
@@ -151,9 +151,9 @@ func (a *AutoSetup) noAgentsError(index *registry.Index) error {
 
 	for _, ag := range agents {
 		if ag.desc != "" {
-			sb.WriteString(fmt.Sprintf("  %s - %s\n", ag.bin, ag.desc))
+			fmt.Fprintf(&sb, "  %s - %s\n", ag.bin, ag.desc)
 		} else {
-			sb.WriteString(fmt.Sprintf("  %s\n", ag.bin))
+			fmt.Fprintf(&sb, "  %s\n", ag.bin)
 		}
 	}
 
@@ -176,14 +176,14 @@ func (a *AutoSetup) selectAgent(detected []detection.DetectedAgent) (detection.D
 		bin := binNames[0]
 		variants := groups[bin]
 		if len(variants) == 1 {
-			_, _ = fmt.Fprintf(a.stdout, "Detected: %s\n", variants[0].Key)
+			fmt.Fprintf(a.stdout, "Detected: %s\n", variants[0].Key)
 			return variants[0], nil
 		}
 		if a.isTTY {
 			return a.promptVariantSelection(bin, variants, bufio.NewReader(a.stdin))
 		}
 		chosen := pickVariant(variants)
-		_, _ = fmt.Fprintf(a.stdout,
+		fmt.Fprintf(a.stdout,
 			"Detected %s with multiple variants; using %s. Override with default_agent in config.\n",
 			bin, chosen.Key)
 		return chosen, nil
@@ -212,7 +212,7 @@ func (a *AutoSetup) selectAgent(detected []detection.DetectedAgent) (detection.D
 	// Non-TTY multi-bin: deterministic pick-first with stdout feedback.
 	chosenBin := binNames[0]
 	chosen := pickVariant(groups[chosenBin])
-	_, _ = fmt.Fprintf(a.stdout,
+	fmt.Fprintf(a.stdout,
 		"Detected multiple AI CLI tools (%s); using %s. Override with default_agent in config.\n",
 		strings.Join(binNames, ", "), chosen.Key)
 	return chosen, nil
@@ -279,8 +279,8 @@ func pickVariant(variants []detection.DetectedAgent) detection.DetectedAgent {
 // reader is the shared bufio.Reader created by selectAgent so a follow-up
 // variant prompt sees the same buffered stream.
 func (a *AutoSetup) promptSelection(reps []detection.DetectedAgent, reader *bufio.Reader) (detection.DetectedAgent, error) {
-	_, _ = tui.ColorHeader.Fprintln(a.stdout, "Multiple AI CLI tools detected:")
-	_, _ = fmt.Fprintln(a.stdout)
+	tui.ColorHeader.Fprintln(a.stdout, "Multiple AI CLI tools detected:")
+	fmt.Fprintln(a.stdout)
 
 	binWidth := 0
 	for _, r := range reps {
@@ -290,18 +290,18 @@ func (a *AutoSetup) promptSelection(reps []detection.DetectedAgent, reader *bufi
 	}
 
 	for i, r := range reps {
-		_, _ = fmt.Fprintf(a.stdout, "  %d. ", i+1)
-		_, _ = tui.ColorAgents.Fprintf(a.stdout, "%-*s", binWidth, r.Entry.Bin)
+		fmt.Fprintf(a.stdout, "  %d. ", i+1)
+		tui.ColorAgents.Fprintf(a.stdout, "%-*s", binWidth, r.Entry.Bin)
 		if r.Entry.Description != "" {
-			_, _ = fmt.Fprint(a.stdout, "  ")
-			_, _ = tui.ColorDim.Fprintln(a.stdout, r.Entry.Description)
+			fmt.Fprint(a.stdout, "  ")
+			tui.ColorDim.Fprintln(a.stdout, r.Entry.Description)
 		} else {
-			_, _ = fmt.Fprintln(a.stdout)
+			fmt.Fprintln(a.stdout)
 		}
 	}
 
-	_, _ = fmt.Fprintln(a.stdout)
-	_, _ = fmt.Fprint(a.stdout, "Select agent: ")
+	fmt.Fprintln(a.stdout)
+	fmt.Fprint(a.stdout, "Select agent: ")
 
 	input, err := readSelection(reader)
 	if err != nil {
@@ -330,19 +330,19 @@ func (a *AutoSetup) promptSelection(reps []detection.DetectedAgent, reader *bufi
 // indented description (when present) on the second. reader is shared with the
 // (optional) preceding tool prompt so bufio doesn't drop bytes between reads.
 func (a *AutoSetup) promptVariantSelection(bin string, variants []detection.DetectedAgent, reader *bufio.Reader) (detection.DetectedAgent, error) {
-	_, _ = tui.ColorHeader.Fprintf(a.stdout, "Multiple variants of %s detected:\n", bin)
-	_, _ = fmt.Fprintln(a.stdout)
+	tui.ColorHeader.Fprintf(a.stdout, "Multiple variants of %s detected:\n", bin)
+	fmt.Fprintln(a.stdout)
 
 	for i, v := range variants {
-		_, _ = fmt.Fprintf(a.stdout, "  %d. ", i+1)
-		_, _ = tui.ColorAgents.Fprintln(a.stdout, v.Key)
+		fmt.Fprintf(a.stdout, "  %d. ", i+1)
+		tui.ColorAgents.Fprintln(a.stdout, v.Key)
 		if v.Entry.Description != "" {
-			_, _ = tui.ColorDim.Fprintf(a.stdout, "     %s\n", v.Entry.Description)
+			tui.ColorDim.Fprintf(a.stdout, "     %s\n", v.Entry.Description)
 		}
-		_, _ = fmt.Fprintln(a.stdout)
+		fmt.Fprintln(a.stdout)
 	}
 
-	_, _ = fmt.Fprint(a.stdout, "Select agent: ")
+	fmt.Fprint(a.stdout, "Select agent: ")
 
 	input, err := readSelection(reader)
 	if err != nil {
@@ -468,16 +468,16 @@ func generateAgentCUE(agent Agent) string {
 	sb.WriteString("// or other providers, you may need to replace them with explicit model IDs.\n")
 	sb.WriteString("// Example for Vertex AI: \"opus\" -> \"claude-opus-4-5@20251101\"\n\n")
 	sb.WriteString("agents: {\n")
-	sb.WriteString(fmt.Sprintf("\t%q: {\n", agent.Name))
-	sb.WriteString(fmt.Sprintf("\t\tbin:     %q\n", agent.Bin))
-	sb.WriteString(fmt.Sprintf("\t\tcommand: %q\n", agent.Command))
+	fmt.Fprintf(&sb, "\t%q: {\n", agent.Name)
+	fmt.Fprintf(&sb, "\t\tbin:     %q\n", agent.Bin)
+	fmt.Fprintf(&sb, "\t\tcommand: %q\n", agent.Command)
 
 	if agent.DefaultModel != "" {
-		sb.WriteString(fmt.Sprintf("\t\tdefault_model: %q\n", agent.DefaultModel))
+		fmt.Fprintf(&sb, "\t\tdefault_model: %q\n", agent.DefaultModel)
 	}
 
 	if agent.Description != "" {
-		sb.WriteString(fmt.Sprintf("\t\tdescription: %q\n", agent.Description))
+		fmt.Fprintf(&sb, "\t\tdescription: %q\n", agent.Description)
 	}
 
 	if len(agent.Models) > 0 {
@@ -492,7 +492,7 @@ func generateAgentCUE(agent Agent) string {
 
 		for _, name := range modelNames {
 			// Quote model names that contain special characters
-			sb.WriteString(fmt.Sprintf("\t\t\t%q: %q\n", name, agent.Models[name]))
+			fmt.Fprintf(&sb, "\t\t\t%q: %q\n", name, agent.Models[name])
 		}
 		sb.WriteString("\t\t}\n")
 	}
@@ -510,7 +510,7 @@ func generateSettingsCUE(defaultAgent string) string {
 	sb.WriteString("// Auto-generated by start auto-setup\n")
 	sb.WriteString("// Edit this file to customize your settings\n\n")
 	sb.WriteString("settings: {\n")
-	sb.WriteString(fmt.Sprintf("\tdefault_agent: %q\n", defaultAgent))
+	fmt.Fprintf(&sb, "\tdefault_agent: %q\n", defaultAgent)
 	sb.WriteString("}\n")
 
 	return sb.String()
@@ -522,7 +522,7 @@ func (a *AutoSetup) installDefaultModules(ctx context.Context, client *registry.
 	// Get global config directory
 	paths, err := config.ResolvePaths("")
 	if err != nil {
-		_, _ = fmt.Fprintf(a.stderr, "Warning: Failed to resolve config paths: %v\n", err)
+		fmt.Fprintf(a.stderr, "Warning: Failed to resolve config paths: %v\n", err)
 		return
 	}
 	configDir := paths.Global
@@ -542,7 +542,7 @@ func (a *AutoSetup) installDefaultModules(ctx context.Context, client *registry.
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {
 		if matches, _ := filepath.Glob(filepath.Join(configDir, "*.cue")); len(matches) > 0 {
-			_, _ = fmt.Fprintf(a.stderr, "Warning: invalid config in %s:\n%s\n",
+			fmt.Fprintf(a.stderr, "Warning: invalid config in %s:\n%s\n",
 				configDir, internalcue.IdentifyBrokenFiles(matches))
 			return
 		}
@@ -570,7 +570,7 @@ func (a *AutoSetup) installDefaultModules(ctx context.Context, client *registry.
 		}
 
 		if entry == nil {
-			_, _ = fmt.Fprintf(a.stderr, "Warning: Default module %s/%s not found in registry\n", mod.category, mod.name)
+			fmt.Fprintf(a.stderr, "Warning: Default module %s/%s not found in registry\n", mod.category, mod.name)
 			continue
 		}
 
@@ -581,7 +581,7 @@ func (a *AutoSetup) installDefaultModules(ctx context.Context, client *registry.
 		}
 
 		if _, err := modules.InstallModule(ctx, client, index, searchResult, configDir); err != nil {
-			_, _ = fmt.Fprintf(a.stderr, "Warning: Failed to install %s/%s: %v\n", mod.category, mod.name, err)
+			fmt.Fprintf(a.stderr, "Warning: Failed to install %s/%s: %v\n", mod.category, mod.name, err)
 		}
 	}
 }

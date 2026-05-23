@@ -50,7 +50,7 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 		return runConfigRemoveInteractive(stdin, stdout, local, skipConfirm, getFlags(cmd).Quiet)
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	query := args[0]
 	matches, err := searchAllConfigCategories(query, config.ScopeFromLocal(local))
 	if err != nil {
@@ -100,7 +100,7 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("removing %s %q: %w", m.Category, m.Name, err)
 		}
 		if !flags.Quiet {
-			_, _ = fmt.Fprintf(stdout, "Removed %s %q\n", m.Category, m.Name)
+			fmt.Fprintf(stdout, "Removed %s %q\n", m.Category, m.Name)
 		}
 	}
 
@@ -109,8 +109,8 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 
 // runConfigRemoveInteractive prompts for category, item(s), confirmation, then removes.
 func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, skipConfirm bool, quiet bool) error {
-	_, _ = fmt.Fprintln(stdout)
-	_, _ = fmt.Fprintln(stdout, "Remove:")
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "Remove:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
 	if err != nil || category == "" {
 		return err
@@ -121,12 +121,12 @@ func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, s
 		return err
 	}
 	if len(names) == 0 {
-		_, _ = fmt.Fprintf(stdout, "No %s configured.\n", category)
+		fmt.Fprintf(stdout, "No %s configured.\n", category)
 		return nil
 	}
 
 	singular := strings.TrimSuffix(category, "s")
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	selectedNames, err := promptSelectFromList(stdout, stdin, singular, "", names)
 	if err != nil || selectedNames == nil {
 		return err
@@ -152,7 +152,7 @@ func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, s
 			return fmt.Errorf("removing %s %q: %w", m.Category, m.Name, err)
 		}
 		if !quiet {
-			_, _ = fmt.Fprintf(stdout, "Removed %s %q\n", m.Category, m.Name)
+			fmt.Fprintf(stdout, "Removed %s %q\n", m.Category, m.Name)
 		}
 	}
 
@@ -165,13 +165,13 @@ func confirmConfigRemoval(w io.Writer, r io.Reader, items []configMatch, local b
 	scope := scopeString(local)
 	if len(items) == 1 {
 		m := items[0]
-		_, _ = fmt.Fprintf(w, "Remove %s %q from %s config? %s ", m.Category, m.Name, scope, tui.Bracket("y/N"))
+		fmt.Fprintf(w, "Remove %s %q from %s config? %s ", m.Category, m.Name, scope, tui.Bracket("y/N"))
 	} else {
-		_, _ = fmt.Fprintf(w, "Remove the following items from %s config?\n", scope)
+		fmt.Fprintf(w, "Remove the following items from %s config?\n", scope)
 		for _, m := range items {
-			_, _ = fmt.Fprintf(w, "  - %s %s\n", m.Category, m.Name)
+			fmt.Fprintf(w, "  - %s %s\n", m.Category, m.Name)
 		}
-		_, _ = fmt.Fprintf(w, "%s ", tui.Bracket("y/N"))
+		fmt.Fprintf(w, "%s ", tui.Bracket("y/N"))
 	}
 
 	reader := bufio.NewReader(r)
@@ -181,7 +181,7 @@ func confirmConfigRemoval(w io.Writer, r io.Reader, items []configMatch, local b
 	}
 	input = strings.TrimSpace(strings.ToLower(input))
 	if input != "y" && input != "yes" {
-		_, _ = fmt.Fprintln(w, "Cancelled.")
+		fmt.Fprintln(w, "Cancelled.")
 		return false, nil
 	}
 	return true, nil

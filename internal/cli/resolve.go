@@ -125,7 +125,7 @@ func (r *resolver) resolveModule(name, cueKey, category, displayType string, all
 	}
 
 	if len(installedMatches) == 0 && !r.flags.Quiet {
-		_, _ = fmt.Fprintf(r.stdout, "%s %q not found in configuration\n", displayType, name)
+		fmt.Fprintf(r.stdout, "%s %q not found in configuration\n", displayType, name)
 	}
 
 	// ensureIndex returns nil error; errors are stored in r.indexErr for graceful fallback.
@@ -269,7 +269,7 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 			return nil, err
 		}
 		if addr.HasPrefix && addr.Category != "contexts" {
-			return nil, fmt.Errorf("Context expects category %q, got %q in %q", "contexts", addr.Category, term)
+			return nil, fmt.Errorf("context expects category %q, got %q in %q", "contexts", addr.Category, term)
 		}
 		term = addr.Name
 
@@ -296,7 +296,7 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 		// Only show "not found" when no installed matches exist
 		if !hasInstalledMatches {
 			if !r.flags.Quiet {
-				_, _ = fmt.Fprintf(r.stdout, "Context %q not found in configuration\n", term)
+				fmt.Fprintf(r.stdout, "Context %q not found in configuration\n", term)
 			}
 		}
 
@@ -557,7 +557,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		truncated = true
 	}
 
-	_, _ = fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), categoryType, query)
+	fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), categoryType, query)
 
 	// Find longest name for alignment
 	maxNameLen := 0
@@ -576,16 +576,16 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		} else {
 			sourceLabel = tui.ColorRegistry.Sprint(m.Source)
 		}
-		_, _ = fmt.Fprintf(r.stdout, "  %2d. %s%s%s\n", i+1, m.Name, padding, sourceLabel)
+		fmt.Fprintf(r.stdout, "  %2d. %s%s%s\n", i+1, m.Name, padding, sourceLabel)
 	}
 
 	if truncated {
-		_, _ = fmt.Fprintf(r.stdout, "\nShowing %d of %d matches. Refine search for more specific results.\n",
+		fmt.Fprintf(r.stdout, "\nShowing %d of %d matches. Refine search for more specific results.\n",
 			displayCount, len(matches))
 	}
 
-	_, _ = fmt.Fprintln(r.stdout)
-	_, _ = fmt.Fprintf(r.stdout, "Select %s: ", tui.Annotate("1-%d", displayCount))
+	fmt.Fprintln(r.stdout)
+	fmt.Fprintf(r.stdout, "Select %s: ", tui.Annotate("1-%d", displayCount))
 
 	reader := bufio.NewReader(r.stdin)
 	input, err := reader.ReadString('\n')
@@ -597,7 +597,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 	// Try number
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
-			_, _ = fmt.Fprintln(r.stdout)
+			fmt.Fprintln(r.stdout)
 			return matches[choice-1], nil
 		}
 		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
@@ -607,7 +607,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 	inputLower := strings.ToLower(input)
 	for i := 0; i < displayCount; i++ {
 		if strings.ToLower(matches[i].Name) == inputLower {
-			_, _ = fmt.Fprintln(r.stdout)
+			fmt.Fprintln(r.stdout)
 			return matches[i], nil
 		}
 	}
@@ -620,7 +620,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		}
 	}
 	if len(subMatches) == 1 {
-		_, _ = fmt.Fprintln(r.stdout)
+		fmt.Fprintln(r.stdout)
 		return subMatches[0], nil
 	}
 
@@ -643,7 +643,7 @@ func (r *resolver) autoInstall(client *registry.Client, result modules.SearchRes
 	debugf(r.stderr, r.flags, dbgResolve, "Auto-installing %s from registry", formatAddress(result.Category, result.Name))
 
 	if !r.flags.Quiet {
-		_, _ = fmt.Fprintf(r.stdout, "Installing %s from registry...\n", result.Name)
+		fmt.Fprintf(r.stdout, "Installing %s from registry...\n", result.Name)
 	}
 
 	version, err := modules.InstallModule(ctx, client, r.index, result, paths.Global)
@@ -653,9 +653,9 @@ func (r *resolver) autoInstall(client *registry.Client, result modules.SearchRes
 
 	if !r.flags.Quiet {
 		if version != "" {
-			_, _ = fmt.Fprintf(r.stdout, "Installed %s@%s to global config\n\n", result.Name, version)
+			fmt.Fprintf(r.stdout, "Installed %s@%s to global config\n\n", result.Name, version)
 		} else {
-			_, _ = fmt.Fprintf(r.stdout, "Installed %s to global config\n\n", result.Name)
+			fmt.Fprintf(r.stdout, "Installed %s to global config\n\n", result.Name)
 		}
 	}
 
@@ -694,7 +694,7 @@ func (r *resolver) ensureIndex() (*registry.Index, *registry.Client, error) {
 		usedCache = true
 	} else {
 		if !r.flags.Quiet {
-			_, _ = fmt.Fprintf(r.stdout, "Fetching registry index...\n")
+			fmt.Fprintf(r.stdout, "Fetching registry index...\n")
 		}
 	}
 

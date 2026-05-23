@@ -112,6 +112,15 @@ if ! command -v go >/dev/null; then
   die "Missing dependency - 'go'"
 fi
 
+# Lint Gate
+# -----------------------------------------------------------------------------
+cd "${PROJECT_DIR}" || exit 1
+
+if ! "${SCRIPT_DIR}/invoke-linter"; then
+  exit 1
+fi
+echo
+
 # Build Binary for E2E Tests
 # -----------------------------------------------------------------------------
 if [[ "${include_e2e}" == true ]]; then

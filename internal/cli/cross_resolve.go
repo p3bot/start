@@ -243,7 +243,7 @@ func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query stri
 
 	displayCount := min(len(matches), maxModuleResults)
 
-	_, _ = fmt.Fprintf(w, "Found %d matches for %q:\n\n", len(matches), query)
+	fmt.Fprintf(w, "Found %d matches for %q:\n\n", len(matches), query)
 
 	maxDisplayLen := 0
 	for i := range displayCount {
@@ -263,16 +263,16 @@ func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query stri
 		} else {
 			sourceLabel = tui.ColorRegistry.Sprint(m.Source)
 		}
-		_, _ = fmt.Fprintf(w, "  %2d. %s%s%s\n", i+1, display, padding, sourceLabel)
+		fmt.Fprintf(w, "  %2d. %s%s%s\n", i+1, display, padding, sourceLabel)
 	}
 
 	if displayCount < len(matches) {
-		_, _ = fmt.Fprintf(w, "\nShowing %d of %d matches. Refine search for more specific results.\n",
+		fmt.Fprintf(w, "\nShowing %d of %d matches. Refine search for more specific results.\n",
 			displayCount, len(matches))
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", displayCount))
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", displayCount))
 
 	reader := bufio.NewReader(stdin)
 	input, err := reader.ReadString('\n')
@@ -283,7 +283,7 @@ func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query stri
 
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
-			_, _ = fmt.Fprintln(w)
+			fmt.Fprintln(w)
 			return matches[choice-1], nil
 		}
 		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)

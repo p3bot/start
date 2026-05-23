@@ -113,24 +113,24 @@ func listSettings(w io.Writer, scope config.Scope) error {
 	}
 
 	// Show config paths
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 	printConfigPaths(w, paths)
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}
 
-	_, _ = tui.ColorSettings.Fprint(w, "settings")
-	_, _ = fmt.Fprintln(w, "/")
+	tui.ColorSettings.Fprint(w, "settings")
+	fmt.Fprintln(w, "/")
 	printSettingsEntries(w, entries)
 	return nil
 }
 
 // printConfigPaths displays the configuration directory paths.
 func printConfigPaths(w io.Writer, paths config.Paths) {
-	_, _ = tui.ColorPaths.Fprintln(w, "Configuration Paths:")
+	tui.ColorPaths.Fprintln(w, "Configuration Paths:")
 	globalStatus := "not found"
 	if paths.GlobalExists {
 		globalStatus = "exists"
@@ -139,12 +139,12 @@ func printConfigPaths(w io.Writer, paths config.Paths) {
 	if paths.LocalExists {
 		localStatus = "exists"
 	}
-	_, _ = tui.ColorDim.Fprintf(w, "  Global: ")
-	_, _ = fmt.Fprintf(w, "%s ", paths.Global)
-	_, _ = fmt.Fprintln(w, tui.Annotate("%s", globalStatus))
-	_, _ = tui.ColorDim.Fprintf(w, "  Local:  ")
-	_, _ = fmt.Fprintf(w, "%s ", paths.Local)
-	_, _ = fmt.Fprintln(w, tui.Annotate("%s", localStatus))
+	tui.ColorDim.Fprintf(w, "  Global: ")
+	fmt.Fprintf(w, "%s ", paths.Global)
+	fmt.Fprintln(w, tui.Annotate("%s", globalStatus))
+	tui.ColorDim.Fprintf(w, "  Local:  ")
+	fmt.Fprintf(w, "%s ", paths.Local)
+	fmt.Fprintln(w, tui.Annotate("%s", localStatus))
 }
 
 // printSettingsEntries displays resolved setting entries in a formatted table.
@@ -164,15 +164,15 @@ func printSettingsEntries(w io.Writer, entries map[string]config.SettingEntry) {
 
 	for _, k := range keys {
 		entry := entries[k]
-		_, _ = tui.ColorDim.Fprintf(w, "%*s: ", maxLen, k)
+		tui.ColorDim.Fprintf(w, "%*s: ", maxLen, k)
 		if entry.Source == "not set" {
-			_, _ = fmt.Fprintln(w, tui.Annotate("not set"))
+			fmt.Fprintln(w, tui.Annotate("not set"))
 		} else {
 			source := entry.Source
 			if _, known := config.SettingsRegistry[k]; !known {
 				source += ", unknown key"
 			}
-			_, _ = fmt.Fprintf(w, "%s %s\n", entry.Value, tui.Annotate("%s", source))
+			fmt.Fprintf(w, "%s %s\n", entry.Value, tui.Annotate("%s", source))
 		}
 	}
 }
@@ -194,11 +194,11 @@ func showSetting(w io.Writer, key string, scope config.Scope) error {
 	}
 
 	entry := entries[key]
-	_, _ = tui.ColorDim.Fprintf(w, "%s: ", key)
+	tui.ColorDim.Fprintf(w, "%s: ", key)
 	if entry.Source == "not set" {
-		_, _ = fmt.Fprintln(w, tui.Annotate("not set"))
+		fmt.Fprintln(w, tui.Annotate("not set"))
 	} else {
-		_, _ = fmt.Fprintf(w, "%s %s\n", entry.Value, tui.Annotate("%s", entry.Source))
+		fmt.Fprintf(w, "%s %s\n", entry.Value, tui.Annotate("%s", entry.Source))
 	}
 
 	return nil
@@ -287,7 +287,7 @@ func setSetting(w io.Writer, flags *Flags, key, value string, localOnly bool) er
 	}
 
 	if !flags.Quiet {
-		_, _ = fmt.Fprintf(w, "Set %s to %q\n", key, value)
+		fmt.Fprintf(w, "Set %s to %q\n", key, value)
 	}
 
 	return nil
@@ -389,10 +389,10 @@ func writeSettingsFile(path string, settings map[string]string) error {
 			// Check if this is an int setting
 			if info, exists := config.SettingsRegistry[k]; exists && info.Type == "int" {
 				// Write as integer (no quotes)
-				sb.WriteString(fmt.Sprintf("\t%s: %s\n", k, v))
+				fmt.Fprintf(&sb, "\t%s: %s\n", k, v)
 			} else {
 				// Write as string (with quotes)
-				sb.WriteString(fmt.Sprintf("\t%s: %q\n", k, v))
+				fmt.Fprintf(&sb, "\t%s: %q\n", k, v)
 			}
 		}
 	}
@@ -420,7 +420,7 @@ func unsetSetting(w io.Writer, flags *Flags, key string, localOnly bool) error {
 	settingsPath := filepath.Join(configDir, "settings.cue")
 	if _, statErr := os.Stat(settingsPath); os.IsNotExist(statErr) {
 		if !flags.Quiet {
-			_, _ = fmt.Fprintf(w, "%s is not set\n", key)
+			fmt.Fprintf(w, "%s is not set\n", key)
 		}
 		return nil
 	}
@@ -431,14 +431,14 @@ func unsetSetting(w io.Writer, flags *Flags, key string, localOnly bool) error {
 	}
 	if len(settings) == 0 {
 		if !flags.Quiet {
-			_, _ = fmt.Fprintf(w, "%s is not set\n", key)
+			fmt.Fprintf(w, "%s is not set\n", key)
 		}
 		return nil
 	}
 
 	if _, exists := settings[key]; !exists {
 		if !flags.Quiet {
-			_, _ = fmt.Fprintf(w, "%s is not set\n", key)
+			fmt.Fprintf(w, "%s is not set\n", key)
 		}
 		return nil
 	}
@@ -450,7 +450,7 @@ func unsetSetting(w io.Writer, flags *Flags, key string, localOnly bool) error {
 	}
 
 	if !flags.Quiet {
-		_, _ = fmt.Fprintf(w, "Unset %s\n", key)
+		fmt.Fprintf(w, "Unset %s\n", key)
 	}
 	return nil
 }

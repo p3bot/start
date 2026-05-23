@@ -155,7 +155,7 @@ func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, 
 	if !isTerminal(stdin) {
 		return "", fmt.Errorf("query must be at least 3 characters")
 	}
-	_, _ = fmt.Fprintln(stderr, "Query must be at least 3 characters")
+	fmt.Fprintln(stderr, "Query must be at least 3 characters")
 	return promptSearchQuery(stderr, stdin)
 }
 
@@ -189,7 +189,7 @@ func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, 
 	}
 
 	rendered := partialFillAgentCommand(command, item, modelOverride)
-	_, _ = fmt.Fprint(stdout, ensureTrailingNewline(rendered))
+	fmt.Fprint(stdout, ensureTrailingNewline(rendered))
 	return nil
 }
 
@@ -271,7 +271,7 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 		return err
 	}
 
-	_, _ = fmt.Fprint(stdout, ensureTrailingNewline(result.Content))
+	fmt.Fprint(stdout, ensureTrailingNewline(result.Content))
 	return nil
 }
 
@@ -283,20 +283,20 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 // so users aren't misled into editing the CUE module cache; local-file modules
 // keep the `Path:` label so the user knows where the editable source lives.
 func printGetVerbose(stderr io.Writer, itemType, name string, item cue.Value, resolvedFile, command string, fromModuleCache bool) {
-	_, _ = fmt.Fprintf(stderr, "Type: %s\n", itemType)
-	_, _ = fmt.Fprintf(stderr, "Name: %s\n", name)
+	fmt.Fprintf(stderr, "Type: %s\n", itemType)
+	fmt.Fprintf(stderr, "Name: %s\n", name)
 	if origin := orchestration.ExtractOrigin(item); origin != "" {
-		_, _ = fmt.Fprintf(stderr, "Origin: %s\n", origin)
+		fmt.Fprintf(stderr, "Origin: %s\n", origin)
 	}
 	if resolvedFile != "" {
 		label := "Path"
 		if fromModuleCache {
 			label = "Cache"
 		}
-		_, _ = fmt.Fprintf(stderr, "%s: %s\n", label, resolvedFile)
+		fmt.Fprintf(stderr, "%s: %s\n", label, resolvedFile)
 	}
 	if command != "" {
-		_, _ = fmt.Fprintf(stderr, "Command: %s\n", command)
+		fmt.Fprintf(stderr, "Command: %s\n", command)
 	}
 }
 

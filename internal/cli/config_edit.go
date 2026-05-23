@@ -46,7 +46,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 		return runConfigEditInteractive(stdin, stdout, local)
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	query := args[0]
 	matches, err := searchAllConfigCategories(query, config.ScopeFromLocal(local))
 	if err != nil {
@@ -79,8 +79,8 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 // runConfigEditInteractive prompts for category then item, then edits.
 func runConfigEditInteractive(stdin io.Reader, stdout io.Writer, local bool) error {
-	_, _ = fmt.Fprintln(stdout)
-	_, _ = fmt.Fprintln(stdout, "Edit:")
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "Edit:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
 	if err != nil || category == "" {
 		return err
@@ -91,12 +91,12 @@ func runConfigEditInteractive(stdin io.Reader, stdout io.Writer, local bool) err
 		return err
 	}
 	if len(names) == 0 {
-		_, _ = fmt.Fprintf(stdout, "No %s configured.\n", category)
+		fmt.Fprintf(stdout, "No %s configured.\n", category)
 		return nil
 	}
 
 	singular := strings.TrimSuffix(category, "s")
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	selected, err := promptSelectOneFromList(stdout, stdin, singular, names)
 	if err != nil || selected == "" {
 		return err
@@ -145,7 +145,7 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 		return fmt.Errorf("loading agents: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Editing agent %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
+	fmt.Fprintf(stdout, "Editing agent %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
 	newBin, err := promptString(stdout, stdin, "Binary", agent.Bin)
 	if err != nil {
@@ -168,19 +168,19 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	newModels, err := promptModels(stdout, stdin, agent.Models)
 	if err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	newDefaultModel, err := promptDefaultModel(stdout, stdin, agent.DefaultModel, newModels)
 	if err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	newTags, err := promptTags(stdout, stdin, agent.Tags, true)
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 		return fmt.Errorf("writing agents file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "\nUpdated agent %q\n", resolvedName)
+	fmt.Fprintf(stdout, "\nUpdated agent %q\n", resolvedName)
 	return nil
 }
 
@@ -225,25 +225,25 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Editing role %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
+	fmt.Fprintf(stdout, "Editing role %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
 	newDescription, err := promptString(stdout, stdin, "Description", role.Description)
 	if err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout, "\nCurrent content source:")
+	fmt.Fprintln(stdout, "\nCurrent content source:")
 	if role.File != "" {
-		_, _ = fmt.Fprintf(stdout, "  File: %s\n", role.File)
+		fmt.Fprintf(stdout, "  File: %s\n", role.File)
 	}
 	if role.Command != "" {
-		_, _ = fmt.Fprintf(stdout, "  Command: %s\n", role.Command)
+		fmt.Fprintf(stdout, "  Command: %s\n", role.Command)
 	}
 	if role.Prompt != "" {
-		_, _ = fmt.Fprintf(stdout, "  Prompt: %s\n", truncatePrompt(role.Prompt, 50))
+		fmt.Fprintf(stdout, "  Prompt: %s\n", truncatePrompt(role.Prompt, 50))
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Keep current? %s ", tui.Bracket("Y/n"))
+	fmt.Fprintf(stdout, "Keep current? %s ", tui.Bracket("Y/n"))
 	reader := bufio.NewReader(stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -268,7 +268,7 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		if role.Optional {
 			optBracket = "Y/n"
 		}
-		_, _ = fmt.Fprintf(stdout, "\nOptional %s? %s ", tui.Annotate("currently %t", role.Optional), tui.Bracket("%s", optBracket))
+		fmt.Fprintf(stdout, "\nOptional %s? %s ", tui.Annotate("currently %t", role.Optional), tui.Bracket("%s", optBracket))
 		optInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("reading input: %w", err)
@@ -284,7 +284,7 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		newOptional = false
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	newTags, err := promptTags(stdout, stdin, role.Tags, true)
 	if err != nil {
 		return err
@@ -302,7 +302,7 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return fmt.Errorf("writing roles file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "\nUpdated role %q\n", resolvedName)
+	fmt.Fprintf(stdout, "\nUpdated role %q\n", resolvedName)
 	return nil
 }
 
@@ -329,25 +329,25 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 		return fmt.Errorf("loading contexts: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Editing context %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
+	fmt.Fprintf(stdout, "Editing context %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
 	newDescription, err := promptString(stdout, stdin, "Description", ctx.Description)
 	if err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout, "\nCurrent content source:")
+	fmt.Fprintln(stdout, "\nCurrent content source:")
 	if ctx.File != "" {
-		_, _ = fmt.Fprintf(stdout, "  File: %s\n", ctx.File)
+		fmt.Fprintf(stdout, "  File: %s\n", ctx.File)
 	}
 	if ctx.Command != "" {
-		_, _ = fmt.Fprintf(stdout, "  Command: %s\n", ctx.Command)
+		fmt.Fprintf(stdout, "  Command: %s\n", ctx.Command)
 	}
 	if ctx.Prompt != "" {
-		_, _ = fmt.Fprintf(stdout, "  Prompt: %s\n", truncatePrompt(ctx.Prompt, 50))
+		fmt.Fprintf(stdout, "  Prompt: %s\n", truncatePrompt(ctx.Prompt, 50))
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Keep current? %s ", tui.Bracket("Y/n"))
+	fmt.Fprintf(stdout, "Keep current? %s ", tui.Bracket("Y/n"))
 	reader := bufio.NewReader(stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -366,7 +366,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 		}
 	}
 
-	_, _ = fmt.Fprintf(stdout, "\nRequired %s? %s ", tui.Annotate("currently %t", ctx.Required), tui.Bracket("y/N"))
+	fmt.Fprintf(stdout, "\nRequired %s? %s ", tui.Annotate("currently %t", ctx.Required), tui.Bracket("y/N"))
 	input, err = reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("reading input: %w", err)
@@ -382,7 +382,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 
 	newDefault := ctx.Default
 	if !newRequired {
-		_, _ = fmt.Fprintf(stdout, "Default %s? %s ", tui.Annotate("currently %t", ctx.Default), tui.Bracket("y/N"))
+		fmt.Fprintf(stdout, "Default %s? %s ", tui.Annotate("currently %t", ctx.Default), tui.Bracket("y/N"))
 		input, err = reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("reading input: %w", err)
@@ -396,7 +396,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 		}
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	newTags, err := promptTags(stdout, stdin, ctx.Tags, true)
 	if err != nil {
 		return err
@@ -415,7 +415,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 		return fmt.Errorf("writing contexts file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "\nUpdated context %q\n", resolvedName)
+	fmt.Fprintf(stdout, "\nUpdated context %q\n", resolvedName)
 	return nil
 }
 
@@ -442,25 +442,25 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return fmt.Errorf("loading tasks: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Editing task %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
+	fmt.Fprintf(stdout, "Editing task %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
 	newDescription, err := promptString(stdout, stdin, "Description", task.Description)
 	if err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout, "\nCurrent content source:")
+	fmt.Fprintln(stdout, "\nCurrent content source:")
 	if task.File != "" {
-		_, _ = fmt.Fprintf(stdout, "  File: %s\n", task.File)
+		fmt.Fprintf(stdout, "  File: %s\n", task.File)
 	}
 	if task.Command != "" {
-		_, _ = fmt.Fprintf(stdout, "  Command: %s\n", task.Command)
+		fmt.Fprintf(stdout, "  Command: %s\n", task.Command)
 	}
 	if task.Prompt != "" {
-		_, _ = fmt.Fprintf(stdout, "  Prompt: %s\n", truncatePrompt(task.Prompt, 50))
+		fmt.Fprintf(stdout, "  Prompt: %s\n", truncatePrompt(task.Prompt, 50))
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Keep current? %s ", tui.Bracket("Y/n"))
+	fmt.Fprintf(stdout, "Keep current? %s ", tui.Bracket("Y/n"))
 	reader := bufio.NewReader(stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -484,7 +484,7 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout)
 	newTags, err := promptTags(stdout, stdin, task.Tags, true)
 	if err != nil {
 		return err
@@ -502,6 +502,6 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return fmt.Errorf("writing tasks file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "\nUpdated task %q\n", resolvedName)
+	fmt.Fprintf(stdout, "\nUpdated task %q\n", resolvedName)
 	return nil
 }

@@ -66,20 +66,20 @@ func runConfigOrder(cmd *cobra.Command, args []string) error {
 		var known bool
 		category, known = resolveOrderCategory(args[0])
 		if category == "" && !known {
-			_, _ = fmt.Fprintf(stdout, "unknown category %q\n", args[0])
+			fmt.Fprintf(stdout, "unknown category %q\n", args[0])
 		}
 	}
 
 	if category == "" {
-		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "Reorder:")
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "Reorder:")
 		var err error
 		category, err = promptSelectCategory(stdout, stdin, []string{"roles", "contexts"})
 		if err != nil || category == "" {
 			return err
 		}
 	} else {
-		_, _ = fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout)
 	}
 
 	switch category {
@@ -106,7 +106,7 @@ func reorderContexts(stdout io.Writer, stdin io.Reader, local bool) error {
 	}
 
 	if len(order) == 0 {
-		_, _ = fmt.Fprintln(stdout, "No contexts configured.")
+		fmt.Fprintln(stdout, "No contexts configured.")
 		return nil
 	}
 
@@ -131,7 +131,7 @@ func reorderContexts(stdout io.Writer, stdin io.Reader, local bool) error {
 	}
 
 	if !saved {
-		_, _ = fmt.Fprintln(stdout, "Cancelled.")
+		fmt.Fprintln(stdout, "Cancelled.")
 		return nil
 	}
 
@@ -139,7 +139,7 @@ func reorderContexts(stdout io.Writer, stdin io.Reader, local bool) error {
 		return fmt.Errorf("writing contexts file: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(stdout, "Order saved.")
+	fmt.Fprintln(stdout, "Order saved.")
 	return nil
 }
 
@@ -158,7 +158,7 @@ func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 	}
 
 	if len(order) == 0 {
-		_, _ = fmt.Fprintln(stdout, "No roles configured.")
+		fmt.Fprintln(stdout, "No roles configured.")
 		return nil
 	}
 
@@ -180,7 +180,7 @@ func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 	}
 
 	if !saved {
-		_, _ = fmt.Fprintln(stdout, "Cancelled.")
+		fmt.Fprintln(stdout, "Cancelled.")
 		return nil
 	}
 
@@ -188,7 +188,7 @@ func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 		return fmt.Errorf("writing roles file: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(stdout, "Order saved.")
+	fmt.Fprintln(stdout, "Order saved.")
 	return nil
 }
 
@@ -202,15 +202,15 @@ func runReorderLoop(w io.Writer, r io.Reader, heading string, order []string, fo
 	reader := bufio.NewReader(r)
 
 	// Display initial list
-	_, _ = fmt.Fprintln(w, heading)
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w, heading)
+	fmt.Fprintln(w)
 	for i, name := range current {
-		_, _ = fmt.Fprintln(w, formatItem(i, name))
+		fmt.Fprintln(w, formatItem(i, name))
 	}
 
 	for {
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintf(w, "Move up %s, Enter to save, q to cancel: ", tui.Annotate("number"))
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "Move up %s, Enter to save, q to cancel: ", tui.Annotate("number"))
 
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -232,17 +232,17 @@ func runReorderLoop(w io.Writer, r io.Reader, heading string, order []string, fo
 		// Try to parse as number
 		num, err := strconv.Atoi(input)
 		if err != nil {
-			_, _ = fmt.Fprintf(w, "Invalid input: %s\n", input)
+			fmt.Fprintf(w, "Invalid input: %s\n", input)
 			continue
 		}
 
 		if num < 1 || num > len(current) {
-			_, _ = fmt.Fprintf(w, "Invalid number: %d %s\n", num, tui.Annotate("must be 1-%d", len(current)))
+			fmt.Fprintf(w, "Invalid number: %d %s\n", num, tui.Annotate("must be 1-%d", len(current)))
 			continue
 		}
 
 		if num == 1 {
-			_, _ = fmt.Fprintln(w, "Already at top.")
+			fmt.Fprintln(w, "Already at top.")
 			continue
 		}
 
@@ -251,9 +251,9 @@ func runReorderLoop(w io.Writer, r io.Reader, heading string, order []string, fo
 		current[idx], current[idx-1] = current[idx-1], current[idx]
 
 		// Re-display
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 		for i, name := range current {
-			_, _ = fmt.Fprintln(w, formatItem(i, name))
+			fmt.Fprintln(w, formatItem(i, name))
 		}
 	}
 }

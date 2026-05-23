@@ -395,12 +395,12 @@ func extractAgentFields(agentVal cue.Value, name string) Agent {
 func GenerateDryRunCommand(agent Agent, model, roleName string, contexts []string, workingDir string, cmdStr string) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Agent: %s\n", agent.Name))
-	sb.WriteString(fmt.Sprintf("# Model: %s\n", model))
-	sb.WriteString(fmt.Sprintf("# Role: %s\n", roleName))
-	sb.WriteString(fmt.Sprintf("# Contexts: %s\n", strings.Join(contexts, ", ")))
-	sb.WriteString(fmt.Sprintf("# Working Directory: %s\n", workingDir))
-	sb.WriteString(fmt.Sprintf("# Generated: %s\n", time.Now().Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "# Agent: %s\n", agent.Name)
+	fmt.Fprintf(&sb, "# Model: %s\n", model)
+	fmt.Fprintf(&sb, "# Role: %s\n", roleName)
+	fmt.Fprintf(&sb, "# Contexts: %s\n", strings.Join(contexts, ", "))
+	fmt.Fprintf(&sb, "# Working Directory: %s\n", workingDir)
+	fmt.Fprintf(&sb, "# Generated: %s\n", time.Now().Format(time.RFC3339))
 	sb.WriteString("\n")
 	sb.WriteString(cmdStr)
 

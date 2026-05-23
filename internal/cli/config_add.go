@@ -54,8 +54,8 @@ func runConfigAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	if category == "" {
-		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "Add:")
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "Add:")
 		var err error
 		category, err = promptSelectCategory(stdout, stdin, allConfigCategories)
 		if err != nil || category == "" {
@@ -64,7 +64,7 @@ func runConfigAdd(cmd *cobra.Command, args []string) error {
 		// promptSelectCategory returns plural; normalize to singular
 		category = strings.TrimSuffix(category, "s")
 	} else {
-		_, _ = fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout)
 	}
 
 	switch category {
@@ -166,8 +166,8 @@ func configAgentAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("writing agents file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Added agent %q to %s config\n", name, scopeName)
-	_, _ = fmt.Fprintf(stdout, "Config: %s\n", agentPath)
+	fmt.Fprintf(stdout, "Added agent %q to %s config\n", name, scopeName)
+	fmt.Fprintf(stdout, "Config: %s\n", agentPath)
 	return nil
 }
 
@@ -211,7 +211,7 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 
 	var optional bool
 	if file != "" {
-		_, _ = fmt.Fprintf(stdout, "Optional %s? %s ", tui.Annotate("skip if file missing"), tui.Bracket("y/N"))
+		fmt.Fprintf(stdout, "Optional %s? %s ", tui.Annotate("skip if file missing"), tui.Bracket("y/N"))
 		reader := bufio.NewReader(stdin)
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -264,8 +264,8 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("writing roles file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Added role %q to %s config\n", name, scopeName)
-	_, _ = fmt.Fprintf(stdout, "Config: %s\n", rolePath)
+	fmt.Fprintf(stdout, "Added role %q to %s config\n", name, scopeName)
+	fmt.Fprintf(stdout, "Config: %s\n", rolePath)
 	return nil
 }
 
@@ -309,7 +309,7 @@ func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 
 	var required, isDefault bool
 	{
-		_, _ = fmt.Fprintf(stdout, "Required %s? %s ", tui.Annotate("always include"), tui.Bracket("y/N"))
+		fmt.Fprintf(stdout, "Required %s? %s ", tui.Annotate("always include"), tui.Bracket("y/N"))
 		reader := bufio.NewReader(stdin)
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -319,7 +319,7 @@ func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		required = input == "y" || input == "yes"
 
 		if !required {
-			_, _ = fmt.Fprintf(stdout, "Default %s? %s ", tui.Annotate("include by default"), tui.Bracket("y/N"))
+			fmt.Fprintf(stdout, "Default %s? %s ", tui.Annotate("include by default"), tui.Bracket("y/N"))
 			input, err := reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("reading input: %w", err)
@@ -373,8 +373,8 @@ func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("writing contexts file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Added context %q to %s config\n", name, scopeName)
-	_, _ = fmt.Fprintf(stdout, "Config: %s\n", contextPath)
+	fmt.Fprintf(stdout, "Added context %q to %s config\n", name, scopeName)
+	fmt.Fprintf(stdout, "Config: %s\n", contextPath)
 	return nil
 }
 
@@ -464,7 +464,7 @@ func configTaskAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("writing tasks file: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Added task %q to %s config\n", name, scopeName)
-	_, _ = fmt.Fprintf(stdout, "Config: %s\n", taskPath)
+	fmt.Fprintf(stdout, "Added task %q to %s config\n", name, scopeName)
+	fmt.Fprintf(stdout, "Config: %s\n", taskPath)
 	return nil
 }

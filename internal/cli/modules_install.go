@@ -79,7 +79,7 @@ func runModulesInstall(cmd *cobra.Command, args []string) error {
 			if !isTerminal(stdin) {
 				return fmt.Errorf("query %q must be at least 3 characters", q)
 			}
-			_, _ = fmt.Fprintf(w, "Query %q must be at least 3 characters\n", q)
+			fmt.Fprintf(w, "Query %q must be at least 3 characters\n", q)
 			input, err := promptSearchQuery(w, stdin)
 			if err != nil {
 				return err
@@ -134,12 +134,12 @@ func runModulesInstall(cmd *cobra.Command, args []string) error {
 	for _, query := range args {
 		if err := installModule(ctx, cmd, prog, client, index, query, configDir, scopeName, flags, cfg); err != nil {
 			if prompted && len(args) == 1 && errors.Is(err, errNoModules) {
-				_, _ = fmt.Fprintf(w, "No modules found matching %q\n", query)
+				fmt.Fprintf(w, "No modules found matching %q\n", query)
 				return nil
 			}
 			errs = append(errs, fmt.Errorf("%s: %w", query, err))
 			if len(args) > 1 {
-				_, _ = fmt.Fprintf(w, "Error installing %q: %v\n", query, err)
+				fmt.Fprintf(w, "Error installing %q: %v\n", query, err)
 			}
 		}
 	}
@@ -180,7 +180,7 @@ func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, 
 	for _, selected := range selections {
 		if err := installSingleModule(ctx, w, prog, client, index, selected, configDir, scopeName, flags, cfg); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", formatAddress(selected.Category, selected.Name), err))
-			_, _ = fmt.Fprintf(w, "Error installing %s: %v\n", formatAddress(selected.Category, selected.Name), err)
+			fmt.Fprintf(w, "Error installing %s: %v\n", formatAddress(selected.Category, selected.Name), err)
 		}
 	}
 
@@ -206,29 +206,29 @@ func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, c
 				outdated := latestVer != "" && installedVer != "" && semver.Compare(latestVer, installedVer) > 0
 
 				if outdated {
-					_, _ = fmt.Fprint(w, "○ ")
+					fmt.Fprint(w, "○ ")
 				} else {
-					_, _ = tui.ColorSuccess.Fprint(w, "✓ ")
+					tui.ColorSuccess.Fprint(w, "✓ ")
 				}
-				_, _ = tui.ColorDim.Fprint(w, "Already installed: ")
-				_, _ = tui.CategoryColor(selected.Category).Fprint(w, selected.Category)
-				_, _ = fmt.Fprintf(w, ":%s ", selected.Name)
-				_, _ = tui.ColorCyan.Fprint(w, "(")
+				tui.ColorDim.Fprint(w, "Already installed: ")
+				tui.CategoryColor(selected.Category).Fprint(w, selected.Category)
+				fmt.Fprintf(w, ":%s ", selected.Name)
+				tui.ColorCyan.Fprint(w, "(")
 				if installedVer != "" {
-					_, _ = tui.ColorDim.Fprint(w, installedVer)
+					tui.ColorDim.Fprint(w, installedVer)
 				}
 				if outdated {
-					_, _ = fmt.Fprint(w, " ")
-					_, _ = tui.ColorBlue.Fprint(w, "->")
-					_, _ = fmt.Fprint(w, " ")
-					_, _ = tui.ColorWarning.Fprint(w, latestVer)
+					fmt.Fprint(w, " ")
+					tui.ColorBlue.Fprint(w, "->")
+					fmt.Fprint(w, " ")
+					tui.ColorWarning.Fprint(w, latestVer)
 				} else {
-					_, _ = fmt.Fprint(w, " ")
-					_, _ = tui.ColorBlue.Fprint(w, "->")
-					_, _ = fmt.Fprint(w, " ")
-					_, _ = tui.ColorDim.Fprint(w, "current")
+					fmt.Fprint(w, " ")
+					tui.ColorBlue.Fprint(w, "->")
+					fmt.Fprint(w, " ")
+					tui.ColorDim.Fprint(w, "current")
 				}
-				_, _ = tui.ColorCyan.Fprintln(w, ")")
+				tui.ColorCyan.Fprintln(w, ")")
 			}
 			return nil
 		}
@@ -253,11 +253,11 @@ func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, c
 			configFile = "settings.cue"
 		}
 		if version != "" {
-			_, _ = fmt.Fprintf(w, "\nInstalled %s@%s to %s config\n", formatAddress(selected.Category, selected.Name), version, scopeName)
+			fmt.Fprintf(w, "\nInstalled %s@%s to %s config\n", formatAddress(selected.Category, selected.Name), version, scopeName)
 		} else {
-			_, _ = fmt.Fprintf(w, "\nInstalled %s to %s config\n", formatAddress(selected.Category, selected.Name), scopeName)
+			fmt.Fprintf(w, "\nInstalled %s to %s config\n", formatAddress(selected.Category, selected.Name), scopeName)
 		}
-		_, _ = fmt.Fprintf(w, "Config: %s/%s\n", configDir, configFile)
+		fmt.Fprintf(w, "Config: %s/%s\n", configDir, configFile)
 	}
 
 	return nil
@@ -281,24 +281,24 @@ func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchRes
 		)
 	}
 
-	_, _ = fmt.Fprintf(w, "\nFound %d matches:\n\n", len(results))
+	fmt.Fprintf(w, "\nFound %d matches:\n\n", len(results))
 
 	for i, res := range results {
 		marker := "  "
 		if modules.ModuleExists(cfg, res.Category, res.Name) {
 			marker = tui.ColorInstalled.Sprint("★") + " "
 		}
-		_, _ = fmt.Fprintf(w, "  %s%d. ", marker, i+1)
-		_, _ = tui.CategoryColor(res.Category).Fprint(w, res.Category)
-		_, _ = fmt.Fprintf(w, ":%s ", res.Name)
-		_, _ = tui.ColorDim.Fprintf(w, "- %s", res.Entry.Description)
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintf(w, "  %s%d. ", marker, i+1)
+		tui.CategoryColor(res.Category).Fprint(w, res.Category)
+		fmt.Fprintf(w, ":%s ", res.Name)
+		tui.ColorDim.Fprintf(w, "- %s", res.Entry.Description)
+		fmt.Fprintln(w)
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "CSV %s, range %s, or \"all\" supported\n",
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "CSV %s, range %s, or \"all\" supported\n",
 		tui.Annotate("1,2,3"), tui.Annotate("1-3"))
-	_, _ = fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", len(results)))
+	fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", len(results)))
 
 	reader := bufio.NewReader(r)
 	input, err := reader.ReadString('\n')
@@ -309,7 +309,7 @@ func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchRes
 	input = strings.TrimSpace(input)
 
 	if input == "" {
-		_, _ = fmt.Fprintln(w, "Cancelled.")
+		fmt.Fprintln(w, "Cancelled.")
 		return nil, nil
 	}
 	if strings.ToLower(input) == "all" {
@@ -331,7 +331,7 @@ func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchRes
 		return nil, err
 	}
 	if len(indices) == 0 {
-		_, _ = fmt.Fprintln(w, "Cancelled.")
+		fmt.Fprintln(w, "Cancelled.")
 		return nil, nil
 	}
 	selected := make([]modules.SearchResult, len(indices))

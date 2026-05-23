@@ -49,8 +49,8 @@ func runConfigOpen(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("category required (or run interactively to be prompted)")
 		}
 		stdout := cmd.OutOrStdout()
-		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "Open:")
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "Open:")
 		var err error
 		category, err = promptSelectCategory(stdout, stdin, openCategories)
 		if err != nil || category == "" {

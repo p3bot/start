@@ -153,7 +153,7 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 		if !isTerminal(stdin) {
 			return fmt.Errorf("query must be at least 3 characters")
 		}
-		_, _ = fmt.Fprintln(w, "Query must be at least 3 characters")
+		fmt.Fprintln(w, "Query must be at least 3 characters")
 		input, err := promptSearchQuery(w, stdin)
 		if err != nil {
 			return err
@@ -167,7 +167,7 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 
 	if err := runDescribeSearch(cmd, query); err != nil {
 		if prompted {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), capitalise(err.Error()))
+			fmt.Fprintln(cmd.OutOrStdout(), capitalise(err.Error()))
 			return nil
 		}
 		return err
@@ -187,18 +187,18 @@ func runDescribeListing(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 	printConfigPaths(w, paths)
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		return err
 	}
-	_, _ = tui.ColorSettings.Fprint(w, "settings")
-	_, _ = fmt.Fprintln(w, "/")
+	tui.ColorSettings.Fprint(w, "settings")
+	fmt.Fprintln(w, "/")
 	printSettingsEntries(w, entries)
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	// Show categories
 	cfg, err := loadConfig(scope)
@@ -240,20 +240,20 @@ func runDescribeListing(cmd *cobra.Command) error {
 			continue
 		}
 
-		_, _ = tui.CategoryColor(cat.category).Fprint(w, cat.category)
-		_, _ = fmt.Fprintln(w, "/")
+		tui.CategoryColor(cat.category).Fprint(w, cat.category)
+		fmt.Fprintln(w, "/")
 
 		for _, e := range catEntries {
 			if e.desc != "" {
 				padding := strings.Repeat(" ", maxNameLen-len(e.name)+2)
-				_, _ = fmt.Fprintf(w, "  %s%s", e.name, padding)
-				_, _ = tui.ColorDim.Fprintln(w, e.desc)
+				fmt.Fprintf(w, "  %s%s", e.name, padding)
+				tui.ColorDim.Fprintln(w, e.desc)
 			} else {
-				_, _ = fmt.Fprintf(w, "  %s\n", e.name)
+				fmt.Fprintf(w, "  %s\n", e.name)
 			}
 		}
 
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 
 	// In TTY mode, prompt for a search query
@@ -266,7 +266,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 			return nil
 		}
 		if err := runDescribeSearch(cmd, query); err != nil {
-			_, _ = fmt.Fprintln(w, capitalise(err.Error()))
+			fmt.Fprintln(w, capitalise(err.Error()))
 			return nil
 		}
 		return nil
@@ -278,7 +278,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 // runDescribeSearch handles cross-category search for `start describe <name>`.
 func runDescribeSearch(cmd *cobra.Command, name string) error {
 	w := cmd.OutOrStdout()
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 	stderr := cmd.ErrOrStderr()
 	flags := getFlags(cmd)
 	scope := scopeFromFlags(flags)
@@ -467,14 +467,14 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 	label := tui.ColorDim.Sprint
 
 	// Header
-	_, _ = tui.CategoryColor(cat).Fprint(w, r.ItemType)
-	_, _ = fmt.Fprintf(w, ": %s\n", r.Name)
+	tui.CategoryColor(cat).Fprint(w, r.ItemType)
+	fmt.Fprintf(w, ": %s\n", r.Name)
 	printSeparator(w)
 
 	// Config source
 	configSource := findConfigSource(r.CueKey, r.Name)
 	if configSource != "" {
-		_, _ = fmt.Fprintf(w, "%s %s %s\n",
+		fmt.Fprintf(w, "%s %s %s\n",
 			label("Config:"), configSource,
 			tui.Annotate("%s", r.Name))
 	}
@@ -482,10 +482,10 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 	// Origin and cache
 	origin := orchestration.ExtractOrigin(r.Value)
 	if origin != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Origin:"), origin)
+		fmt.Fprintf(w, "%s %s\n", label("Origin:"), origin)
 		cacheDir := deriveCacheDir(origin)
 		if cacheDir != "" {
-			_, _ = fmt.Fprintf(w, "%s %s\n", label("Cache:"), cacheDir)
+			fmt.Fprintf(w, "%s %s\n", label("Cache:"), cacheDir)
 		}
 	}
 
@@ -495,28 +495,28 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 	// CUE Definition
 	cueDef := formatCUEDefinition(r.Value)
 	if cueDef != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, cueDef)
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, cueDef)
 	}
 
 	// File contents
 	fields := orchestration.ExtractUTDFields(r.Value)
 	if fields.File != "" {
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("File:"), fields.File)
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "%s %s\n", label("File:"), fields.File)
 
 		resolvedPath, content, readErr := resolveDescribeFile(fields.File, origin)
 		if resolvedPath != "" && resolvedPath != fields.File {
-			_, _ = fmt.Fprintf(w, "%s %s\n", label("Path:"), resolvedPath)
+			fmt.Fprintf(w, "%s %s\n", label("Path:"), resolvedPath)
 		}
 
 		if readErr != nil {
-			_, _ = fmt.Fprintf(w, "[error: %s]\n", readErr)
+			fmt.Fprintf(w, "[error: %s]\n", readErr)
 		} else if content != "" {
-			_, _ = fmt.Fprintln(w)
-			_, _ = fmt.Fprint(w, content)
+			fmt.Fprintln(w)
+			fmt.Fprint(w, content)
 			if !strings.HasSuffix(content, "\n") {
-				_, _ = fmt.Fprintln(w)
+				fmt.Fprintln(w)
 			}
 		}
 	}
@@ -527,8 +527,8 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 		if r.ItemType == "Agent" {
 			cmd = partialFillAgentCommand(cmd, r.Value, "")
 		}
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Command:"), cmd)
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "%s %s\n", label("Command:"), cmd)
 	}
 
 	printSeparator(w)

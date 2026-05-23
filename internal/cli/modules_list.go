@@ -92,10 +92,10 @@ func runModulesList(cmd *cobra.Command, args []string) error {
 
 	if !paths.AnyExists() {
 		if jsonFlag {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+			fmt.Fprintln(cmd.OutOrStdout(), "[]")
 			return nil
 		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No configuration found. Run 'start' to set up.")
+		fmt.Fprintln(cmd.OutOrStdout(), "No configuration found. Run 'start' to set up.")
 		return nil
 	}
 
@@ -120,10 +120,10 @@ func runModulesList(cmd *cobra.Command, args []string) error {
 
 	if len(installed) == 0 {
 		if jsonFlag {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+			fmt.Fprintln(cmd.OutOrStdout(), "[]")
 			return nil
 		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No modules installed from registry.")
+		fmt.Fprintln(cmd.OutOrStdout(), "No modules installed from registry.")
 		return nil
 	}
 
@@ -139,10 +139,10 @@ func runModulesList(cmd *cobra.Command, args []string) error {
 
 		if len(installed) == 0 {
 			if jsonFlag {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+				fmt.Fprintln(cmd.OutOrStdout(), "[]")
 				return nil
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No %s installed from registry.\n", category)
+			fmt.Fprintf(cmd.OutOrStdout(), "No %s installed from registry.\n", category)
 			return nil
 		}
 	}
@@ -166,7 +166,7 @@ func runModulesList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout())
 	printInstalledModules(cmd.OutOrStdout(), installed, flags.Verbose)
 
 	return nil
@@ -325,8 +325,8 @@ func findInIndex(index *registry.Index, category, name string) *registry.IndexEn
 
 // printInstalledModules prints the list of installed modules.
 func printInstalledModules(w io.Writer, installed []InstalledModule, verbose bool) {
-	_, _ = fmt.Fprintln(w, "Installed modules:")
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w, "Installed modules:")
+	fmt.Fprintln(w)
 
 	// Group by category
 	grouped := make(map[string][]InstalledModule)
@@ -341,29 +341,29 @@ func printInstalledModules(w io.Writer, installed []InstalledModule, verbose boo
 			continue
 		}
 
-		_, _ = tui.CategoryColor(cat).Fprint(w, cat)
-		_, _ = fmt.Fprintln(w, "/")
+		tui.CategoryColor(cat).Fprint(w, cat)
+		fmt.Fprintln(w, "/")
 		for _, a := range modules {
 			if verbose && a.LatestVer != "" {
-				_, _ = fmt.Fprintf(w, "  %-25s ", a.Name)
+				fmt.Fprintf(w, "  %-25s ", a.Name)
 				if a.UpdateAvail {
-					_, _ = fmt.Fprint(w, tui.Annotate("update available: %s", a.LatestVer))
+					fmt.Fprint(w, tui.Annotate("update available: %s", a.LatestVer))
 				} else {
-					_, _ = fmt.Fprint(w, tui.Annotate("latest"))
+					fmt.Fprint(w, tui.Annotate("latest"))
 				}
-				_, _ = fmt.Fprintln(w)
+				fmt.Fprintln(w)
 			} else {
 				scopeIndicator := ""
 				if verbose {
 					scopeIndicator = fmt.Sprintf(" [%s]", a.Scope)
 				}
 				if a.InstalledVer != "" {
-					_, _ = fmt.Fprintf(w, "  %-25s %s%s\n", a.Name, tui.Annotate("%s", a.InstalledVer), scopeIndicator)
+					fmt.Fprintf(w, "  %-25s %s%s\n", a.Name, tui.Annotate("%s", a.InstalledVer), scopeIndicator)
 				} else {
-					_, _ = fmt.Fprintf(w, "  %s%s\n", a.Name, scopeIndicator)
+					fmt.Fprintf(w, "  %s%s\n", a.Name, scopeIndicator)
 				}
 			}
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 }

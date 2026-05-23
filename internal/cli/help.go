@@ -30,7 +30,7 @@ func addHelpCommand(root *cobra.Command) {
 			}
 			target, _, err := root.Find(args)
 			if err != nil || target == nil || target == root {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Unknown help topic: %s\n", args[0])
+				fmt.Fprintf(cmd.OutOrStdout(), "Unknown help topic: %s\n", args[0])
 				return
 			}
 			_ = target.Help()

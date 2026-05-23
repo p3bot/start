@@ -12,8 +12,8 @@ func main() {
 	if err := cli.Execute(); err != nil {
 		if !cli.IsSilentError(err) {
 			red := color.New(color.FgRed)
-			_, _ = red.Fprint(os.Stderr, "Error: ")
-			_, _ = fmt.Fprintln(os.Stderr, err)
+			red.Fprint(os.Stderr, "Error: ")
+			fmt.Fprintln(os.Stderr, err)
 		}
 		os.Exit(1)
 	}

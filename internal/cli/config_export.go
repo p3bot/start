@@ -71,7 +71,7 @@ func exportSingleCategory(w io.Writer, local bool, category string) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	_, _ = fmt.Fprint(w, string(data))
+	fmt.Fprint(w, string(data))
 	return nil
 }
 
@@ -90,9 +90,9 @@ func printCueFiles(w io.Writer, dir string) error {
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
-		_, _ = fmt.Fprintf(w, "// %s\n", entry.Name())
-		_, _ = fmt.Fprint(w, string(data))
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintf(w, "// %s\n", entry.Name())
+		fmt.Fprint(w, string(data))
+		fmt.Fprintln(w)
 	}
 	return nil
 }

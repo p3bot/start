@@ -39,35 +39,35 @@ func writeAgentMetadata(w io.Writer, agent AgentConfig) {
 	}
 
 	label := tui.ColorDim.Sprint
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	if agent.Description != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), agent.Description)
+		fmt.Fprintf(w, "%s %s\n", label("Description:"), agent.Description)
 	}
 	if agent.Bin != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Bin:"), agent.Bin)
+		fmt.Fprintf(w, "%s %s\n", label("Bin:"), agent.Bin)
 	}
 	if agent.DefaultModel != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Default Model:"), agent.DefaultModel)
+		fmt.Fprintf(w, "%s %s\n", label("Default Model:"), agent.DefaultModel)
 	}
 	if len(agent.Tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(agent.Tags, ", "))
+		fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(agent.Tags, ", "))
 	}
 	if hasModels {
 		if hasHeader {
-			_, _ = fmt.Fprintln(w)
+			fmt.Fprintln(w)
 		}
-		_, _ = tui.ColorDim.Fprintln(w, "Models:")
+		tui.ColorDim.Fprintln(w, "Models:")
 		aliases := make([]string, 0, len(agent.Models))
 		for alias := range agent.Models {
 			aliases = append(aliases, alias)
 		}
 		sort.Strings(aliases)
 		for _, alias := range aliases {
-			_, _ = fmt.Fprintf(w, "  %s ", alias)
-			_, _ = tui.ColorBlue.Fprint(w, "->")
-			_, _ = fmt.Fprint(w, " ")
-			_, _ = tui.ColorDim.Fprintf(w, "%s\n", agent.Models[alias])
+			fmt.Fprintf(w, "  %s ", alias)
+			tui.ColorBlue.Fprint(w, "->")
+			fmt.Fprint(w, " ")
+			tui.ColorDim.Fprintf(w, "%s\n", agent.Models[alias])
 		}
 	}
 }
@@ -81,25 +81,25 @@ func writeRoleMetadata(w io.Writer, role RoleConfig) {
 	}
 
 	label := tui.ColorDim.Sprint
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	if role.Description != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), role.Description)
+		fmt.Fprintf(w, "%s %s\n", label("Description:"), role.Description)
 	}
 	if role.File != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("File:"), role.File)
+		fmt.Fprintf(w, "%s %s\n", label("File:"), role.File)
 	}
 	if role.Command != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Command:"), role.Command)
+		fmt.Fprintf(w, "%s %s\n", label("Command:"), role.Command)
 	}
 	if role.Prompt != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(role.Prompt, 100))
+		fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(role.Prompt, 100))
 	}
 	if role.Optional {
-		_, _ = fmt.Fprintf(w, "%s true\n", label("Optional:"))
+		fmt.Fprintf(w, "%s true\n", label("Optional:"))
 	}
 	if len(role.Tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(role.Tags, ", "))
+		fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(role.Tags, ", "))
 	}
 }
 
@@ -108,24 +108,24 @@ func writeRoleMetadata(w io.Writer, role RoleConfig) {
 // unconditionally, so this writer always produces output.
 func writeContextMetadata(w io.Writer, ctx ContextConfig) {
 	label := tui.ColorDim.Sprint
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	if ctx.Description != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), ctx.Description)
+		fmt.Fprintf(w, "%s %s\n", label("Description:"), ctx.Description)
 	}
 	if ctx.File != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("File:"), ctx.File)
+		fmt.Fprintf(w, "%s %s\n", label("File:"), ctx.File)
 	}
 	if ctx.Command != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Command:"), ctx.Command)
+		fmt.Fprintf(w, "%s %s\n", label("Command:"), ctx.Command)
 	}
 	if ctx.Prompt != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(ctx.Prompt, 100))
+		fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(ctx.Prompt, 100))
 	}
-	_, _ = fmt.Fprintf(w, "%s %t\n", label("Required:"), ctx.Required)
-	_, _ = fmt.Fprintf(w, "%s %t\n", label("Default:"), ctx.Default)
+	fmt.Fprintf(w, "%s %t\n", label("Required:"), ctx.Required)
+	fmt.Fprintf(w, "%s %t\n", label("Default:"), ctx.Default)
 	if len(ctx.Tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(ctx.Tags, ", "))
+		fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(ctx.Tags, ", "))
 	}
 }
 
@@ -137,24 +137,24 @@ func writeTaskMetadata(w io.Writer, task TaskConfig) {
 	}
 
 	label := tui.ColorDim.Sprint
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	if task.Description != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Description:"), task.Description)
+		fmt.Fprintf(w, "%s %s\n", label("Description:"), task.Description)
 	}
 	if task.File != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("File:"), task.File)
+		fmt.Fprintf(w, "%s %s\n", label("File:"), task.File)
 	}
 	if task.Command != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Command:"), task.Command)
+		fmt.Fprintf(w, "%s %s\n", label("Command:"), task.Command)
 	}
 	if task.Prompt != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(task.Prompt, 100))
+		fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(task.Prompt, 100))
 	}
 	if task.Role != "" {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Role:"), task.Role)
+		fmt.Fprintf(w, "%s %s\n", label("Role:"), task.Role)
 	}
 	if len(task.Tags) > 0 {
-		_, _ = fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(task.Tags, ", "))
+		fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(task.Tags, ", "))
 	}
 }

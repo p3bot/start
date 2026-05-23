@@ -71,8 +71,8 @@ func runTask(cmd *cobra.Command, args []string) error {
 		if err := runConfigTaskList(cmd, args); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nRun %s to search and run a task.\n", tui.Annotate("start task <name>"))
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run %s to search all configuration and modules.\n", tui.Annotate("start search <name>"))
+		fmt.Fprintf(cmd.OutOrStdout(), "\nRun %s to search and run a task.\n", tui.Annotate("start task <name>"))
+		fmt.Fprintf(cmd.OutOrStdout(), "Run %s to search all configuration and modules.\n", tui.Annotate("start search <name>"))
 		return nil
 	}
 
@@ -207,7 +207,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 			}
 
 			if len(installedMatches) == 0 && !flags.Quiet {
-				_, _ = fmt.Fprintf(stdout, "Task not found in configuration\n")
+				fmt.Fprintf(stdout, "Task not found in configuration\n")
 			}
 
 			// ensureIndex returns nil error; errors are stored in r.indexErr for graceful fallback.
@@ -233,7 +233,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 				match := allMatches[0]
 				if match.Source == TaskSourceRegistry {
 					if !flags.Quiet {
-						_, _ = fmt.Fprintf(stdout, "Installing %s from registry...\n", match.Name)
+						fmt.Fprintf(stdout, "Installing %s from registry...\n", match.Name)
 					}
 					result := modules.SearchResult{
 						Category: "tasks",
@@ -264,7 +264,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 				}
 				if selected.Source == TaskSourceRegistry {
 					if !flags.Quiet {
-						_, _ = fmt.Fprintf(stdout, "Installing %s from registry...\n", selected.Name)
+						fmt.Fprintf(stdout, "Installing %s from registry...\n", selected.Name)
 					}
 					result := modules.SearchResult{
 						Category: "tasks",
@@ -467,15 +467,15 @@ func printTaskExecutionInfo(w io.Writer, agent orchestration.Agent, model, model
 	printRoleTable(w, result.RoleResolutions)
 
 	if taskResult.CommandExecuted {
-		_, _ = fmt.Fprintln(w, "Command: executed")
+		fmt.Fprintln(w, "Command: executed")
 	}
 
 	if instructions != "" {
-		_, _ = fmt.Fprintf(w, "Instructions:\n%s\n", instructions)
+		fmt.Fprintf(w, "Instructions:\n%s\n", instructions)
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Starting %s - awaiting response...\n", agent.Name)
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Starting %s - awaiting response...\n", agent.Name)
 }
 
 // printTaskDryRunSummary prints the task dry-run summary.
@@ -488,27 +488,27 @@ func printTaskDryRunSummary(w io.Writer, agent orchestration.Agent, model, model
 	printRoleTable(w, result.RoleResolutions)
 
 	if instructions != "" {
-		_, _ = fmt.Fprintf(w, "Instructions:\n%s\n", instructions)
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintf(w, "Instructions:\n%s\n", instructions)
+		fmt.Fprintln(w)
 	}
 
 	// Show role preview
 	if result.Role != "" {
 		printContentPreview(w, "Role", tui.ColorRoles, result.Role, 5)
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 
 	// Show prompt preview
 	if result.Prompt != "" {
 		printContentPreview(w, "Prompt", tui.ColorPrompts, result.Prompt, 5)
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 
-	_, _ = tui.ColorDim.Fprint(w, "Files:")
-	_, _ = fmt.Fprintf(w, " %s/\n", dir)
-	_, _ = fmt.Fprintln(w, "  role.md")
-	_, _ = fmt.Fprintln(w, "  prompt.md")
-	_, _ = fmt.Fprintln(w, "  command.txt")
+	tui.ColorDim.Fprint(w, "Files:")
+	fmt.Fprintf(w, " %s/\n", dir)
+	fmt.Fprintln(w, "  role.md")
+	fmt.Fprintln(w, "  prompt.md")
+	fmt.Fprintln(w, "  command.txt")
 }
 
 // taskInMatches returns true if a task name appears in the match list.
@@ -601,7 +601,7 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 		truncated = true
 	}
 
-	_, _ = fmt.Fprintf(w, "Found %d tasks matching %q:\n\n", totalCount, searchTerm)
+	fmt.Fprintf(w, "Found %d tasks matching %q:\n\n", totalCount, searchTerm)
 
 	// Find the longest task name for alignment
 	maxNameLen := 0
@@ -621,15 +621,15 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 		} else {
 			sourceLabel = tui.ColorRegistry.Sprint(m.Source)
 		}
-		_, _ = fmt.Fprintf(w, "  %2d. %s%s%s\n", i+1, m.Name, padding, sourceLabel)
+		fmt.Fprintf(w, "  %2d. %s%s%s\n", i+1, m.Name, padding, sourceLabel)
 	}
 
 	if truncated {
-		_, _ = fmt.Fprintf(w, "\nShowing %d of %d matches. Refine search for more specific results.\n", displayCount, totalCount)
+		fmt.Fprintf(w, "\nShowing %d of %d matches. Refine search for more specific results.\n", displayCount, totalCount)
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", displayCount))
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", displayCount))
 
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -706,9 +706,9 @@ func installTaskFromRegistry(stdout io.Writer, flags *Flags, client *registry.Cl
 
 	if !flags.Quiet {
 		if version != "" {
-			_, _ = fmt.Fprintf(stdout, "Installed %s@%s to global config\n\n", result.Name, version)
+			fmt.Fprintf(stdout, "Installed %s@%s to global config\n\n", result.Name, version)
 		} else {
-			_, _ = fmt.Fprintf(stdout, "Installed %s to global config\n\n", result.Name)
+			fmt.Fprintf(stdout, "Installed %s to global config\n\n", result.Name)
 		}
 	}
 

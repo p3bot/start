@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*github.com/fatih/color.Color).Fprint
+        - (*github.com/fatih/color.Color).Fprintf
+        - (*github.com/fatih/color.Color).Fprintln
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

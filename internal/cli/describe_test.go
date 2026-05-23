@@ -1549,7 +1549,7 @@ agents: {
 	if haikuIdx == -1 || opusIdx == -1 || sonnetIdx == -1 {
 		t.Fatalf("output missing one or more aliases\n%s", output)
 	}
-	if !(haikuIdx < opusIdx && opusIdx < sonnetIdx) {
+	if haikuIdx >= opusIdx || opusIdx >= sonnetIdx {
 		t.Errorf("models not sorted by alias: haiku=%d opus=%d sonnet=%d\n%s",
 			haikuIdx, opusIdx, sonnetIdx, output)
 	}

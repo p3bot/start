@@ -129,19 +129,19 @@ func runModulesValidate(cmd *cobra.Command, args []string) error {
 	// Gate: --yes is required to prevent casual traffic against public infrastructure.
 	yes, _ := cmd.Flags().GetBool("yes")
 	if !yes {
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, "The 'start modules validate' command is a maintainer tool for checking")
-		_, _ = fmt.Fprintln(w, "consistency between git tags, the CUE registry, and the modules index.")
-		_, _ = fmt.Fprintln(w, "It makes significant network requests against public infrastructure.")
-		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, "Running it will:")
-		_, _ = fmt.Fprintln(w, "  - Clone or pull the modules repository from GitHub")
-		_, _ = fmt.Fprintln(w, "  - Fetch all git tags from origin")
-		_, _ = fmt.Fprintln(w, "  - Query the CUE registry for each published module")
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorHiYellow.Fprintln(w, "A freely accessible public registry is a shared resource — don't be that person.")
-		_, _ = fmt.Fprintln(w)
-		_, _ = tui.ColorDim.Fprintln(w, "Run with --yes to proceed.")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "The 'start modules validate' command is a maintainer tool for checking")
+		fmt.Fprintln(w, "consistency between git tags, the CUE registry, and the modules index.")
+		fmt.Fprintln(w, "It makes significant network requests against public infrastructure.")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "Running it will:")
+		fmt.Fprintln(w, "  - Clone or pull the modules repository from GitHub")
+		fmt.Fprintln(w, "  - Fetch all git tags from origin")
+		fmt.Fprintln(w, "  - Query the CUE registry for each published module")
+		fmt.Fprintln(w)
+		tui.ColorHiYellow.Fprintln(w, "A freely accessible public registry is a shared resource — don't be that person.")
+		fmt.Fprintln(w)
+		tui.ColorDim.Fprintln(w, "Run with --yes to proceed.")
 		return nil
 	}
 
@@ -843,28 +843,28 @@ func validateHasFailure(cats []validateCatResult) bool {
 // Uses the doctor CheckResult types for status icons but without the full doctor
 // reporter header or summary — this is modules validate, not doctor.
 func printValidateIndexSection(w io.Writer, section doctor.SectionResult) {
-	_, _ = tui.ColorHeader.Fprintln(w, section.Name)
+	tui.ColorHeader.Fprintln(w, section.Name)
 	for _, result := range section.Results {
-		_, _ = fmt.Fprint(w, "  ")
+		fmt.Fprint(w, "  ")
 		switch result.Status {
 		case doctor.StatusPass:
-			_, _ = tui.ColorSuccess.Fprint(w, "✓")
+			tui.ColorSuccess.Fprint(w, "✓")
 		case doctor.StatusFail:
-			_, _ = tui.ColorError.Fprint(w, "✗")
+			tui.ColorError.Fprint(w, "✗")
 		case doctor.StatusWarn:
-			_, _ = tui.ColorWarning.Fprint(w, "⚠")
+			tui.ColorWarning.Fprint(w, "⚠")
 		default:
-			_, _ = fmt.Fprint(w, "-")
+			fmt.Fprint(w, "-")
 		}
 		if result.Message != "" {
-			_, _ = fmt.Fprintf(w, " %s - ", result.Label)
-			_, _ = tui.ColorDim.Fprint(w, result.Message)
+			fmt.Fprintf(w, " %s - ", result.Label)
+			tui.ColorDim.Fprint(w, result.Message)
 		} else {
-			_, _ = fmt.Fprintf(w, " %s", result.Label)
+			fmt.Fprintf(w, " %s", result.Label)
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }
 
 // printValidateModules prints Section 2 output.
@@ -882,49 +882,49 @@ func printValidateModules(w io.Writer, cats []validateCatResult, verbose bool) {
 
 		if verbose {
 			// Verbose: list every module with its status
-			_, _ = catColor.Fprintf(w, "%s", cat.name)
-			_, _ = fmt.Fprintf(w, " %s\n", tui.Annotate("%d", total))
+			catColor.Fprintf(w, "%s", cat.name)
+			fmt.Fprintf(w, " %s\n", tui.Annotate("%d", total))
 			for _, m := range cat.modules {
 				if m.status == validateModulePass {
-					_, _ = tui.ColorSuccess.Fprint(w, "  ✓")
+					tui.ColorSuccess.Fprint(w, "  ✓")
 				} else {
-					_, _ = tui.ColorError.Fprint(w, "  ✗")
+					tui.ColorError.Fprint(w, "  ✗")
 				}
-				_, _ = fmt.Fprintf(w, " %-20s", m.name)
+				fmt.Fprintf(w, " %-20s", m.name)
 				if m.version != "" {
-					_, _ = tui.ColorDim.Fprintf(w, " %s", m.version)
+					tui.ColorDim.Fprintf(w, " %s", m.version)
 				}
-				_, _ = fmt.Fprintln(w)
+				fmt.Fprintln(w)
 				for _, issue := range m.issues {
-					_, _ = tui.ColorDim.Fprintf(w, "      %s\n", issue)
+					tui.ColorDim.Fprintf(w, "      %s\n", issue)
 				}
 			}
 		} else {
 			// Default: one summary line per category
 			pass := total - fail
-			_, _ = catColor.Fprintf(w, "%-10s", cat.name)
+			catColor.Fprintf(w, "%-10s", cat.name)
 			if fail == 0 {
-				_, _ = tui.ColorSuccess.Fprintf(w, " %d/%d OK\n", pass, total)
+				tui.ColorSuccess.Fprintf(w, " %d/%d OK\n", pass, total)
 			} else {
-				_, _ = tui.ColorError.Fprintf(w, " %d/%d FAIL\n", pass, total)
+				tui.ColorError.Fprintf(w, " %d/%d FAIL\n", pass, total)
 				// List failing modules below
 				for _, m := range cat.modules {
 					if m.status != validateModuleFail {
 						continue
 					}
-					_, _ = tui.ColorError.Fprint(w, "  ✗")
-					_, _ = fmt.Fprintf(w, " %-20s", m.name)
+					tui.ColorError.Fprint(w, "  ✗")
+					fmt.Fprintf(w, " %-20s", m.name)
 					if m.version != "" {
-						_, _ = tui.ColorDim.Fprintf(w, " %s", m.version)
+						tui.ColorDim.Fprintf(w, " %s", m.version)
 					}
-					_, _ = fmt.Fprintln(w)
+					fmt.Fprintln(w)
 					for _, issue := range m.issues {
-						_, _ = tui.ColorDim.Fprintf(w, "      %s\n", issue)
+						tui.ColorDim.Fprintf(w, "      %s\n", issue)
 					}
 				}
 			}
 		}
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 }
 
@@ -943,17 +943,17 @@ func printValidateStats(w io.Writer, cats []validateCatResult) bool {
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "Checked: ")
-	_, _ = tui.ColorDim.Fprintf(w, "%d modules", checked)
-	_, _ = fmt.Fprint(w, "  Pass: ")
-	_, _ = tui.ColorSuccess.Fprintf(w, "%d", pass)
-	_, _ = fmt.Fprint(w, "  Fail: ")
+	fmt.Fprintf(w, "Checked: ")
+	tui.ColorDim.Fprintf(w, "%d modules", checked)
+	fmt.Fprint(w, "  Pass: ")
+	tui.ColorSuccess.Fprintf(w, "%d", pass)
+	fmt.Fprint(w, "  Fail: ")
 	if fail > 0 {
-		_, _ = tui.ColorError.Fprintf(w, "%d", fail)
+		tui.ColorError.Fprintf(w, "%d", fail)
 	} else {
-		_, _ = tui.ColorDim.Fprintf(w, "%d", fail)
+		tui.ColorDim.Fprintf(w, "%d", fail)
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 
 	return fail > 0
 }

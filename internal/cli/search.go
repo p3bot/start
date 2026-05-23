@@ -73,7 +73,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if query != "" {
-			_, _ = fmt.Fprintln(w, "Query must be at least 3 characters")
+			fmt.Fprintln(w, "Query must be at least 3 characters")
 		}
 		input, promptErr := promptSearchQuery(w, stdin)
 		if promptErr != nil {
@@ -205,21 +205,21 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(sections) == 0 {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No matches found for %q\n", displayQuery)
+		fmt.Fprintf(cmd.OutOrStdout(), "No matches found for %q\n", displayQuery)
 		if registryErr != nil {
-			printWarning(cmd.ErrOrStderr(), "registry unavailable: %v\n", registryErr)
+			printWarning(cmd.ErrOrStderr(), "registry unavailable: %v", registryErr)
 		}
 		return nil
 	}
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout())
 	installed := collectInstalledNames()
 	flags := getFlags(cmd)
 	printSearchSections(cmd.OutOrStdout(), sections, flags.Verbose, installed)
 
 	if registryErr != nil {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout())
-		printWarning(cmd.ErrOrStderr(), "registry unavailable: %v\n", registryErr)
+		fmt.Fprintln(cmd.OutOrStdout())
+		printWarning(cmd.ErrOrStderr(), "registry unavailable: %v", registryErr)
 	}
 
 	return nil
@@ -233,12 +233,12 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 		}
 
 		if i > 0 {
-			_, _ = fmt.Fprintln(w)
+			fmt.Fprintln(w)
 		}
 		if section.Path != "" {
-			_, _ = fmt.Fprintf(w, "%s %s\n", section.Label, tui.Annotate("%s", section.Path))
+			fmt.Fprintf(w, "%s %s\n", section.Label, tui.Annotate("%s", section.Path))
 		} else {
-			_, _ = fmt.Fprintln(w, section.Label)
+			fmt.Fprintln(w, section.Label)
 		}
 
 		// Group results by category
@@ -257,13 +257,13 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 			}
 
 			if !firstCat {
-				_, _ = fmt.Fprintln(w)
+				fmt.Fprintln(w)
 			}
 			firstCat = false
 
-			_, _ = fmt.Fprint(w, "  ")
-			_, _ = tui.CategoryColor(cat).Fprint(w, cat)
-			_, _ = fmt.Fprintln(w, "/")
+			fmt.Fprint(w, "  ")
+			tui.CategoryColor(cat).Fprint(w, cat)
+			fmt.Fprintln(w, "/")
 
 			for _, r := range catResults {
 				marker := "  "
@@ -271,13 +271,13 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 					marker = tui.ColorInstalled.Sprint("★") + " "
 				}
 
-				_, _ = fmt.Fprintf(w, "    %s%-25s %s\n", marker, r.Name, tui.ColorDim.Sprint(r.Entry.Description))
+				fmt.Fprintf(w, "    %s%-25s %s\n", marker, r.Name, tui.ColorDim.Sprint(r.Entry.Description))
 				if verbose {
 					if r.Entry.Module != "" {
-						_, _ = fmt.Fprintf(w, "      Module: %s\n", tui.ColorDim.Sprint(r.Entry.Module))
+						fmt.Fprintf(w, "      Module: %s\n", tui.ColorDim.Sprint(r.Entry.Module))
 					}
 					if len(r.Entry.Tags) > 0 {
-						_, _ = fmt.Fprintf(w, "      Tags: %s\n", tui.ColorDim.Sprint(strings.Join(r.Entry.Tags, ", ")))
+						fmt.Fprintf(w, "      Tags: %s\n", tui.ColorDim.Sprint(strings.Join(r.Entry.Tags, ", ")))
 					}
 				}
 			}

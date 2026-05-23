@@ -135,24 +135,24 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 
 	for _, name := range names {
 		agent := agents[name]
-		sb.WriteString(fmt.Sprintf("\t%q: {\n", name))
+		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
 		// Write origin first if present (registry provenance)
 		if agent.Origin != "" {
-			sb.WriteString(fmt.Sprintf("\t\torigin: %q\n", agent.Origin))
+			fmt.Fprintf(&sb, "\t\torigin: %q\n", agent.Origin)
 		}
 		if agent.Bin != "" {
-			sb.WriteString(fmt.Sprintf("\t\tbin:     %q\n", agent.Bin))
+			fmt.Fprintf(&sb, "\t\tbin:     %q\n", agent.Bin)
 		}
 		if agent.Command != "" {
-			sb.WriteString(fmt.Sprintf("\t\tcommand: %q\n", agent.Command))
+			fmt.Fprintf(&sb, "\t\tcommand: %q\n", agent.Command)
 		}
 
 		if agent.DefaultModel != "" {
-			sb.WriteString(fmt.Sprintf("\t\tdefault_model: %q\n", agent.DefaultModel))
+			fmt.Fprintf(&sb, "\t\tdefault_model: %q\n", agent.DefaultModel)
 		}
 		if agent.Description != "" {
-			sb.WriteString(fmt.Sprintf("\t\tdescription: %q\n", agent.Description))
+			fmt.Fprintf(&sb, "\t\tdescription: %q\n", agent.Description)
 		}
 		writeCUETags(&sb, agent.Tags)
 		if len(agent.Models) > 0 {
@@ -163,7 +163,7 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 			}
 			sort.Strings(aliases)
 			for _, alias := range aliases {
-				sb.WriteString(fmt.Sprintf("\t\t\t%q: %q\n", alias, agent.Models[alias]))
+				fmt.Fprintf(&sb, "\t\t\t%q: %q\n", alias, agent.Models[alias])
 			}
 			sb.WriteString("\t\t}\n")
 		}
@@ -304,20 +304,20 @@ func writeRolesFile(path string, roles map[string]RoleConfig, order []string) er
 
 	for _, name := range order {
 		role := roles[name]
-		sb.WriteString(fmt.Sprintf("\t%q: {\n", name))
+		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
 		// Write origin first if present (registry provenance)
 		if role.Origin != "" {
-			sb.WriteString(fmt.Sprintf("\t\torigin: %q\n", role.Origin))
+			fmt.Fprintf(&sb, "\t\torigin: %q\n", role.Origin)
 		}
 		if role.Description != "" {
-			sb.WriteString(fmt.Sprintf("\t\tdescription: %q\n", role.Description))
+			fmt.Fprintf(&sb, "\t\tdescription: %q\n", role.Description)
 		}
 		if role.File != "" {
-			sb.WriteString(fmt.Sprintf("\t\tfile: %q\n", role.File))
+			fmt.Fprintf(&sb, "\t\tfile: %q\n", role.File)
 		}
 		if role.Command != "" {
-			sb.WriteString(fmt.Sprintf("\t\tcommand: %q\n", role.Command))
+			fmt.Fprintf(&sb, "\t\tcommand: %q\n", role.Command)
 		}
 		writeCUEPrompt(&sb, role.Prompt)
 		writeCUETags(&sb, role.Tags)
@@ -434,20 +434,20 @@ func writeContextsFile(path string, contexts map[string]ContextConfig, order []s
 
 	for _, name := range order {
 		ctx := contexts[name]
-		sb.WriteString(fmt.Sprintf("\t%q: {\n", name))
+		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
 		// Write origin first if present (registry provenance)
 		if ctx.Origin != "" {
-			sb.WriteString(fmt.Sprintf("\t\torigin: %q\n", ctx.Origin))
+			fmt.Fprintf(&sb, "\t\torigin: %q\n", ctx.Origin)
 		}
 		if ctx.Description != "" {
-			sb.WriteString(fmt.Sprintf("\t\tdescription: %q\n", ctx.Description))
+			fmt.Fprintf(&sb, "\t\tdescription: %q\n", ctx.Description)
 		}
 		if ctx.File != "" {
-			sb.WriteString(fmt.Sprintf("\t\tfile: %q\n", ctx.File))
+			fmt.Fprintf(&sb, "\t\tfile: %q\n", ctx.File)
 		}
 		if ctx.Command != "" {
-			sb.WriteString(fmt.Sprintf("\t\tcommand: %q\n", ctx.Command))
+			fmt.Fprintf(&sb, "\t\tcommand: %q\n", ctx.Command)
 		}
 		writeCUEPrompt(&sb, ctx.Prompt)
 		if ctx.Required {
@@ -570,24 +570,24 @@ func writeTasksFile(path string, tasks map[string]TaskConfig) error {
 
 	for _, name := range names {
 		task := tasks[name]
-		sb.WriteString(fmt.Sprintf("\t%q: {\n", name))
+		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
 		// Write origin first if present (registry provenance)
 		if task.Origin != "" {
-			sb.WriteString(fmt.Sprintf("\t\torigin: %q\n", task.Origin))
+			fmt.Fprintf(&sb, "\t\torigin: %q\n", task.Origin)
 		}
 		if task.Description != "" {
-			sb.WriteString(fmt.Sprintf("\t\tdescription: %q\n", task.Description))
+			fmt.Fprintf(&sb, "\t\tdescription: %q\n", task.Description)
 		}
 		if task.File != "" {
-			sb.WriteString(fmt.Sprintf("\t\tfile: %q\n", task.File))
+			fmt.Fprintf(&sb, "\t\tfile: %q\n", task.File)
 		}
 		if task.Command != "" {
-			sb.WriteString(fmt.Sprintf("\t\tcommand: %q\n", task.Command))
+			fmt.Fprintf(&sb, "\t\tcommand: %q\n", task.Command)
 		}
 		writeCUEPrompt(&sb, task.Prompt)
 		if task.Role != "" {
-			sb.WriteString(fmt.Sprintf("\t\trole: %q\n", task.Role))
+			fmt.Fprintf(&sb, "\t\trole: %q\n", task.Role)
 		}
 		writeCUETags(&sb, task.Tags)
 

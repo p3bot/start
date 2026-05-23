@@ -31,7 +31,7 @@ func runModulesBrowse(cmd *cobra.Command, args []string) error {
 	flags := getFlags(cmd)
 
 	if !flags.Quiet {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Opening %s\n", url)
+		fmt.Fprintf(cmd.OutOrStdout(), "Opening %s\n", url)
 	}
 
 	return openBrowser(url)

@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: [06-linter-config-and-print-helpers.md](./06-linter-config-and-print-helpers.md)
+Active Project: [07-extract-resolve-module-file-helper.md](./07-extract-resolve-module-file-helper.md)
 
 When a project is complete, update this file to point to the next active project
 
@@ -19,7 +19,9 @@ When a project is complete, update this file to point to the next active project
 ```bash
 go build ./...                  # Build all packages
 go build -o start ./cmd/start   # Build the CLI binary
-scripts/invoke-tests            # Run the full test suite
+scripts/invoke-tests            # Run the full pipeline (lint + tests)
+scripts/invoke-linter           # Run golangci-lint only
+scripts/invoke-linter -- --fix  # Apply auto-fixes
 go test ./internal/...          # Run all internal package tests
 go test ./internal/cli/...      # Run CLI tests only
 ```

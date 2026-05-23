@@ -80,10 +80,10 @@ func runModulesUpdate(cmd *cobra.Command, args []string) error {
 
 	if !paths.AnyExists() {
 		if jsonFlag {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+			fmt.Fprintln(cmd.OutOrStdout(), "[]")
 			return nil
 		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No configuration found. Run 'start' to set up.")
+		fmt.Fprintln(cmd.OutOrStdout(), "No configuration found. Run 'start' to set up.")
 		return nil
 	}
 
@@ -108,10 +108,10 @@ func runModulesUpdate(cmd *cobra.Command, args []string) error {
 
 	if len(installed) == 0 {
 		if jsonFlag {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+			fmt.Fprintln(cmd.OutOrStdout(), "[]")
 			return nil
 		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No modules installed from registry.")
+		fmt.Fprintln(cmd.OutOrStdout(), "No modules installed from registry.")
 		return nil
 	}
 
@@ -129,10 +129,10 @@ func runModulesUpdate(cmd *cobra.Command, args []string) error {
 
 		if len(installed) == 0 {
 			if jsonFlag {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "[]")
+				fmt.Fprintln(cmd.OutOrStdout(), "[]")
 				return nil
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No installed modules matching %q\n", query)
+			fmt.Fprintf(cmd.OutOrStdout(), "No installed modules matching %q\n", query)
 			return nil
 		}
 	}
@@ -257,53 +257,53 @@ func checkAndUpdate(ctx context.Context, client *registry.Client, paths config.P
 // printUpdateResults prints the results of the update operation.
 func printUpdateResults(w io.Writer, results []UpdateResult, dryRun bool) {
 	if dryRun {
-		_, _ = fmt.Fprintln(w, "\nDry run - no changes applied:")
+		fmt.Fprintln(w, "\nDry run - no changes applied:")
 	} else {
-		_, _ = fmt.Fprintln(w)
+		fmt.Fprintln(w)
 	}
 
 	var updated, current, failed int
 
 	for _, r := range results {
 		name := formatAddress(r.Module.Category, r.Module.Name)
-		_, _ = fmt.Fprintf(w, "  %s ", name)
+		fmt.Fprintf(w, "  %s ", name)
 
 		if r.Error != nil {
-			_, _ = tui.ColorCyan.Fprint(w, "(")
-			_, _ = tui.ColorError.Fprintf(w, "error: %v", r.Error)
-			_, _ = tui.ColorCyan.Fprintln(w, ")")
+			tui.ColorCyan.Fprint(w, "(")
+			tui.ColorError.Fprintf(w, "error: %v", r.Error)
+			tui.ColorCyan.Fprintln(w, ")")
 			failed++
 		} else if r.Updated {
-			_, _ = tui.ColorCyan.Fprint(w, "(")
+			tui.ColorCyan.Fprint(w, "(")
 			if r.OldVersion != "" {
-				_, _ = tui.ColorDim.Fprint(w, r.OldVersion)
-				_, _ = fmt.Fprint(w, " ")
+				tui.ColorDim.Fprint(w, r.OldVersion)
+				fmt.Fprint(w, " ")
 			}
-			_, _ = tui.ColorBlue.Fprint(w, "->")
+			tui.ColorBlue.Fprint(w, "->")
 			if r.NewVersion != "" {
-				_, _ = fmt.Fprint(w, " ")
-				_, _ = tui.ColorSuccess.Fprint(w, r.NewVersion)
+				fmt.Fprint(w, " ")
+				tui.ColorSuccess.Fprint(w, r.NewVersion)
 			}
-			_, _ = tui.ColorCyan.Fprintln(w, ")")
+			tui.ColorCyan.Fprintln(w, ")")
 			updated++
 		} else {
-			_, _ = tui.ColorCyan.Fprint(w, "(")
+			tui.ColorCyan.Fprint(w, "(")
 			if r.OldVersion != "" {
-				_, _ = tui.ColorDim.Fprint(w, r.OldVersion)
-				_, _ = fmt.Fprint(w, " ")
-				_, _ = tui.ColorBlue.Fprint(w, "->")
-				_, _ = fmt.Fprint(w, " ")
+				tui.ColorDim.Fprint(w, r.OldVersion)
+				fmt.Fprint(w, " ")
+				tui.ColorBlue.Fprint(w, "->")
+				fmt.Fprint(w, " ")
 			}
-			_, _ = tui.ColorDim.Fprint(w, "current")
-			_, _ = tui.ColorCyan.Fprintln(w, ")")
+			tui.ColorDim.Fprint(w, "current")
+			tui.ColorCyan.Fprintln(w, ")")
 			current++
 		}
 	}
 
-	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Updated: %d, Current: %d", updated, current)
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Updated: %d, Current: %d", updated, current)
 	if failed > 0 {
-		_, _ = fmt.Fprintf(w, ", Failed: %d", failed)
+		fmt.Fprintf(w, ", Failed: %d", failed)
 	}
-	_, _ = fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }

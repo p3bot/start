@@ -65,9 +65,12 @@ Resolver helpers already exist:
   empty when no `origin` field is set.
 - `ResolveModulePath(path, origin string) (string, error)` at
   `composer.go:771` — resolves the literal `@module/...` against the
-  origin and returns the absolute extract path. Errors when the
-  module is not in the cache, with a message containing
-  `"not found in cache"`.
+  origin and returns the absolute extract path. Has two failure
+  paths: `reading cache directory: %w` when the origin's parent
+  directory is absent under the cache, and `module %s not found in
+  cache` when the parent exists but no matching versioned subdir is
+  found. The helper wraps either with `resolving module path %s: %w`,
+  so the four-case test asserts on the outer prefix only.
 
 Existing test idiom for `@module/` cache fabrication lives in
 `internal/orchestration/composer_test.go`:
@@ -99,8 +102,9 @@ Existing test idiom for `@module/` cache fabrication lives in
 2. When the input file string does not begin with `@module/`, the
    helper returns it unchanged with a nil error.
 3. When the input file string begins with `@module/` and the CUE
-   value has no `origin` field, the helper returns the empty string
-   and an error whose message contains
+   value has no `origin` field set (or it is the empty string — both
+   surface as `""` through `ExtractOrigin`), the helper returns the
+   empty string and an error whose message contains
    `missing origin for @module/ path` and includes a hint pointing
    the user at `start modules install`.
 4. When the input file string begins with `@module/` and the origin
@@ -115,14 +119,26 @@ Existing test idiom for `@module/` cache fabrication lives in
 7. One new table-driven test `TestResolveModuleFile` exists in
    `internal/orchestration/composer_test.go`, covering four cases:
    - Non-`@module/` path returns input unchanged with nil error.
-   - `@module/` path with empty origin returns an error whose
-     message contains `missing origin for @module/ path`.
+   - `@module/` path on a CUE value with no `origin` field set
+     returns an error whose message contains
+     `missing origin for @module/ path`. Construct the CUE value as
+     `{ file: "@module/role.md" }` with no `origin` key, matching the
+     idiom in `TestSelectDefaultRole_ModulePath`'s "missing origin
+     reported as actionable error" sub-test.
    - `@module/` path with origin pointing at a cached extract returns
-     the resolved absolute path.
+     the resolved absolute path. Fabricate the extract under
+     `cacheDir/mod/extract/<origin-path>@<version>/<file>` on disk
+     before invoking the helper, matching the existing idiom.
    - `@module/` path with origin pointing at a missing cache entry
      returns an error whose message contains
-     `resolving module path`.
-8. `go test ./...` and `go vet ./...` pass cleanly.
+     `resolving module path`. Use an origin whose parent directory
+     does not exist under the cache (e.g.
+     `github.com/test/missing/mod@v9.9.9` with no `mod/extract/...`
+     fabrication), matching `TestSelectDefaultRole_ModulePath`'s
+     "surfaces resolver error when module not cached" sub-test.
+8. `go test ./...`, `go vet ./...`, and `scripts/invoke-tests` pass
+   cleanly. `scripts/invoke-tests` is the full pipeline gate and
+   covers the `errcheck` linter added in commit `e10efe9`.
 9. No behavioural change at any of the three call sites — error
    wording and resolution semantics match what the inline blocks
    produced before.
@@ -132,9 +148,9 @@ Existing test idiom for `@module/` cache fabrication lives in
 1. Read the three call sites and confirm the inline blocks are
    identical save for the return tuple shape and the local variable
    name for the CUE value.
-2. Add `resolveModuleFile` near the other helpers in
-   `composer.go` (the implementer decides exact placement). Suggested
-   shape:
+2. Add `resolveModuleFile` adjacent to `ExtractOrigin` and
+   `ResolveModulePath` (`composer.go:758` / `:771`) — the helpers
+   this one delegates to. Suggested shape:
 
    ```go
    func resolveModuleFile(file string, v cue.Value) (string, error) {
@@ -171,7 +187,8 @@ Existing test idiom for `@module/` cache fabrication lives in
    `mod/extract/...` directory idiom from the existing
    `TestSelectDefaultRole_ModulePath` and `TestRoleFileAvailable`
    tests. Do not call `t.Parallel()`.
-5. Run `go test ./...` and `go vet ./...`. Confirm both pass.
+5. Run `go test ./...`, `go vet ./...`, and `scripts/invoke-tests`.
+   Confirm all pass.
 6. Diff-check the three call sites to confirm the error wording and
    resolution semantics match the inline blocks they replaced.
 
@@ -219,6 +236,7 @@ Existing test idiom for `@module/` cache fabrication lives in
 - One new table-driven test `TestResolveModuleFile` exists in
   `internal/orchestration/composer_test.go` and covers the four
   cases listed in Requirements.
-- `go test ./...` and `go vet ./...` are clean.
+- `go test ./...`, `go vet ./...`, and `scripts/invoke-tests` are
+  clean.
 - Diff confined to one source file and one test file.
 - No changes under `library/` or `homebrew-tap/`.

@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+# Environment setup
+# -----------------------------------------------------------------------------
+set -o nounset
+set -o pipefail
+[[ ${DEBUG-} ]] && set -o xtrace
+SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." || exit 1; pwd)"
+
+function print_usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options] [-- golangci-lint-args...]
+
+Run golangci-lint against the start project. Anything after '--' is
+forwarded to 'golangci-lint run' verbatim.
+
+Options:
+  -h, --help           Show this help message and exit
+
+Examples:
+  $(basename "$0")                       Run the linter against ./...
+  $(basename "$0") -- --fix              Apply auto-fixes
+EOF
+}
+
+function die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+function ctrlc_trap() {
+  echo
+  echo "Script interrupted. Exiting."
+  exit 130
+}
+trap ctrlc_trap SIGINT
+
+# Parse Arguments
+# -----------------------------------------------------------------------------
+declare -a passthrough=()
+
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    --)
+      shift
+      passthrough=("$@")
+      break
+      ;;
+    *)
+      echo "ERROR: Unknown option: ${1}" >&2
+      print_usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Dependency Checks
+# -----------------------------------------------------------------------------
+if ! command -v golangci-lint >/dev/null; then
+  echo "ERROR: Missing dependency - 'golangci-lint' (>= 2.0.0)" >&2
+  echo "Install with one of:" >&2
+  echo "  brew install golangci-lint" >&2
+  echo "  See https://golangci-lint.run/welcome/install/ for other options" >&2
+  exit 1
+fi
+
+# Run Linter
+# -----------------------------------------------------------------------------
+cd "${PROJECT_DIR}" || exit 1
+
+echo "Running golangci-lint..."
+echo "Command: golangci-lint run ${passthrough[*]:-} ./..."
+echo
+
+if ! golangci-lint run "${passthrough[@]}" ./...; then
+  echo >&2
+  echo "Lint failed." >&2
+  exit 1
+fi
+
+echo
+echo "Lint passed."
