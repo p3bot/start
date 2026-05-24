@@ -11,7 +11,7 @@ import (
 func addPromptCommand(parent *cobra.Command) {
 	promptCmd := &cobra.Command{
 		Use:     "prompt [text]",
-		GroupID: "commands",
+		GroupID: "workflow",
 		Short:   "Launch AI agent with a custom prompt",
 		Long: `Launch AI agent with a custom prompt and only required contexts.
 

@@ -470,7 +470,7 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 				Status:  StatusNotFound,
 				Label:   name,
 				Message: fmt.Sprintf("module not extracted (%s)", originVersion(origin)),
-				Fix:     fmt.Sprintf("Run 'start modules install %s' to fetch the module", name),
+				Fix:     fmt.Sprintf("Run 'start install %s' to fetch the module", name),
 			}
 		}
 		if _, err := os.Stat(resolved); os.IsNotExist(err) {
@@ -705,7 +705,7 @@ func CheckCache() SectionResult {
 			Status:  StatusNotFound,
 			Label:   "Index cache",
 			Message: "not found",
-			Fix:     "Run any registry command (e.g., start modules list) to create the cache",
+			Fix:     "Run any registry command (e.g., start list) to create the cache",
 		})
 		return section
 	}

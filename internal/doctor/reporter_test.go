@@ -24,14 +24,14 @@ func TestPrintResult_FixRendersForStatusNotFound(t *testing.T) {
 		Status:  StatusNotFound,
 		Label:   "myrole",
 		Message: "module not extracted",
-		Fix:     "Run 'start modules install myrole' to fetch the module",
+		Fix:     "Run 'start install myrole' to fetch the module",
 	}, false)
 
 	out := buf.String()
 	if !strings.Contains(out, "myrole") {
 		t.Errorf("output = %q, want it to include the label", out)
 	}
-	if !strings.Contains(out, "Fix: Run 'start modules install myrole'") {
+	if !strings.Contains(out, "Fix: Run 'start install myrole'") {
 		t.Errorf("output = %q, want the Fix line to be rendered", out)
 	}
 }

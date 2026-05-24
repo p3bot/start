@@ -115,8 +115,8 @@ start --role ./prompts/senior-reviewer.md
 Roles are installed from the registry:
 
 ```bash
-start modules install golang/teacher
-start modules install git/agent
+start install golang/teacher
+start install git/agent
 ```
 
 Roles come in three modes:
@@ -141,7 +141,7 @@ Your project's context files (like `AGENTS.md`, `README.md`, or `PROJECT.md`) ar
 
 ```bash
 # Add the ./AGENTS.md context
-start modules install contexts:cwd/agents-md
+start install contexts:cwd/agents-md
 
 # Use the ./AGENTS.md context (it is a required context)
 start
@@ -165,8 +165,8 @@ start task ./tasks/my-review.md
 Tasks only include required contexts by default, keeping prompts focused. Tasks are also available from the registry:
 
 ```bash
-start modules install review/git-diff
-start modules install jira/item/research
+start install review/git-diff
+start install jira/item/research
 ```
 
 ### Configuration
@@ -263,27 +263,24 @@ start describe <name>
 ### Modules Management
 
 ```bash
-# Browse available registry packages
-start modules browse
-
-# Show the full registry catalog
-start modules index
+# Show the available module library
+start library
 
 # Show details for a specific module
 start describe golang/assistant
 
 # Install a package
-start modules install golang/teacher
-start modules install review/git-diff
+start install golang/teacher
+start install review/git-diff
 
 # List installed modules
-start modules list
+start list
 
 # Update installed packages
-start modules update
+start update
 
 # Validate index and module version consistency (maintainer tool)
-start modules validate --yes
+start doctor validate --yes
 ```
 
 ### Configuration

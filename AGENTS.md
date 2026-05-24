@@ -42,10 +42,14 @@ start task pre-commit-review    # Run a specific task
 start describe                  # List all installed modules grouped by category
 start describe <name>           # Inspect a module; auto-installs from registry if needed
 start get <name>                # Output module content to stdout (pipe-clean)
-start modules install <pkg>     # Install a module from the library
+start install <pkg>             # Install a module from the library
+start list                      # List installed modules
+start library                   # Show the available module library
+start update                    # Update installed modules
 start config list               # List configuration entries
 start search <term>             # Search installed config and the module registry
 start doctor                    # Diagnose installation and configuration
+start doctor validate           # Maintainer check: index/registry/tag consistency
 start prompt                    # Compose and preview a prompt
 echo "summarise" | start        # Pipe text as a one-shot prompt (required contexts only)
 echo "..." | start prompt       # Pipe text to fill prompt's [text] arg

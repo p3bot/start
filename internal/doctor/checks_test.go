@@ -602,7 +602,7 @@ func TestCheckRoles_ModulePath(t *testing.T) {
 		if r.Status != StatusNotFound {
 			t.Errorf("status = %v, want StatusNotFound", r.Status)
 		}
-		if strings.Contains(r.Fix, "modules install") {
+		if strings.Contains(r.Fix, "start install") {
 			t.Errorf("fix = %q, must not advise reinstall when the extract is present", r.Fix)
 		}
 		if !strings.Contains(r.Fix, "@module/nonexistent.md") {
@@ -647,8 +647,8 @@ func TestCheckRoles_ModulePath(t *testing.T) {
 		if r.Status != StatusNotFound {
 			t.Errorf("status = %v, want StatusNotFound", r.Status)
 		}
-		if !strings.Contains(r.Fix, "modules install") {
-			t.Errorf("fix = %q, want it to mention 'modules install'", r.Fix)
+		if !strings.Contains(r.Fix, "start install") {
+			t.Errorf("fix = %q, want it to mention 'start install'", r.Fix)
 		}
 	})
 

@@ -18,13 +18,13 @@ import (
 )
 
 // NOTE(design): The post-fetch logic in this file overlaps with
-// modules_install.go (config resolution, scope handling, command-specific
+// install.go (config resolution, scope handling, command-specific
 // empty-state output). The repetition is kept inline because each call site
 // has command-specific UX baked into the same shape — extracting a helper
 // would either hide the per-command messages from the call site or require
 // parameterising them through callbacks, both of which reduce readability
 // more than they save lines. The shared registry-client + fetch +
-// cache-write sequence is centralised in fetchIndex (modules.go).
+// cache-write sequence is centralised in fetchIndex (modules_shared.go).
 
 // UpdateResult tracks the result of an update operation.
 type UpdateResult struct {
@@ -36,11 +36,12 @@ type UpdateResult struct {
 	ErrorMessage string          `json:"error,omitempty"`
 }
 
-// addModulesUpdateCommand adds the update subcommand to the modules command.
-func addModulesUpdateCommand(parent *cobra.Command) {
+// addUpdateCommand adds the update command to the root command.
+func addUpdateCommand(parent *cobra.Command) {
 	updateCmd := &cobra.Command{
 		Use:     "update [query]",
 		Aliases: []string{"upgrade"},
+		GroupID: "modules",
 		Short:   "Update installed modules",
 		Long: `Update installed modules to their latest versions.
 
@@ -50,7 +51,7 @@ With a query, updates only matching modules.
 Use --dry-run to preview what would be updated without applying changes.
 Use --force to re-fetch and update modules even when already at the latest version.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runModulesUpdate,
+		RunE: runUpdate,
 	}
 
 	updateCmd.Flags().Bool("force", false, "Re-fetch even if already at latest version")
@@ -59,8 +60,8 @@ Use --force to re-fetch and update modules even when already at the latest versi
 	parent.AddCommand(updateCmd)
 }
 
-// runModulesUpdate updates installed modules.
-func runModulesUpdate(cmd *cobra.Command, args []string) error {
+// runUpdate updates installed modules.
+func runUpdate(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}

@@ -109,7 +109,8 @@ Examples:
 
 	// Define command groups for help output
 	cmd.AddGroup(
-		&cobra.Group{ID: "commands", Title: "Commands:"},
+		&cobra.Group{ID: "modules", Title: "Modules:"},
+		&cobra.Group{ID: "workflow", Title: "Workflow:"},
 		&cobra.Group{ID: "utilities", Title: "Utilities:"},
 	)
 
@@ -118,7 +119,10 @@ Examples:
 	addGetCommand(cmd, flags)
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)
-	addModulesCommand(cmd)
+	addInstallCommand(cmd)
+	addListCommand(cmd)
+	addUpdateCommand(cmd)
+	addLibraryCommand(cmd)
 	addConfigCommand(cmd, flags)
 	addSearchCommand(cmd)
 	addDoctorCommand(cmd)

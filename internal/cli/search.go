@@ -31,7 +31,7 @@ func addSearchCommand(parent *cobra.Command) {
 	searchCmd := &cobra.Command{
 		Use:     "search [query]...",
 		Aliases: []string{"find"},
-		GroupID: "commands",
+		GroupID: "modules",
 		Short:   "Search configs and registry for modules",
 		Long: `Search local config, global config, and the module registry by keyword.
 

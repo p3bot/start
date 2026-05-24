@@ -23,19 +23,20 @@ import (
 var errNoModules = errors.New("no modules found")
 
 // NOTE(design): The post-fetch logic in this file overlaps with
-// modules_update.go (config resolution, scope handling, command-specific
+// update.go (config resolution, scope handling, command-specific
 // empty-state output). The repetition is kept inline because each call site
 // has command-specific UX baked into the same shape — extracting a helper
 // would either hide the per-command messages from the call site or require
 // parameterising them through callbacks, both of which reduce readability
 // more than they save lines. The shared registry-client + fetch +
-// cache-write sequence is centralised in fetchIndex (modules.go).
+// cache-write sequence is centralised in fetchIndex (modules_shared.go).
 
-// addModulesInstallCommand adds the install subcommand to the modules command.
-func addModulesInstallCommand(parent *cobra.Command) {
+// addInstallCommand adds the install command to the root command.
+func addInstallCommand(parent *cobra.Command) {
 	installCmd := &cobra.Command{
-		Use:   "install [query]...",
-		Short: "Install modules from registry",
+		Use:     "install [query]...",
+		GroupID: "modules",
+		Short:   "Install modules from registry",
 		Long: `Install one or more modules from the CUE registry to your configuration.
 
 Searches the registry index for matching modules. If multiple matches are found,
@@ -46,14 +47,14 @@ Multiple queries can be provided to install several modules at once.
 By default, installs to global config (~/.config/start/).
 Use --local to install to project config (./.start/).`,
 		Args: cobra.MinimumNArgs(0),
-		RunE: runModulesInstall,
+		RunE: runInstall,
 	}
 
 	parent.AddCommand(installCmd)
 }
 
-// runModulesInstall searches for and installs one or more modules.
-func runModulesInstall(cmd *cobra.Command, args []string) error {
+// runInstall searches for and installs one or more modules.
+func runInstall(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}

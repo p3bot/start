@@ -71,11 +71,11 @@ tasks: {
 	cmd := cli.NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"modules", "list"})
+	cmd.SetArgs([]string{"list"})
 
 	err := cmd.Execute()
 	if err != nil {
-		t.Fatalf("modules list failed: %v", err)
+		t.Fatalf("list failed: %v", err)
 	}
 
 	output := buf.String()
@@ -137,15 +137,15 @@ roles: {
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
 
-	t.Run("modules list --json", func(t *testing.T) {
+	t.Run("list --json", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"modules", "list", "--json"})
+		cmd.SetArgs([]string{"list", "--json"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("modules list --json failed: %v", err)
+			t.Fatalf("list --json failed: %v", err)
 		}
 
 		var result []map[string]interface{}
@@ -165,35 +165,15 @@ roles: {
 		}
 	})
 
-	t.Run("start modules --json (parent command)", func(t *testing.T) {
+	t.Run("list roles --json", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"modules", "--json"})
+		cmd.SetArgs([]string{"list", "roles", "--json"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("start modules --json failed: %v", err)
-		}
-
-		var result []map[string]interface{}
-		if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
-			t.Fatalf("output is not valid JSON: %v\ngot: %s", err, buf.String())
-		}
-		if len(result) == 0 {
-			t.Errorf("expected non-empty JSON array, got: %s", buf.String())
-		}
-	})
-
-	t.Run("modules list roles --json", func(t *testing.T) {
-		buf := new(bytes.Buffer)
-		cmd := cli.NewRootCmd()
-		cmd.SetOut(buf)
-		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"modules", "list", "roles", "--json"})
-
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("modules list roles --json failed: %v", err)
+			t.Fatalf("list roles --json failed: %v", err)
 		}
 
 		var result []map[string]interface{}
@@ -248,10 +228,10 @@ roles: {
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"modules", "list", "agents"})
+		cmd.SetArgs([]string{"list", "agents"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("modules list agents failed: %v", err)
+			t.Fatalf("list agents failed: %v", err)
 		}
 
 		output := buf.String()
@@ -271,10 +251,10 @@ roles: {
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"modules", "list", "roles"})
+		cmd.SetArgs([]string{"list", "roles"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("modules list roles failed: %v", err)
+			t.Fatalf("list roles failed: %v", err)
 		}
 
 		output := buf.String()
@@ -294,10 +274,10 @@ roles: {
 		cmd := cli.NewRootCmd()
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
-		cmd.SetArgs([]string{"modules", "list", "tasks"})
+		cmd.SetArgs([]string{"list", "tasks"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("modules list tasks failed: %v", err)
+			t.Fatalf("list tasks failed: %v", err)
 		}
 
 		output := buf.String()
@@ -322,11 +302,11 @@ func TestIntegration_ModulesListNoConfig(t *testing.T) {
 	cmd := cli.NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"modules", "list"})
+	cmd.SetArgs([]string{"list"})
 
 	err := cmd.Execute()
 	if err != nil {
-		t.Fatalf("modules list failed: %v", err)
+		t.Fatalf("list failed: %v", err)
 	}
 
 	output := buf.String()
@@ -447,7 +427,7 @@ func matchesQuery(name string, entry registry.IndexEntry, queryLower string) boo
 	return false
 }
 
-// TestIntegration_ModulesCommandHelp tests that help works for modules commands.
+// TestIntegration_ModulesCommandHelp tests that help works for the flat module commands.
 func TestIntegration_ModulesCommandHelp(t *testing.T) {
 	tests := []struct {
 		name string
@@ -455,14 +435,14 @@ func TestIntegration_ModulesCommandHelp(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "modules help",
-			args: []string{"modules", "--help"},
-			want: []string{"Manage modules", "browse", "install", "list", "update"},
+			name: "install help",
+			args: []string{"install", "--help"},
+			want: []string{"Install", "--local"},
 		},
 		{
-			name: "modules install help",
-			args: []string{"modules", "install", "--help"},
-			want: []string{"Install", "--local"},
+			name: "list help",
+			args: []string{"list", "--help"},
+			want: []string{"installed", "--json"},
 		},
 	}
 

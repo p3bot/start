@@ -615,7 +615,7 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 
 	// All roles exhausted
 	if len(resolutions) > 0 {
-		return "", resolutions, fmt.Errorf("no roles available — all configured roles reference missing files\n  Run 'start config roles' to check your role configuration\n  Run 'start modules install <role-name>' to install a role from the registry")
+		return "", resolutions, fmt.Errorf("no roles available — all configured roles reference missing files\n  Run 'start config roles' to check your role configuration\n  Run 'start install <role-name>' to install a role from the registry")
 	}
 
 	return "", nil, nil
@@ -742,11 +742,11 @@ func resolveModuleFile(file string, v cue.Value) (string, error) {
 	}
 	origin := ExtractOrigin(v)
 	if origin == "" {
-		return "", fmt.Errorf("missing origin for @module/ path %s\nRun 'start modules install' to reinstall", file)
+		return "", fmt.Errorf("missing origin for @module/ path %s\nRun 'start install' to reinstall", file)
 	}
 	resolved, err := ResolveModulePath(file, origin)
 	if err != nil {
-		return "", fmt.Errorf("resolving module path %s: %w\nRun 'start modules install' to reinstall", file, err)
+		return "", fmt.Errorf("resolving module path %s: %w\nRun 'start install' to reinstall", file, err)
 	}
 	return resolved, nil
 }

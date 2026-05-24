@@ -378,7 +378,7 @@ func TestWriteModuleToConfig(t *testing.T) {
 			wantErr: false,
 			wantContains: []string{
 				"// start configuration",
-				"// Managed by 'start modules install'",
+				"// Managed by 'start install'",
 				"contexts:",
 				`"cwd/agents-md":`,
 				"origin:",
@@ -389,7 +389,7 @@ func TestWriteModuleToConfig(t *testing.T) {
 			name:         "append to existing file",
 			existingFile: "contexts.cue",
 			existingContent: `// start configuration
-// Managed by 'start modules install'
+// Managed by 'start install'
 contexts: {
 	"other": {
 		origin: "test"
@@ -410,7 +410,7 @@ contexts: {
 			wantErr: false,
 			wantContains: []string{
 				"// start configuration",
-				"// Managed by 'start modules install'",
+				"// Managed by 'start install'",
 				"contexts:",
 				"other:",
 				`"cwd/agents-md":`,
@@ -435,7 +435,7 @@ contexts: {
 			wantErr: false,
 			wantContains: []string{
 				"// start configuration",
-				"// Managed by 'start modules install'",
+				"// Managed by 'start install'",
 				"contexts:",
 				`"cwd/agents-md":`,
 				"v0.1.0",

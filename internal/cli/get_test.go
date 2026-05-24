@@ -565,7 +565,7 @@ func TestGetCommandHelp(t *testing.T) {
 }
 
 // TestGetAppearsInRootHelp verifies the get command is registered on the
-// root with GroupID "commands" so it lands in the Commands section of help
+// root with GroupID "workflow" so it lands in the Workflow section of help
 // output. Asserting the structural property avoids fragility against Cobra
 // help-formatter changes (heading order, colour codes, line wrapping).
 func TestGetAppearsInRootHelp(t *testing.T) {
@@ -576,8 +576,8 @@ func TestGetAppearsInRootHelp(t *testing.T) {
 	cmd := NewRootCmd()
 	for _, c := range cmd.Commands() {
 		if c.Name() == "get" {
-			if c.GroupID != "commands" {
-				t.Errorf("get.GroupID = %q, want %q", c.GroupID, "commands")
+			if c.GroupID != "workflow" {
+				t.Errorf("get.GroupID = %q, want %q", c.GroupID, "workflow")
 			}
 			return
 		}

@@ -63,7 +63,7 @@ func TestExecute_Version(t *testing.T) {
 
 // TestHelpArgLeafCommands verifies that "help" as a positional argument works
 // on leaf commands (those with no subcommands) the same as --help.
-// This covers all 17 commands updated with noArgsOrHelp in place of cobra.NoArgs.
+// This covers the commands using noArgsOrHelp in place of cobra.NoArgs.
 func TestHelpArgLeafCommands(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -71,25 +71,20 @@ func TestHelpArgLeafCommands(t *testing.T) {
 		args []string
 		want string // expected substring in help output
 	}{
-		// modules subcommands
+		// module commands (now top-level)
 		{
-			name: "modules browse help",
-			args: []string{"modules", "browse", "help"},
-			want: "browser",
+			name: "library help",
+			args: []string{"library", "help"},
+			want: "module library",
 		},
 		{
-			name: "modules index help",
-			args: []string{"modules", "index", "help"},
-			want: "module catalog",
-		},
-		{
-			name: "modules list help",
-			args: []string{"modules", "list", "help"},
+			name: "list help",
+			args: []string{"list", "help"},
 			want: "installed",
 		},
 		{
-			name: "modules validate help",
-			args: []string{"modules", "validate", "help"},
+			name: "doctor validate help",
+			args: []string{"doctor", "validate", "help"},
 			want: "git tags",
 		},
 		// completion subcommands
@@ -171,15 +166,15 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"doctor", "help"},
 			want: "Check start installation",
 		},
-		// modules subcommands
+		// module commands (now top-level)
 		{
-			name: "modules install help",
-			args: []string{"modules", "install", "help"},
+			name: "install help",
+			args: []string{"install", "help"},
 			want: "Install",
 		},
 		{
-			name: "modules update help",
-			args: []string{"modules", "update", "help"},
+			name: "update help",
+			args: []string{"update", "help"},
 			want: "Update installed",
 		},
 	}
@@ -214,15 +209,19 @@ func TestNoArgsOrHelpRejectsInvalidArgs(t *testing.T) {
 	}{
 		{
 			name: "unknown positional arg",
-			args: []string{"modules", "browse", "unexpected"},
+			args: []string{"doctor", "validate", "unexpected"},
 		},
 		{
 			name: "help plus extra arg",
-			args: []string{"modules", "browse", "help", "extra"},
+			args: []string{"doctor", "validate", "help", "extra"},
 		},
 		{
 			name: "multiple unknown args",
-			args: []string{"modules", "browse", "foo", "bar"},
+			args: []string{"doctor", "validate", "foo", "bar"},
+		},
+		{
+			name: "doctor with unknown arg",
+			args: []string{"doctor", "bogus"},
 		},
 	}
 

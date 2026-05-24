@@ -20,7 +20,7 @@ import (
 
 // NOTE(design): The config-loading shape here (paths.ResolvePaths, AnyExists
 // gate, Load(merged) plus a separate LoadSingle(local) for scope detection) is
-// repeated in modules_update.go. The repetition is kept inline because each
+// repeated in update.go. The repetition is kept inline because each
 // call site has command-specific empty-state UX baked into the same shape —
 // extracting a helper would either hide those messages from the call site or
 // require parameterising them through callbacks. Update checking uses
@@ -42,11 +42,12 @@ type InstalledModule struct {
 	ConfigFile   string   `json:"configFile"`
 }
 
-// addModulesListCommand adds the list subcommand to the modules command.
-func addModulesListCommand(parent *cobra.Command) {
+// addListCommand adds the list command to the root command.
+func addListCommand(parent *cobra.Command) {
 	listCmd := &cobra.Command{
 		Use:     "list [category]",
 		Aliases: []string{"ls"},
+		GroupID: "modules",
 		Short:   "List installed modules",
 		Long: `List installed registry modules with update status.
 
@@ -57,7 +58,7 @@ Optionally filter by category: agents, roles, contexts, or tasks.
 
 Use --json to output machine-readable JSON.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runModulesList,
+		RunE: runList,
 	}
 
 	listCmd.Flags().Bool("json", false, "Output as JSON")
@@ -65,8 +66,8 @@ Use --json to output machine-readable JSON.`,
 	parent.AddCommand(listCmd)
 }
 
-// runModulesList lists installed modules with update status.
-func runModulesList(cmd *cobra.Command, args []string) error {
+// runList lists installed modules with update status.
+func runList(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}

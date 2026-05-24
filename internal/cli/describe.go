@@ -105,7 +105,7 @@ func formatAddress(category, name string) string {
 func addDescribeCommand(parent *cobra.Command, flags *Flags) {
 	describeCmd := &cobra.Command{
 		Use:     "describe [name]",
-		GroupID: "commands",
+		GroupID: "workflow",
 		Short:   "Display resolved configuration content",
 		Long: `Display resolved configuration content from merged global and local config.
 

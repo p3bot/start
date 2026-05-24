@@ -1049,7 +1049,7 @@ func TestResolveModuleFile(t *testing.T) {
 		return v
 	}
 
-	const installHint = "Run 'start modules install' to reinstall"
+	const installHint = "Run 'start install' to reinstall"
 
 	tests := []struct {
 		name      string
@@ -2124,7 +2124,7 @@ func TestComposer_ModulePathResolutionError(t *testing.T) {
 		if !strings.Contains(ctx.Error, "resolving module path") {
 			t.Errorf("context error = %q, want it to contain %q", ctx.Error, "resolving module path")
 		}
-		if !strings.Contains(ctx.Error, "start modules install") {
+		if !strings.Contains(ctx.Error, "start install") {
 			t.Errorf("context error = %q, want it to contain actionable hint", ctx.Error)
 		}
 	})
@@ -2149,7 +2149,7 @@ func TestComposer_ModulePathResolutionError(t *testing.T) {
 		if !strings.Contains(err.Error(), "resolving module path") {
 			t.Errorf("error = %q, want it to contain %q", err.Error(), "resolving module path")
 		}
-		if !strings.Contains(err.Error(), "start modules install") {
+		if !strings.Contains(err.Error(), "start install") {
 			t.Errorf("error = %q, want it to contain actionable hint", err.Error())
 		}
 	})
@@ -2174,7 +2174,7 @@ func TestComposer_ModulePathResolutionError(t *testing.T) {
 		if !strings.Contains(err.Error(), "resolving module path") {
 			t.Errorf("error = %q, want it to contain %q", err.Error(), "resolving module path")
 		}
-		if !strings.Contains(err.Error(), "start modules install") {
+		if !strings.Contains(err.Error(), "start install") {
 			t.Errorf("error = %q, want it to contain actionable hint", err.Error())
 		}
 	})

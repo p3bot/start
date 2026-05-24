@@ -97,8 +97,8 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	// loadAgentFromModule receives selected.Key as the agent name, which
 	// flows into agent.Name via extractAgentFields. The slash-form key
 	// (e.g. "claude/interactive") becomes both the agents.cue label and
-	// the settings.cue default_agent value, matching what 'start modules
-	// add' produces so the two writers cannot drift.
+	// the settings.cue default_agent value, matching what 'start install'
+	// produces so the two writers cannot drift.
 	agent, err := loadAgentFromModule(agentResult.SourceDir, selected.Key, client.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("loading agent: %w", err)

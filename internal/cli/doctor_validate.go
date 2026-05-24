@@ -43,7 +43,7 @@ type validateCatResult struct {
 	modules []validateModuleResult
 }
 
-// ValidateResult is the top-level JSON output for modules validate.
+// ValidateResult is the top-level JSON output for doctor validate.
 type ValidateResult struct {
 	Index      ValidateIndexResult      `json:"index"`
 	Categories []ValidateCategoryResult `json:"categories"`
@@ -89,8 +89,8 @@ type validateError struct{}
 func (e *validateError) Error() string { return "validation issues found" }
 func (e *validateError) Silent() bool  { return true }
 
-// addModulesValidateCommand registers the validate subcommand.
-func addModulesValidateCommand(parent *cobra.Command) {
+// addDoctorValidateCommand registers the validate subcommand under doctor.
+func addDoctorValidateCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "validate",
 		Aliases: []string{"verify", "check"},
@@ -107,7 +107,7 @@ Exit codes:
   0 - All checks passed
   1 - Issues found`,
 		Args: noArgsOrHelp,
-		RunE: runModulesValidate,
+		RunE: runDoctorValidate,
 	}
 	cmd.Flags().Bool("yes", false, "Confirm intent to run network checks")
 	_ = cmd.Flags().MarkHidden("yes")
@@ -115,8 +115,8 @@ Exit codes:
 	parent.AddCommand(cmd)
 }
 
-// runModulesValidate executes the validate command.
-func runModulesValidate(cmd *cobra.Command, args []string) error {
+// runDoctorValidate executes the validate command.
+func runDoctorValidate(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func runModulesValidate(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 	if !yes {
 		fmt.Fprintln(w)
-		fmt.Fprintln(w, "The 'start modules validate' command is a maintainer tool for checking")
+		fmt.Fprintln(w, "The 'start doctor validate' command is a maintainer tool for checking")
 		fmt.Fprintln(w, "consistency between git tags, the CUE registry, and the modules index.")
 		fmt.Fprintln(w, "It makes significant network requests against public infrastructure.")
 		fmt.Fprintln(w)
@@ -275,7 +275,7 @@ func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	}
 	// Require and strip /index suffix
 	if !strings.HasSuffix(path, "/index") {
-		return "", fmt.Errorf("modules validate requires an index path ending with /index (got %q); custom subpaths are not supported", path)
+		return "", fmt.Errorf("doctor validate requires an index path ending with /index (got %q); custom subpaths are not supported", path)
 	}
 	path = strings.TrimSuffix(path, "/index")
 	return "https://" + path, nil
@@ -841,7 +841,8 @@ func validateHasFailure(cats []validateCatResult) bool {
 
 // printValidateIndexSection prints the index validation result (Section 1).
 // Uses the doctor CheckResult types for status icons but without the full doctor
-// reporter header or summary — this is modules validate, not doctor.
+// reporter header or summary — this is the focused doctor validate output,
+// not the full doctor report.
 func printValidateIndexSection(w io.Writer, section doctor.SectionResult) {
 	tui.ColorHeader.Fprintln(w, section.Name)
 	for _, result := range section.Results {

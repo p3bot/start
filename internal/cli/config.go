@@ -16,7 +16,7 @@ import (
 func addConfigCommand(parent *cobra.Command, flags *Flags) {
 	configCmd := &cobra.Command{
 		Use:     "config",
-		GroupID: "commands",
+		GroupID: "workflow",
 		Short:   "Manage start configuration",
 		Long: `Manage configuration for agents, roles, contexts, and tasks.
 

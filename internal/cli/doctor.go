@@ -35,10 +35,17 @@ Checks performed:
 Exit codes:
   0 - All checks passed
   1 - Issues found`,
+		Args: noArgsOrHelp,
 		RunE: runDoctor,
 	}
 
 	cmd.Flags().Bool("json", false, "Output as JSON")
+
+	// doctor is a parent command: zero args runs the diagnostic above,
+	// `doctor validate` routes to the maintainer check, and any other
+	// argument falls through to noArgsOrHelp's unknown-command error.
+	addDoctorValidateCommand(cmd)
+
 	parent.AddCommand(cmd)
 }
 

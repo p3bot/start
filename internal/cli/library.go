@@ -16,13 +16,14 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addModulesIndexCommand adds the index subcommand to the modules command.
-func addModulesIndexCommand(parent *cobra.Command) {
-	indexCmd := &cobra.Command{
-		Use:     "index [category]",
-		Aliases: []string{"idx"},
-		Short:   "Show registry module catalog",
-		Long: `Display the full module catalog from the CUE Central Registry.
+// addLibraryCommand adds the library command to the root command.
+func addLibraryCommand(parent *cobra.Command) {
+	libraryCmd := &cobra.Command{
+		Use:     "library [category]",
+		Aliases: []string{"lib"},
+		GroupID: "modules",
+		Short:   "Show the available module library",
+		Long: `Display the full module library from the CUE Central Registry.
 
 Shows all available modules grouped by type (agents, roles, contexts, tasks).
 Installed modules are marked with ★.
@@ -31,19 +32,19 @@ Optionally filter by category: agents, roles, contexts, or tasks.
 Category filtering is supported with --json but not with --export.
 
 Use --json to output machine-readable JSON, or --export to display the
-raw CUE source files from the index module.`,
+raw CUE source files from the library module.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runModulesIndex,
+		RunE: runLibrary,
 	}
 
-	indexCmd.Flags().Bool("json", false, "Output index as JSON")
-	indexCmd.Flags().Bool("export", false, "Output raw CUE source files")
+	libraryCmd.Flags().Bool("json", false, "Output library as JSON")
+	libraryCmd.Flags().Bool("export", false, "Output raw CUE source files")
 
-	parent.AddCommand(indexCmd)
+	parent.AddCommand(libraryCmd)
 }
 
-// runModulesIndex fetches and displays the full registry module catalog.
-func runModulesIndex(cmd *cobra.Command, args []string) error {
+// runLibrary fetches and displays the full module library from the registry.
+func runLibrary(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}

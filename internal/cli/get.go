@@ -16,7 +16,7 @@ import (
 func addGetCommand(parent *cobra.Command, flags *Flags) {
 	getCmd := &cobra.Command{
 		Use:     "get [name]",
-		GroupID: "commands",
+		GroupID: "workflow",
 		Short:   "Output module content to stdout",
 		Long: `Output the resolved content of a module to stdout for piping or preview.
 
