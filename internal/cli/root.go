@@ -183,8 +183,8 @@ func isTerminal(r io.Reader) bool {
 // ("", false, nil) so callers can fall back to their interactive path.
 //
 // Callers decide their own empty-stdin policy. runStart treats a blank
-// pipe as "no prompt given" and falls back to the normal start flow
-// (preserving back-compat for `start </dev/null`); runPrompt and
+// pipe as "no prompt given" and runs the normal start flow with default
+// contexts, so `start </dev/null` behaves like bare `start`; runPrompt and
 // runTask accept an empty pipe as a valid no-text invocation.
 func readPipedStdin(stdin io.Reader) (text string, piped bool, err error) {
 	if isTerminal(stdin) {
