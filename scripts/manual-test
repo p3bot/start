@@ -139,29 +139,23 @@ cmd "help" "config settings --help" \
 cmd "help" "describe --help" \
     "./start describe --help"
 
-cmd "help" "modules --help" \
-    "./start modules --help"
+cmd "help" "install --help" \
+    "./start install --help"
 
-cmd "help" "modules browse --help" \
-    "./start modules browse --help"
+cmd "help" "list --help" \
+    "./start list --help"
 
-cmd "help" "modules index --help" \
-    "./start modules index --help"
+cmd "help" "library --help" \
+    "./start library --help"
 
-cmd "help" "modules install --help" \
-    "./start modules install --help"
-
-cmd "help" "modules list --help" \
-    "./start modules list --help"
-
-cmd "help" "modules update --help" \
-    "./start modules update --help"
-
-cmd "help" "modules validate --help" \
-    "./start modules validate --help"
+cmd "help" "update --help" \
+    "./start update --help"
 
 cmd "help" "doctor --help" \
     "./start doctor --help"
+
+cmd "help" "doctor validate --help" \
+    "./start doctor validate --help"
 
 cmd "help" "completion --help" \
     "./start completion --help"
@@ -546,74 +540,68 @@ cmd "describe" "describe registry-fuzzy (tier-4 single, auto-installs)" \
 section "19. Modules Commands"
 # --------------------------------------------------------------------------
 
-cmd "modules" "modules (no args - lists installed)" \
-    "./start modules"
+cmd "modules" "list (lists installed)" \
+    "./start list"
 
-cmd "modules" "modules browse (opens browser)" \
-    "./start modules browse"
+cmd "modules" "list agents" \
+    "./start list agents"
 
-cmd "modules" "modules list" \
-    "./start modules list"
+cmd "modules" "list roles" \
+    "./start list roles"
 
-cmd "modules" "modules list agents" \
-    "./start modules list agents"
+cmd "modules" "list contexts" \
+    "./start list contexts"
 
-cmd "modules" "modules list roles" \
-    "./start modules list roles"
+cmd "modules" "list tasks" \
+    "./start list tasks"
 
-cmd "modules" "modules list contexts" \
-    "./start modules list contexts"
+cmd "modules" "list --json" \
+    "./start list --json"
 
-cmd "modules" "modules list tasks" \
-    "./start modules list tasks"
+cmd "modules" "list --verbose" \
+    "./start list --verbose"
 
-cmd "modules" "modules list --json" \
-    "./start modules list --json"
+cmd "modules" "library (show catalog)" \
+    "./start library"
 
-cmd "modules" "modules list --verbose" \
-    "./start modules list --verbose"
+cmd "modules" "library --json" \
+    "./start library --json"
 
-cmd "modules" "modules index (show catalog)" \
-    "./start modules index"
+cmd "modules" "library --export" \
+    "./start library --export"
 
-cmd "modules" "modules index --json" \
-    "./start modules index --json"
+cmd "modules" "library roles (category filter)" \
+    "./start library roles"
 
-cmd "modules" "modules index --export" \
-    "./start modules index --export"
+cmd "modules" "install (direct path)" \
+    "./start install golang/debug"
 
-cmd "modules" "modules index roles (category filter)" \
-    "./start modules index roles"
+cmd "modules" "install --local (install to project config)" \
+    "./start install --local golang/debug"
 
-cmd "modules" "modules install (direct path)" \
-    "./start modules install golang/debug"
+cmd "modules" "update (all)" \
+    "./start update"
 
-cmd "modules" "modules install --local (install to project config)" \
-    "./start modules install --local golang/debug"
+cmd "modules" "update (specific)" \
+    "./start update golang"
 
-cmd "modules" "modules update (all)" \
-    "./start modules update"
+cmd "modules" "update --dry-run" \
+    "./start update --dry-run"
 
-cmd "modules" "modules update (specific)" \
-    "./start modules update golang"
+cmd "modules" "update --force" \
+    "./start update --force"
 
-cmd "modules" "modules update --dry-run" \
-    "./start modules update --dry-run"
+cmd "modules" "update --json" \
+    "./start update --json"
 
-cmd "modules" "modules update --force" \
-    "./start modules update --force"
+cmd "modules" "doctor validate (gate message - no --yes)" \
+    "./start doctor validate"
 
-cmd "modules" "modules update --json" \
-    "./start modules update --json"
+cmd "modules" "doctor validate --yes (network-heavy maintainer check)" \
+    "./start doctor validate --yes"
 
-cmd "modules" "modules validate (gate message - no --yes)" \
-    "./start modules validate"
-
-cmd "modules" "modules validate --yes (network-heavy maintainer check)" \
-    "./start modules validate --yes"
-
-cmd "modules" "modules validate --yes --json" \
-    "./start modules validate --yes --json"
+cmd "modules" "doctor validate --yes --json" \
+    "./start doctor validate --yes --json"
 
 # --------------------------------------------------------------------------
 section "20. Doctor Command"

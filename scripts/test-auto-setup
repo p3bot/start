@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Drive the first-run auto-setup wizard in a throwaway sandbox.
+#
+# Creates a temp HOME/XDG tree, builds a sterile PATH containing only fake
+# "agent" shims (and a shell), then launches `start` with stdin still attached
+# to your terminal so you walk the interactive wizard by hand. The shims record
+# the exact command `start` execs, so you can see the real launch line — not a
+# --dry-run preview. Afterwards the generated config is printed.
+#
+# Usage:
+#   scripts/test-auto-setup <scenario> [start args...]
+#
+# Scenarios:
+#   no-agent   empty agent set -> "No AI CLI tools detected" error path
+#   single     one agent (claude) -> auto-selected, no tool prompt
+#   multi      three agents (claude, gemini, aichat) -> tool-selection prompt
+#
+# Examples:
+#   scripts/test-auto-setup single
+#   scripts/test-auto-setup multi --debug
+#
+# Notes:
+# - The CUE module cache is redirected into the sandbox, so each run performs a
+#   fresh fetch from the CUE Central Registry (network required).
+# - The agent shims are real files because `start` finds agents via PATH lookup
+#   (exec.LookPath), which never sees shell functions.
+
+set -euo pipefail
+
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+repo="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/test-auto-setup <scenario> [start args...]
+
+Scenarios:
+  no-agent   empty agent set -> "No AI CLI tools detected" error path
+  single     one agent (claude) -> auto-selected, no tool prompt
+  multi      three agents (claude, gemini, aichat) -> tool-selection prompt
+
+Any arguments after the scenario are passed through to `start`.
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 1
+fi
+
+scenario="$1"
+shift
+
+case "$scenario" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    no-agent) agents=() ;;
+    single)   agents=(claude) ;;
+    multi)    agents=(claude gemini aichat) ;;
+    *)
+        echo -e "${RED}Unknown scenario: $scenario${NC}" >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+esac
+
+# --- Sandbox setup --------------------------------------------------------
+
+tmp="$(mktemp -d)"
+cleanup() {
+    # CUE writes read-only files into its module cache; make everything
+    # writable before removal so rm doesn't choke.
+    chmod -R u+w "$tmp" 2>/dev/null || true
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+cfg="$tmp/.config"
+bindir="$tmp/bin"
+capture="$tmp/launch-capture.txt"
+mkdir -p "$cfg" "$bindir"
+
+# Build the binary from current source so we test what's checked out.
+echo -e "${BOLD}Building start...${NC}"
+( cd "$repo" && go build -o "$repo/start" ./cmd/start )
+start_bin="$repo/start"
+
+# A shell must be reachable on the sterile PATH: start launches the agent via
+# `bash -c` (executor.go), falling back to sh. Symlink whichever exist.
+for sh_bin in bash sh; do
+    if src="$(command -v "$sh_bin" 2>/dev/null)"; then
+        ln -sf "$src" "$bindir/$sh_bin"
+    fi
+done
+
+# Write one shim and copy it to each agent bin name. The shim records the exact
+# argv start execs, then exits 0 so the run continues. It must not read stdin —
+# during the wizard that is your terminal.
+shim="$tmp/.shim"
+cat > "$shim" <<'EOF'
+#!/bin/sh
+{
+    printf 'bin:  %s\n' "$0"
+    printf 'args: %s\n' "$*"
+    printf 'cwd:  %s\n' "$PWD"
+} >> "$START_CAPTURE"
+exit 0
+EOF
+chmod +x "$shim"
+for a in "${agents[@]:-}"; do
+    [[ -n "$a" ]] || continue
+    cp "$shim" "$bindir/$a"
+done
+
+# --- Run ------------------------------------------------------------------
+
+echo
+echo -e "${BOLD}Scenario:${NC} $scenario"
+echo -e "${BOLD}Sandbox:${NC}  $tmp"
+echo -e "${BOLD}Agents on PATH:${NC} ${agents[*]:-<none>}"
+if [[ $# -gt 0 ]]; then
+    echo -e "${BOLD}start args:${NC} $*"
+fi
+echo
+echo -e "${CYAN}Launching start. If the wizard prompts, answer it here.${NC}"
+echo -e "${DIM}(stdin is your terminal, so selection is interactive)${NC}"
+echo -e "${DIM}----------------------------------------------------------${NC}"
+
+rc=0
+(
+    cd "$tmp"
+    export HOME="$tmp"
+    export XDG_CONFIG_HOME="$cfg"
+    export XDG_CACHE_HOME="$tmp/.cache"
+    export START_CAPTURE="$capture"
+    export PATH="$bindir"
+    exec "$start_bin" "$@"
+) || rc=$?
+
+echo -e "${DIM}----------------------------------------------------------${NC}"
+echo -e "${BOLD}start exit code:${NC} $rc"
+
+# --- Report ---------------------------------------------------------------
+
+echo
+if [[ -f "$capture" ]]; then
+    echo -e "${GREEN}${BOLD}Captured launch command:${NC}"
+    while IFS= read -r line; do echo "  $line"; done < "$capture"
+else
+    echo -e "${YELLOW}No agent launch captured (expected for no-agent, or if the wizard was cancelled).${NC}"
+fi
+
+echo
+start_cfg="$cfg/start"
+if [[ -d "$start_cfg" ]]; then
+    echo -e "${GREEN}${BOLD}Generated config ($start_cfg):${NC}"
+    for f in agents.cue settings.cue; do
+        if [[ -f "$start_cfg/$f" ]]; then
+            echo -e "${BOLD}--- $f ---${NC}"
+            cat "$start_cfg/$f"
+            echo
+        fi
+    done
+    echo -e "${BOLD}Tree:${NC}"
+    ( cd "$start_cfg" && find . -type f | sort | sed 's/^/  /' )
+else
+    echo -e "${YELLOW}No config directory created at $start_cfg${NC}"
+fi

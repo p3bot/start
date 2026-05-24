@@ -151,23 +151,23 @@ echo "1. Modules Commands"
 echo "========================================"
 echo
 
-skip_test "1.5 modules install" \
+skip_test "1.5 install" \
     "Interactive - requires TTY for selection"
 
-skip_test "1.6 modules install --local" \
+skip_test "1.6 install --local" \
     "Interactive - requires TTY for selection"
 
-run_test_show "1.7 modules install (Direct Path)" \
-    "./start modules install golang/code-review 2>&1 || echo '(may already exist)'"
+run_test_show "1.7 install (Direct Path)" \
+    "./start install golang/code-review 2>&1 || echo '(may already exist)'"
 
-run_test_show "1.8 modules list" \
-    "./start modules list"
+run_test_show "1.8 list" \
+    "./start list"
 
-run_test_show "1.9 modules list roles" \
-    "./start modules list roles"
+run_test_show "1.9 list roles" \
+    "./start list roles"
 
-run_test_show "1.9b modules list tasks" \
-    "./start modules list tasks"
+run_test_show "1.9b list tasks" \
+    "./start list tasks"
 
 run_test_show "1.10 describe (registry-only, exact)" \
     "./start describe golang/code-review"
@@ -175,31 +175,25 @@ run_test_show "1.10 describe (registry-only, exact)" \
 run_test_show "1.11 describe (registry-fuzzy)" \
     "./start describe 'code review' 2>&1 | head -20"
 
-run_test_show "1.12 modules update" \
-    "./start modules update"
+run_test_show "1.12 update" \
+    "./start update"
 
-run_test_show "1.13 modules update (Specific)" \
-    "./start modules update golang"
+run_test_show "1.13 update (Specific)" \
+    "./start update golang"
 
-run_test_show "1.14 modules update --dry-run" \
-    "./start modules update --dry-run"
+run_test_show "1.14 update --dry-run" \
+    "./start update --dry-run"
 
-run_test_show "1.15 modules update --force" \
-    "./start modules update --force"
+run_test_show "1.15 update --force" \
+    "./start update --force"
 
-skip_test "1.16 modules browse" \
-    "Opens browser - manual test only"
-
-skip_test "1.17 modules browse (Specific)" \
-    "Opens browser - manual test only"
-
-run_test_show "1.18 modules index (Not Module Repo)" \
-    "./start modules index 2>&1 || echo '(expected error - not in library repo)'"
+run_test_show "1.18 library (Not Module Repo)" \
+    "./start library 2>&1 || echo '(expected error - not in library repo)'"
 
 # Use subshell to avoid changing directory in main shell
 START_BIN="$(pwd)/start"
-run_test_expect_fail "1.19 modules index (Not Module Repo - verify error)" \
-    "(cd /tmp && $START_BIN modules index)"
+run_test_expect_fail "1.19 library (Not Module Repo - verify error)" \
+    "(cd /tmp && $START_BIN library)"
 
 echo "========================================"
 echo "2. Doctor Command"
@@ -336,8 +330,8 @@ echo "4. Help and Discoverability"
 echo "========================================"
 echo
 
-run_test_show "4.1 modules --help" \
-    "./start modules --help"
+run_test_show "4.1 library --help" \
+    "./start library --help"
 
 run_test_show "4.2 doctor --help" \
     "./start doctor --help"

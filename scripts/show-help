@@ -47,13 +47,10 @@ show "${BIN} task"
 
 show "${BIN} search"
 
-show "${BIN} modules"
-show "${BIN} modules list"
-show "${BIN} modules install"
-show "${BIN} modules browse"
-show "${BIN} modules index"
-show "${BIN} modules update"
-show "${BIN} modules validate"
+show "${BIN} install"
+show "${BIN} list"
+show "${BIN} library"
+show "${BIN} update"
 
 show "${BIN} config"
 show "${BIN} config agent"
@@ -96,6 +93,7 @@ show "${BIN} config edit"
 show "${BIN} config remove"
 
 show "${BIN} doctor"
+show "${BIN} doctor validate"
 
 show "${BIN} completion"
 show "${BIN} completion bash"

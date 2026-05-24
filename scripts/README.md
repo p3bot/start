@@ -24,12 +24,21 @@ Options:
 - `-y, --yes` - Run without pausing between tests
 - `-h, --help` - Show usage
 
-### Edge Case Tests
+### Auto-Setup Wizard
 
 ```bash
-./scripts/test-no-agents.sh     # Test behaviour with no agents configured
-./scripts/test-single-agent.sh  # Test behaviour with single agent
+./scripts/test-auto-setup single    # One agent: auto-selected, no prompt
+./scripts/test-auto-setup multi      # Three agents: walk the tool-selection prompt
+./scripts/test-auto-setup no-agent   # No agents: "No AI CLI tools detected" path
 ```
+
+Drives the first-run auto-setup wizard in a throwaway `HOME`/XDG sandbox on a
+sterile PATH of fake agent shims. stdin stays attached to your terminal, so the
+wizard is interactive — you answer the prompts by hand. The shims capture the
+exact command `start` execs, then the generated config is printed. Any arguments
+after the scenario are passed through to `start` (e.g. `test-auto-setup multi
+--debug`). Requires network: the CUE module cache is sandboxed, so each run
+fetches fresh from the CUE Central Registry.
 
 ## Development
 
