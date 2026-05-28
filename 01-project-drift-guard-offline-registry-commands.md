@@ -2,7 +2,7 @@
 
 Source: project-doc-review on 2026-05-27
 Category: design
-Location: project.md (CLI Contract Alignment) — Implementation Plan step 7, Requirement 6, Acceptance Criteria
+Location: 02-project-cli-contract-alignment.md (CLI Contract Alignment) — Implementation Plan step 7, Requirement 6, Acceptance Criteria
 
 ## Goal
 
@@ -56,7 +56,7 @@ The cost is asymmetric. Index acquisition for `update`/`install`/`search`/`libra
 3. Build the test fixture. Provide an in-memory `*registry.Index` builder for tests with representative entries across agents/roles/contexts/tasks. Wire it through the seam in the harness (extend `setupStartTestConfig` or add a focused helper) so a test can run `library/search/update/doctor --json` and capture stdout.
 4. Extend the snapshot/capture harness for JSON mode. `snapshots_test.go` renders text only; add JSON-mode capture so the drift guard (built later, in the parent project) can assert structural shape — keys and types, not data values.
 5. Carve out `doctor validate`. Add a build-tagged or env-gated integration test (for example `//go:build registry` or skipped unless `START_REGISTRY_TESTS=1`) that runs `doctor validate --json` against the real registry and asserts the report shape. Document the gate so it is not run by the default test pipeline.
-6. Update the parent `project.md` accordingly when this lands: Plan step 7 and Requirement 6 should describe the index-provider seam and the `doctor validate` carve-out, and drop the incorrect `skipRegistry`/`internal/cache`-fixture description.
+6. Update the parent `02-project-cli-contract-alignment.md` accordingly when this lands: Plan step 7 and Requirement 6 should describe the index-provider seam and the `doctor validate` carve-out, and drop the incorrect `skipRegistry`/`internal/cache`-fixture description.
 
 Decision left to the implementer: whether to instead build a full offline stub for `doctor validate`'s per-module fetch/validate walk (a second seam over `client.Fetch` and schema validation) and keep it in the offline drift guard. This is more faithful but materially more work and more brittle. The recommended path is the carve-out (step 5), because `doctor validate`'s output shape is simple and stable while its execution path is the most expensive to stub.
 
