@@ -193,7 +193,7 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create registry client
-	client, err := registry.NewClient()
+	client, err := getProvider(cmd)()
 	if err != nil {
 		return fmt.Errorf("creating registry client: %w", err)
 	}
@@ -456,7 +456,7 @@ func validateGitTagPrefix(category, name string) string {
 
 // validateIndex validates the index module and returns a doctor section for reporting.
 // Returns the section, the loaded index (nil if fatal), and whether the status is fatal.
-func validateIndex(ctx context.Context, client *registry.Client, indexPath string, tags []string) (doctor.SectionResult, *registry.Index, bool) {
+func validateIndex(ctx context.Context, client registry.Client, indexPath string, tags []string) (doctor.SectionResult, *registry.Index, bool) {
 	section := doctor.SectionResult{Name: "Index"}
 
 	// Check for version mismatch: if the configured path has a specific pinned version,
@@ -548,7 +548,7 @@ func validateIndex(ctx context.Context, client *registry.Client, indexPath strin
 
 // validateCheckIndexVersionExists returns an error if the configured index path pins
 // a specific version that does not exist in the registry.
-func validateCheckIndexVersionExists(ctx context.Context, client *registry.Client, indexPath string) error {
+func validateCheckIndexVersionExists(ctx context.Context, client registry.Client, indexPath string) error {
 	// Only check if the path includes a canonical version (not just @v0)
 	atIdx := strings.LastIndex(indexPath, "@")
 	if atIdx == -1 {
@@ -592,7 +592,7 @@ func indexEntryCount(idx *registry.Index) int {
 
 // validateModules runs the five mismatch checks for every module in the index
 // and discovers filesystem-only modules. onModule is called after each module check.
-func validateModules(ctx context.Context, client *registry.Client, idx *registry.Index, tags []string, cacheDir string, onModule func()) []validateCatResult {
+func validateModules(ctx context.Context, client registry.Client, idx *registry.Index, tags []string, cacheDir string, onModule func()) []validateCatResult {
 	categories := []struct {
 		name    string
 		entries map[string]registry.IndexEntry
@@ -643,7 +643,7 @@ func validateModules(ctx context.Context, client *registry.Client, idx *registry
 
 // validateOneModule runs checks 1–3 and the staleness check for a single indexed module.
 // Check 4 (filesystem orphan detection) is performed by the caller, validateModules.
-func validateOneModule(ctx context.Context, client *registry.Client, category, name string, entry registry.IndexEntry, tags []string, cacheDir string) validateModuleResult {
+func validateOneModule(ctx context.Context, client registry.Client, category, name string, entry registry.IndexEntry, tags []string, cacheDir string) validateModuleResult {
 	m := validateModuleResult{
 		name:    name,
 		version: entry.Version,

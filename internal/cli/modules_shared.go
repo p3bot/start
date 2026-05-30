@@ -23,8 +23,8 @@ import (
 // library uses Fetch + ResolveLatestVersion directly (it needs the source
 // dir, not a parsed index), and list fetches conditionally inside
 // checkForUpdates with graceful failure — neither fits this helper.
-func fetchIndex(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, message string) (*registry.Index, *registry.Client, error) {
-	client, err := registry.NewClient()
+func fetchIndex(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, message string) (*registry.Index, registry.Client, error) {
+	client, err := getProvider(cmd)()
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating registry client: %w", err)
 	}

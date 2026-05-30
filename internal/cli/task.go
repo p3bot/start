@@ -678,7 +678,7 @@ func reloadEnv(workingDir, agentName string, flags *Flags, stdout, stderr io.Wri
 }
 
 // installTaskAndReloadEnv installs a task from the registry and reloads the execution environment.
-func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, client *registry.Client, index *registry.Index, result modules.SearchResult, workingDir, agentName string) (*ExecutionEnv, error) {
+func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, client registry.Client, index *registry.Index, result modules.SearchResult, workingDir, agentName string) (*ExecutionEnv, error) {
 	if err := installTaskFromRegistry(stdout, flags, client, index, result); err != nil {
 		return nil, err
 	}
@@ -686,7 +686,7 @@ func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *F
 }
 
 // installTaskFromRegistry installs a task from the registry using a pre-fetched client and result.
-func installTaskFromRegistry(stdout io.Writer, flags *Flags, client *registry.Client, index *registry.Index, result modules.SearchResult) error {
+func installTaskFromRegistry(stdout io.Writer, flags *Flags, client registry.Client, index *registry.Index, result modules.SearchResult) error {
 	ctx := context.Background()
 
 	// Install the task using the modules package

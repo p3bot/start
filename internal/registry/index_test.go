@@ -472,7 +472,7 @@ func TestFetchIndex_ReturnsIndexAndVersion(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  1,
 		baseWait: time.Millisecond,
@@ -521,7 +521,7 @@ func TestFetchIndex_CanonicalVersionSkipsResolution(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  1,
 		baseWait: time.Millisecond,
@@ -553,7 +553,7 @@ func TestFetchIndex_VersionResolutionError(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  1,
 		baseWait: time.Millisecond,
@@ -587,7 +587,7 @@ func TestFetchIndex_FetchError(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  1,
 		baseWait: time.Millisecond,
@@ -629,7 +629,7 @@ func TestFetchIndex_LoadIndexError(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  1,
 		baseWait: time.Millisecond,
@@ -666,7 +666,7 @@ func TestFetchIndex_DefaultIndexPath(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  1,
 		baseWait: time.Millisecond,

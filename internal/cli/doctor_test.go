@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/start-cli/start/internal/registry"
 )
 
 // cleanupCUECache makes CUE module cache files writable before t.TempDir() cleanup.
@@ -179,7 +181,7 @@ func TestPrepareDoctor(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	report, err := prepareDoctor()
+	report, err := prepareDoctor(registry.NewClient)
 	if err != nil {
 		t.Fatalf("prepareDoctor() error = %v", err)
 	}
@@ -244,7 +246,7 @@ contexts: {
 
 	chdir(t, tmpDir)
 
-	report, err := prepareDoctor()
+	report, err := prepareDoctor(registry.NewClient)
 	if err != nil {
 		t.Fatalf("prepareDoctor() error = %v", err)
 	}

@@ -52,7 +52,7 @@ type resolver struct {
 	stdout       io.Writer
 	stdin        io.Reader
 	index        *registry.Index
-	client       *registry.Client
+	client       registry.Client
 	indexErr     error
 	didFetch     bool
 	didInstall   bool
@@ -628,7 +628,7 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 }
 
 // autoInstall installs a registry module to global config.
-func (r *resolver) autoInstall(client *registry.Client, result modules.SearchResult) error {
+func (r *resolver) autoInstall(client registry.Client, result modules.SearchResult) error {
 	if client == nil {
 		return fmt.Errorf("registry client unavailable")
 	}
@@ -671,7 +671,7 @@ func (r *resolver) autoInstall(client *registry.Client, result modules.SearchRes
 // FetchIndex which short-circuits version resolution and serves from CUE's module
 // cache — no network call. When the cache is stale or missing, a full fetch is
 // performed and the cache is updated.
-func (r *resolver) ensureIndex() (*registry.Index, *registry.Client, error) {
+func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	if r.skipRegistry {
 		return nil, nil, nil
 	}

@@ -65,7 +65,7 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	exportFlag, _ := cmd.Flags().GetBool("export")
 
 	// Create registry client
-	client, err := registry.NewClient()
+	client, err := getProvider(cmd)()
 	if err != nil {
 		return fmt.Errorf("creating registry client: %w", err)
 	}

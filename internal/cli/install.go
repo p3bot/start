@@ -149,7 +149,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 }
 
 // installModule searches for, selects, and installs a single module.
-func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, client *registry.Client, index *registry.Index, query, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
+func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, client registry.Client, index *registry.Index, query, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
 	w := cmd.OutOrStdout()
 
 	// Search for matching modules
@@ -189,7 +189,7 @@ func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, 
 }
 
 // installSingleModule checks and installs a single selected module.
-func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, client *registry.Client, index *registry.Index, selected modules.SearchResult, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
+func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, client registry.Client, index *registry.Index, selected modules.SearchResult, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
 	// Check if already installed
 	if modules.ModuleExists(cfg, selected.Category, selected.Name) {
 		origin := modules.GetInstalledOrigin(cfg, selected.Category, selected.Name)

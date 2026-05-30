@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: 01-project-drift-guard-offline-registry-commands.md
+Active Project: 02-project-cli-contract-alignment.md
 
 When a project is complete, update this file to point to the next active project
 
@@ -32,6 +32,8 @@ Testing key principles:
 - Use table-driven tests for multiple cases
 - Existing tests use `setupStartTestConfig(t)` with `.start/` dir in temp, `os.Chdir`, and `$HOME` isolation
 - `registry.NewClient()` connects to real CUE registry; set `skipRegistry: true` in tests touching the resolver
+- `registry.Client` is an interface; registry-touching commands obtain their client through a per-instance provider (`getProvider(cmd)()`) stored on the command context, not by calling `registry.NewClient()` directly. New registry-backed code should consume the interface through the provider so it stays stubbable. Two paths are not yet on the seam and still call `registry.NewClient()` directly: the resolver (`resolve.go`, powering `describe`/`get`/auto-install — it holds no `cmd`), and first-run auto-setup (`internal/orchestration/autosetup.go` — it cannot import `cli`). Neither emits `--json`; migrate them only if they need offline stubbing
+- Offline `--json` coverage for `library`/`search`/`update`/`doctor`: `setupStartTestConfigWithRegistry(t, idx)` isolates config plus a stub client, and `captureJSON(t, stub, args...)` runs a command with the stub injected and returns decoded JSON. `doctor validate` is excluded from the offline path; its `--json` shape is asserted by a `//go:build registry` integration test run with `go test -tags=registry`
 
 ## Commands
 

@@ -151,7 +151,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	// Check for updates if verbose
 	flags := getFlags(cmd)
 	if flags.Verbose {
-		client, err := registry.NewClient()
+		client, err := getProvider(cmd)()
 		if err == nil {
 			prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 			prog.Update("Checking for updates...")
@@ -286,7 +286,7 @@ func determineScopeAndFile(localCfg cue.Value, paths config.Paths, category, nam
 }
 
 // checkForUpdates checks registry for available updates.
-func checkForUpdates(ctx context.Context, client *registry.Client, installed []InstalledModule, indexPath string) {
+func checkForUpdates(ctx context.Context, client registry.Client, installed []InstalledModule, indexPath string) {
 	// Fetch index for version info
 	index, indexVersion, err := client.FetchIndex(ctx, indexPath)
 	if err != nil {

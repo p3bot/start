@@ -28,7 +28,7 @@ import (
 // If the module is already installed, it is updated in place.
 // Returns the resolved version that was installed (e.g., "v0.1.4"); empty if no version
 // could be parsed from the resolved module path.
-func InstallModule(ctx context.Context, client *registry.Client, index *registry.Index, selected SearchResult, configDir string) (string, error) {
+func InstallModule(ctx context.Context, client registry.Client, index *registry.Index, selected SearchResult, configDir string) (string, error) {
 	// Ensure config directory exists
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("creating config directory: %w", err)
@@ -86,7 +86,7 @@ func InstallModule(ctx context.Context, client *registry.Client, index *registry
 // InstallRoleDependency checks if a task module has a role dependency and installs it
 // as a separate module if not already present. Returns the role name for use as a string
 // reference in the task config, or empty string if no role dependency exists.
-func InstallRoleDependency(ctx context.Context, client *registry.Client, index *registry.Index, moduleDir, configDir string) (string, error) {
+func InstallRoleDependency(ctx context.Context, client registry.Client, index *registry.Index, moduleDir, configDir string) (string, error) {
 	depPath := findRoleDependency(moduleDir)
 	if depPath == "" {
 		return "", nil

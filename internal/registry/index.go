@@ -46,7 +46,7 @@ func EffectiveIndexPath(configured string) string {
 // FetchIndex fetches and parses the index from the registry.
 // indexPath is the CUE module path to use; pass empty string to use IndexModulePath.
 // Returns the parsed index, the resolved canonical version string, and any error.
-func (c *Client) FetchIndex(ctx context.Context, indexPath string) (*Index, string, error) {
+func (c *client) FetchIndex(ctx context.Context, indexPath string) (*Index, string, error) {
 	// Resolve to latest version
 	resolvedPath, err := c.ResolveLatestVersion(ctx, EffectiveIndexPath(indexPath))
 	if err != nil {

@@ -38,6 +38,11 @@ func setupStartTestConfig(t *testing.T) string {
 	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	// Isolate the index cache too: os.UserCacheDir() prefers XDG_CACHE_HOME over
+	// $HOME/.cache, so redirecting HOME alone leaves a real cache reachable.
+	// Tests that assert registry-client call counts (e.g. TestDoctorJSONOffline)
+	// depend on the cache being absent.
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(tmpDir, "cache"))
 
 	// CUE module cache writes read-only files; make them writable before cleanup.
 	t.Cleanup(func() {

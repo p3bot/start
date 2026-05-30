@@ -518,7 +518,7 @@ func generateSettingsCUE(defaultAgent string) string {
 
 // installDefaultModules installs commonly-needed contexts during auto-setup.
 // Errors are logged to stderr but don't fail the setup process.
-func (a *AutoSetup) installDefaultModules(ctx context.Context, client *registry.Client, index *registry.Index) {
+func (a *AutoSetup) installDefaultModules(ctx context.Context, client registry.Client, index *registry.Index) {
 	// Get global config directory
 	paths, err := config.ResolvePaths("")
 	if err != nil {

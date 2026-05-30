@@ -180,7 +180,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 }
 
 // checkAndUpdate checks for updates and optionally applies them.
-func checkAndUpdate(ctx context.Context, client *registry.Client, paths config.Paths, index *registry.Index, mod InstalledModule, dryRun, force bool) UpdateResult {
+func checkAndUpdate(ctx context.Context, client registry.Client, paths config.Paths, index *registry.Index, mod InstalledModule, dryRun, force bool) UpdateResult {
 	result := UpdateResult{Module: mod}
 
 	entry := findInIndex(index, mod.Category, mod.Name)

@@ -14,7 +14,6 @@ import (
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -164,7 +163,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	// Search registry (graceful fallback if unavailable)
 	var registryErr error
 	ctx := context.Background()
-	client, err := registry.NewClient()
+	client, err := getProvider(cmd)()
 	if err != nil {
 		registryErr = err
 	} else {

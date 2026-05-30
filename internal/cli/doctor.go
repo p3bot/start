@@ -54,7 +54,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
-	report, err := prepareDoctor()
+	report, err := prepareDoctor(getProvider(cmd))
 	if err != nil {
 		return err
 	}
@@ -95,8 +95,10 @@ type doctorError struct{}
 func (e *doctorError) Error() string { return "issues found" }
 func (e *doctorError) Silent() bool  { return true }
 
-// prepareDoctor runs all checks and builds the report.
-func prepareDoctor() (doctor.Report, error) {
+// prepareDoctor runs all checks and builds the report. The provider supplies
+// the registry client for the version-resolve and schema-fetch paths so tests
+// can run doctor offline against a stub.
+func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 	var report doctor.Report
 
 	// Intro section
@@ -110,7 +112,7 @@ func prepareDoctor() (doctor.Report, error) {
 		BuildDate:    buildDate,
 		GoVersion:    doctor.DefaultBuildInfo().GoVersion,
 		Platform:     doctor.DefaultBuildInfo().Platform,
-		IndexVersion: resolveIndexVersion(indexPath),
+		IndexVersion: resolveIndexVersion(indexPath, provider),
 		IndexPath:    indexPath,
 	}
 	report.Sections = append(report.Sections, doctor.CheckVersion(buildInfo))
@@ -126,7 +128,7 @@ func prepareDoctor() (doctor.Report, error) {
 	report.Sections = append(report.Sections, doctor.CheckConfiguration(paths))
 
 	// Schema validation section
-	report.Sections = append(report.Sections, fetchAndValidateSchemas(paths))
+	report.Sections = append(report.Sections, fetchAndValidateSchemas(paths, provider))
 
 	// Load config for remaining checks (if possible)
 	var cfgLoaded bool
@@ -205,7 +207,7 @@ func prepareDoctor() (doctor.Report, error) {
 }
 
 // fetchAndValidateSchemas fetches schemas from the registry and validates config files.
-func fetchAndValidateSchemas(paths config.Paths) doctor.SectionResult {
+func fetchAndValidateSchemas(paths config.Paths, provider clientProvider) doctor.SectionResult {
 	if !paths.AnyExists() {
 		return doctor.SectionResult{
 			Name: "Schema Validation",
@@ -215,7 +217,7 @@ func fetchAndValidateSchemas(paths config.Paths) doctor.SectionResult {
 		}
 	}
 
-	client, err := registry.NewClient()
+	client, err := provider()
 	if err != nil {
 		return doctor.SectionResult{
 			Name: "Schema Validation",
@@ -263,7 +265,7 @@ func fetchAndValidateSchemas(paths config.Paths) doctor.SectionResult {
 
 // resolveIndexVersion returns the latest index version string (e.g., "v0.3.2").
 // Reads from cache first; falls back to a registry network call if cache is missing.
-func resolveIndexVersion(indexPath string) string {
+func resolveIndexVersion(indexPath string, provider clientProvider) string {
 	// Try cache first to avoid a network call.
 	cached, err := cache.ReadIndex()
 	if err == nil && cached.Version != "" {
@@ -271,7 +273,7 @@ func resolveIndexVersion(indexPath string) string {
 	}
 
 	// Fall back to registry query.
-	client, err := registry.NewClient()
+	client, err := provider()
 	if err != nil {
 		return ""
 	}

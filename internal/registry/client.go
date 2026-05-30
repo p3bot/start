@@ -13,8 +13,22 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// Client fetches CUE modules from the registry with retry logic.
-type Client struct {
+// Client is the registry surface consumed across the codebase. The interface
+// keeps the natural name so call sites read unchanged; the concrete fetcher is
+// the unexported client below. Defining it here (rather than where consumed)
+// is deliberate: consumers span internal/cli, internal/modules, and
+// internal/orchestration, so the "interface where consumed" rule cannot place
+// it in a single consumer package.
+type Client interface {
+	FetchIndex(ctx context.Context, indexPath string) (*Index, string, error)
+	Fetch(ctx context.Context, modulePath string) (FetchResult, error)
+	ModuleVersions(ctx context.Context, modulePath string) ([]string, error)
+	ResolveLatestVersion(ctx context.Context, modulePath string) (string, error)
+	Registry() modconfig.Registry
+}
+
+// client fetches CUE modules from the registry with retry logic.
+type client struct {
 	registry modconfig.Registry
 	retries  int
 	baseWait time.Duration
@@ -22,12 +36,12 @@ type Client struct {
 
 // NewClient creates a registry client using CUE's standard configuration.
 // It respects CUE_REGISTRY environment variable and cue login authentication.
-func NewClient() (*Client, error) {
+func NewClient() (Client, error) {
 	reg, err := modconfig.NewRegistry(nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating registry client: %w", err)
 	}
-	return &Client{
+	return &client{
 		registry: reg,
 		retries:  3,
 		baseWait: time.Second,
@@ -41,13 +55,13 @@ type FetchResult struct {
 }
 
 // Registry returns the underlying modconfig.Registry for use with cue/load.
-func (c *Client) Registry() modconfig.Registry {
+func (c *client) Registry() modconfig.Registry {
 	return c.registry
 }
 
 // Fetch downloads a module from the registry with retry logic.
 // The module path should include version, e.g., "github.com/user/repo/path@v0".
-func (c *Client) Fetch(ctx context.Context, modulePath string) (FetchResult, error) {
+func (c *client) Fetch(ctx context.Context, modulePath string) (FetchResult, error) {
 	mv, err := module.ParseVersion(modulePath)
 	if err != nil {
 		return FetchResult{}, fmt.Errorf("parsing module path %q: %w", modulePath, err)
@@ -80,13 +94,13 @@ func (c *Client) Fetch(ctx context.Context, modulePath string) (FetchResult, err
 }
 
 // ModuleVersions returns available versions for a module path.
-func (c *Client) ModuleVersions(ctx context.Context, modulePath string) ([]string, error) {
+func (c *client) ModuleVersions(ctx context.Context, modulePath string) ([]string, error) {
 	return c.registry.ModuleVersions(ctx, modulePath)
 }
 
 // ResolveLatestVersion resolves a module path with major version (e.g., @v0) to
 // the latest canonical version (e.g., @v0.0.1).
-func (c *Client) ResolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
+func (c *client) ResolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
 	// Parse the module path to extract base path and major version
 	mv, err := module.ParseVersion(modulePath)
 	if err == nil && mv.Version() != "" {

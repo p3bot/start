@@ -9,6 +9,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/start-cli/start/internal/registry"
 	"golang.org/x/term"
 )
 
@@ -86,6 +87,12 @@ Examples:
 			return nil
 		},
 	}
+
+	// Bind the production registry-client provider into the root context.
+	// Cobra copies the root context onto the resolved subcommand before
+	// running it, so every subcommand observes this provider; tests override
+	// the bound provider before Execute to run offline.
+	cmd.SetContext(WithProvider(context.Background(), registry.NewClient))
 
 	// Custom version template
 	cmd.SetVersionTemplate(versionTemplate)

@@ -147,7 +147,7 @@ func TestFetch_RetryLogic(t *testing.T) {
 				},
 			}
 
-			client := &Client{
+			client := &client{
 				registry: mock,
 				retries:  tt.retries,
 				baseWait: time.Millisecond, // Fast retries for testing
@@ -181,7 +181,7 @@ func TestFetch_ContextCancellation(t *testing.T) {
 		},
 	}
 
-	client := &Client{
+	client := &client{
 		registry: mock,
 		retries:  5,
 		baseWait: time.Second, // Long retry wait so the 50 ms cancel always arrives first.
@@ -206,7 +206,7 @@ func TestFetch_ContextCancellation(t *testing.T) {
 // TestFetch_InvalidModulePath tests Fetch with invalid module paths.
 func TestFetch_InvalidModulePath(t *testing.T) {
 	t.Parallel()
-	client := &Client{
+	client := &client{
 		registry: &mockRegistry{},
 		retries:  3,
 		baseWait: time.Millisecond,
@@ -306,7 +306,7 @@ func TestResolveLatestVersion(t *testing.T) {
 				},
 			}
 
-			client := &Client{
+			client := &client{
 				registry: mock,
 				retries:  3,
 				baseWait: time.Millisecond,
@@ -356,7 +356,7 @@ func TestIsCanonicalVersion(t *testing.T) {
 				},
 			}
 
-			client := &Client{
+			client := &client{
 				registry: mock,
 				retries:  1,
 				baseWait: time.Millisecond,
