@@ -185,8 +185,8 @@ cmd "start" "--quiet --dry-run" \
 cmd "start" "--verbose --dry-run" \
     "./start --verbose --dry-run"
 
-cmd "start" "--no-color --dry-run" \
-    "./start --no-color --dry-run"
+cmd "start" "--color=never --dry-run" \
+    "./start --color=never --dry-run"
 
 cmd "start" "--local --dry-run" \
     "./start --local --dry-run"
@@ -394,7 +394,7 @@ section "13. Config Remove"
 # --------------------------------------------------------------------------
 
 cmd "config remove" "remove nonexistent (expect error)" \
-    "./start config remove nonexistent-xyz-123 --yes"
+    "./start config remove nonexistent-xyz-123 --force"
 
 cmd "config remove" "remove (interactive - no args)" \
     "./start config remove"
@@ -594,14 +594,14 @@ cmd "modules" "update --force" \
 cmd "modules" "update --json" \
     "./start update --json"
 
-cmd "modules" "doctor validate (gate message - no --yes)" \
+cmd "modules" "doctor validate (gate message - no --force)" \
     "./start doctor validate"
 
-cmd "modules" "doctor validate --yes (network-heavy maintainer check)" \
-    "./start doctor validate --yes"
+cmd "modules" "doctor validate --force (network-heavy maintainer check)" \
+    "./start doctor validate --force"
 
-cmd "modules" "doctor validate --yes --json" \
-    "./start doctor validate --yes --json"
+cmd "modules" "doctor validate --force --json" \
+    "./start doctor validate --force --json"
 
 # --------------------------------------------------------------------------
 section "20. Doctor Command"

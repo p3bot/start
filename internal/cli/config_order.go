@@ -54,7 +54,7 @@ func runConfigOrder(cmd *cobra.Command, args []string) error {
 	}
 	stdin := cmd.InOrStdin()
 	if !isTerminal(stdin) {
-		return fmt.Errorf("interactive reordering requires a terminal")
+		return usageError(fmt.Errorf("interactive reordering requires a terminal"))
 	}
 
 	stdout := cmd.OutOrStdout()

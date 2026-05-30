@@ -1,12 +1,54 @@
 package orchestration
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/start-cli/start/internal/fault"
 )
+
+// TestBuildCommand_MissingBinaryIsConfigFault asserts a configured agent whose
+// binary is absent from PATH yields a user-config fault (exit 78), distinct
+// from a missing-resource not-found (exit 3).
+func TestBuildCommand_MissingBinaryIsConfigFault(t *testing.T) {
+	t.Parallel()
+	executor := NewExecutor("")
+	cfg := ExecuteConfig{
+		Agent: Agent{
+			Bin:     "definitely-not-a-real-binary-xyz",
+			Command: "{{.bin}} run",
+		},
+	}
+	_, err := executor.BuildCommand(cfg)
+	if err == nil {
+		t.Fatal("expected an error for a missing binary")
+	}
+	if !errors.Is(err, fault.ErrUserConfig) {
+		t.Errorf("missing binary should be a user-config fault; got %v", err)
+	}
+	if errors.Is(err, fault.ErrNotFound) {
+		t.Error("missing binary must not classify as not-found")
+	}
+}
+
+// TestExtractAgent_AbsentIsNotFound asserts a named agent absent from config is
+// a missing-resource not-found (exit 3), the deliberate counterpart to the
+// missing-binary config fault above.
+func TestExtractAgent_AbsentIsNotFound(t *testing.T) {
+	t.Parallel()
+	ctx := cuecontext.New()
+	v := ctx.CompileString(`agents: {}`)
+	_, err := ExtractAgent(v, "ghost")
+	if err == nil {
+		t.Fatal("expected an error for an absent agent")
+	}
+	if !errors.Is(err, fault.ErrNotFound) {
+		t.Errorf("absent agent should be not-found; got %v", err)
+	}
+}
 
 func TestExecutor_BuildCommand(t *testing.T) {
 	t.Parallel()

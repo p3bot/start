@@ -186,7 +186,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 			return err
 		}
 		if addr.HasPrefix && addr.Category != "tasks" {
-			return fmt.Errorf("task expects category %q, got %q in %q", "tasks", addr.Category, taskName)
+			return usageError(fmt.Errorf("task expects category %q, got %q in %q", "tasks", addr.Category, taskName))
 		}
 		taskName = addr.Name
 
@@ -219,7 +219,16 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 					return err
 				}
 			} else if len(installedMatches) == 0 {
-				return fmt.Errorf("task %q not found and registry is unavailable", taskName)
+				// Split the former combined "not found and registry
+				// unavailable" error into its two fault domains. When the
+				// registry failed, the cause is the (transient) index error —
+				// preserve it so a retry signal (75) survives; not-found can't
+				// even be determined. With no index error (e.g. skipped), the
+				// task is genuinely absent (3).
+				if r.indexErr != nil {
+					return fmt.Errorf("task %q: registry unavailable: %w", taskName, r.indexErr)
+				}
+				return notFoundError(fmt.Errorf("task %q not found", taskName))
 			}
 
 			allMatches := mergeTaskMatches(installedMatches, registryMatches)
@@ -228,7 +237,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 
 			switch len(allMatches) {
 			case 0:
-				return fmt.Errorf("task %q not found", taskName)
+				return notFoundError(fmt.Errorf("task %q not found", taskName))
 			case 1:
 				match := allMatches[0]
 				if match.Source == TaskSourceRegistry {
@@ -255,7 +264,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 					for _, m := range allMatches {
 						names = append(names, m.Name)
 					}
-					return fmt.Errorf("ambiguous task %q matches: %s\nSpecify exact name or run interactively", taskName, strings.Join(names, ", "))
+					return usageError(fmt.Errorf("ambiguous task %q matches: %s\nSpecify exact name or run interactively", taskName, strings.Join(names, ", ")))
 				}
 				reader := bufio.NewReader(stdin)
 				selected, err := promptTaskSelection(stdout, reader, allMatches, taskName)

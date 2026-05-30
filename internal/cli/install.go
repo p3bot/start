@@ -78,7 +78,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	for _, q := range args {
 		if len(q) < 3 {
 			if !isTerminal(stdin) {
-				return fmt.Errorf("query %q must be at least 3 characters", q)
+				return usageError(fmt.Errorf("query %q must be at least 3 characters", q))
 			}
 			fmt.Fprintf(w, "Query %q must be at least 3 characters\n", q)
 			input, err := promptSearchQuery(w, stdin)
@@ -158,7 +158,9 @@ func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, 
 		return err
 	}
 	if len(results) == 0 {
-		return fmt.Errorf("%w matching %q", errNoModules, query)
+		// notFoundError tags for exit 3 while errNoModules stays reachable via
+		// errors.Is for runInstall's interactive empty-result message.
+		return notFoundError(fmt.Errorf("%w matching %q", errNoModules, query))
 	}
 
 	// Select module(s)
@@ -276,10 +278,10 @@ func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchRes
 		for _, res := range results {
 			names = append(names, formatAddress(res.Category, res.Name))
 		}
-		return nil, fmt.Errorf(
+		return nil, usageError(fmt.Errorf(
 			"multiple modules found: %s\nSpecify exact path or run interactively",
 			strings.Join(names, ", "),
-		)
+		))
 	}
 
 	fmt.Fprintf(w, "\nFound %d matches:\n\n", len(results))

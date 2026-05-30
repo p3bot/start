@@ -42,7 +42,7 @@ func runConfigAdd(cmd *cobra.Command, args []string) error {
 
 	// Always interactive
 	if !isTerminal(stdin) {
-		return fmt.Errorf("interactive add requires a terminal")
+		return usageError(fmt.Errorf("interactive add requires a terminal"))
 	}
 
 	category := ""

@@ -24,11 +24,11 @@ func addConfigRemoveCommand(parent *cobra.Command) {
 Search by name across all categories. If multiple items match, a menu is presented.
 With no argument, prompts interactively for category and item.
 
-Use --yes / -y to skip the confirmation prompt.`,
+Use --force to skip the confirmation prompt.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runConfigRemove,
 	}
-	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
+	cmd.Flags().Bool("force", false, "Skip confirmation prompt")
 	parent.AddCommand(cmd)
 }
 
@@ -41,11 +41,11 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 	stdin := cmd.InOrStdin()
 	stdout := cmd.OutOrStdout()
 	local := getFlags(cmd).Local
-	skipConfirm, _ := cmd.Flags().GetBool("yes")
+	skipConfirm, _ := cmd.Flags().GetBool("force")
 
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
-			return fmt.Errorf("interactive remove requires a terminal")
+			return usageError(fmt.Errorf("interactive remove requires a terminal"))
 		}
 		return runConfigRemoveInteractive(stdin, stdout, local, skipConfirm, getFlags(cmd).Quiet)
 	}
@@ -58,18 +58,18 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(matches) == 0 {
-		return fmt.Errorf("%q not found", query)
+		return notFoundError(fmt.Errorf("%q not found", query))
 	}
 
 	var toRemove []configMatch
 	if len(matches) == 1 {
 		toRemove = matches
 	} else if skipConfirm {
-		// --yes with multiple matches: remove all
+		// --force with multiple matches: remove all
 		toRemove = matches
 	} else {
 		if !isTerminal(stdin) {
-			return fmt.Errorf("--yes flag required in non-interactive mode for ambiguous query %q", query)
+			return usageError(fmt.Errorf("--force flag required in non-interactive mode for ambiguous query %q", query))
 		}
 		selected, err := promptSelectConfigMatchesFromList(stdout, stdin, query, matches)
 		if err != nil {
@@ -83,7 +83,7 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 
 	if !skipConfirm {
 		if !isTerminal(stdin) {
-			return fmt.Errorf("--yes flag required in non-interactive mode")
+			return usageError(fmt.Errorf("--force flag required in non-interactive mode"))
 		}
 		confirmed, err := confirmConfigRemoval(stdout, stdin, toRemove, local)
 		if err != nil {

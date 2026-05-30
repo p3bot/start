@@ -448,6 +448,49 @@ func TestValidateError(t *testing.T) {
 	}
 }
 
+// TestDoctorValidateGate verifies the --force gate that shields public
+// infrastructure from casual traffic. Without --force the command prints
+// guidance and returns without constructing a registry client or doing any
+// network work; with --force it skips the guidance and proceeds to the
+// prerequisite checks.
+func TestDoctorValidateGate(t *testing.T) {
+	t.Run("without --force shows guidance and does no registry work", func(t *testing.T) {
+		_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+
+		out, err := captureText(t, stub, "doctor", "validate")
+		if err != nil {
+			t.Fatalf("gate path should return nil, got %v", err)
+		}
+		if !strings.Contains(out, "Run with --force to proceed.") {
+			t.Errorf("expected gate guidance in output, got: %q", out)
+		}
+		// The gate returns before getProvider(cmd)(), so no client is built —
+		// proving the gate prevents all registry traffic, not just the fetch.
+		if stub.providerCalls != 0 {
+			t.Errorf("gate must not construct a registry client; providerCalls = %d, want 0", stub.providerCalls)
+		}
+	})
+
+	t.Run("with --force passes the gate and reaches prerequisites", func(t *testing.T) {
+		_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+		// An empty PATH makes the first post-gate prerequisite (git in PATH)
+		// fail deterministically and offline, proving the gate was passed
+		// without triggering real network or clone work.
+		t.Setenv("PATH", "")
+
+		out, err := captureText(t, stub, "doctor", "validate", "--force")
+		if err == nil {
+			t.Fatal("expected the git-prerequisite error past the gate, got nil")
+		}
+		if !strings.Contains(err.Error(), "git not found") {
+			t.Errorf("expected git-not-found prerequisite error past the gate, got: %v", err)
+		}
+		if strings.Contains(out, "Run with --force to proceed.") {
+			t.Errorf("gate guidance must not print when --force is set, got: %q", out)
+		}
+	})
+}
+
 // --- helpers ---
 
 // makeTestRegistryIndex creates a *registry.Index with n stub entries per category.

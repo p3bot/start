@@ -76,7 +76,11 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 		}
 
 		output := stdout.String()
-		if !strings.Contains(output, "agents/claude") {
+		// The canonical header is "agents:claude" (formatAddress uses ':').
+		// Asserting the old "agents/claude" slash form made this flaky: a slash
+		// only survives in the optional registry Origin line, which depends on
+		// non-isolated registry cache state from earlier tests.
+		if !strings.Contains(output, "agents:claude") {
 			t.Errorf("get output missing agent name: %s", output)
 		}
 		if !strings.Contains(output, "Default Model: sonnet") {
@@ -150,12 +154,12 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("remove agent with --yes", func(t *testing.T) {
+	t.Run("remove agent with --force", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "gemini", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "gemini", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("remove failed: %v", err)
@@ -168,28 +172,6 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 		}
 		if !strings.Contains(string(content), `"claude"`) {
 			t.Errorf("claude should still exist: %s", content)
-		}
-	})
-
-	t.Run("remove with -y short flag", func(t *testing.T) {
-		// Re-add gemini for this test
-		if err := configAgentAdd(slowStdin("gemini\ngemini\n"+`gemini "{{.prompt}}"`+"\n\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
-			t.Fatalf("re-add gemini failed: %v", err)
-		}
-
-		cmd := NewRootCmd()
-		stdout := &bytes.Buffer{}
-		cmd.SetOut(stdout)
-		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "gemini", "-y"})
-
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("remove with -y failed: %v", err)
-		}
-
-		content, _ := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
-		if strings.Contains(string(content), `"gemini"`) {
-			t.Errorf("gemini should be removed: %s", content)
 		}
 	})
 
@@ -276,12 +258,12 @@ func TestConfigRole_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("remove role with --yes", func(t *testing.T) {
+	t.Run("remove role with --force", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "reviewer", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "reviewer", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("remove failed: %v", err)
@@ -372,12 +354,12 @@ func TestConfigContext_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("remove context with --yes", func(t *testing.T) {
+	t.Run("remove context with --force", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "readme", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "readme", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("remove failed: %v", err)
@@ -458,12 +440,12 @@ func TestConfigTask_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("remove task with --yes", func(t *testing.T) {
+	t.Run("remove task with --force", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "review", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "review", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("remove failed: %v", err)
@@ -677,12 +659,12 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("remove with exact name and --yes", func(t *testing.T) {
+	t.Run("remove with exact name and --force", func(t *testing.T) {
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "cwd/dotai/create-role", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "cwd/dotai/create-role", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("remove failed: %v", err)
@@ -695,16 +677,16 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("remove with ambiguous query and --yes removes all matches", func(t *testing.T) {
+	t.Run("remove with ambiguous query and --force removes all matches", func(t *testing.T) {
 		// "review" matches golang/review/architecture and golang/review/code
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "golang/review", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "golang/review", "--force"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("ambiguous remove with --yes failed: %v", err)
+			t.Fatalf("ambiguous remove with --force failed: %v", err)
 		}
 
 		content, _ := os.ReadFile(filepath.Join(globalDir, "tasks.cue"))
@@ -721,7 +703,7 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		cmd := NewRootCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "does-not-exist", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "does-not-exist", "--force"})
 
 		err := cmd.Execute()
 		if err == nil {
@@ -732,7 +714,7 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("remove with ambiguous query in non-interactive mode without --yes errors", func(t *testing.T) {
+	t.Run("remove with ambiguous query in non-interactive mode without --force errors", func(t *testing.T) {
 		// Re-add some tasks first
 		if err := configTaskAdd(slowStdin("golang/review/security\n\n\nReview security.\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("re-add failed: %v", err)
@@ -749,16 +731,16 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 
 		err := cmd.Execute()
 		if err == nil {
-			t.Fatal("expected error for ambiguous remove without --yes in non-interactive mode")
+			t.Fatal("expected error for ambiguous remove without --force in non-interactive mode")
 		}
-		if !strings.Contains(err.Error(), "--yes") {
-			t.Errorf("expected '--yes' hint in error, got: %v", err)
+		if !strings.Contains(err.Error(), "--force") {
+			t.Errorf("expected '--force' hint in error, got: %v", err)
 		}
 	})
 }
 
 func TestConfigRemove_MultipleArgs(t *testing.T) {
-	t.Run("task remove ambiguous query with --yes expands all", func(t *testing.T) {
+	t.Run("task remove ambiguous query with --force expands all", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		chdir(t, tmpDir)
@@ -779,15 +761,15 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			}
 		}
 
-		// Ambiguous query with --yes should remove all three golang/review/* tasks
+		// Ambiguous query with --force should remove all three golang/review/* tasks
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "golang/review", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "golang/review", "--force"})
 
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("ambiguous remove with --yes failed: %v", err)
+			t.Fatalf("ambiguous remove with --force failed: %v", err)
 		}
 
 		content, _ := os.ReadFile(filepath.Join(globalDir, "tasks.cue"))
@@ -806,7 +788,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("cross-category remove with --yes removes all matches", func(t *testing.T) {
+	t.Run("cross-category remove with --force removes all matches", func(t *testing.T) {
 		// Create an agent and role both named "shared" to test cross-category removal
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
@@ -830,7 +812,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "shared", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "shared", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("cross-category remove failed: %v", err)
@@ -848,7 +830,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("agent remove with --yes", func(t *testing.T) {
+	t.Run("agent remove with --force", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		chdir(t, tmpDir)
@@ -869,7 +851,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"config", "remove", "alpha", "--yes"})
+		cmd.SetArgs([]string{"config", "remove", "alpha", "--force"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("remove alpha failed: %v", err)
@@ -879,7 +861,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		cmd2 := NewRootCmd()
 		cmd2.SetOut(&bytes.Buffer{})
 		cmd2.SetErr(&bytes.Buffer{})
-		cmd2.SetArgs([]string{"config", "remove", "beta", "--yes"})
+		cmd2.SetArgs([]string{"config", "remove", "beta", "--force"})
 
 		if err := cmd2.Execute(); err != nil {
 			t.Fatalf("remove beta failed: %v", err)
@@ -898,7 +880,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("remove in non-interactive mode without --yes errors", func(t *testing.T) {
+	t.Run("remove in non-interactive mode without --force errors", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		chdir(t, tmpDir)
@@ -912,7 +894,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			t.Fatalf("add failed: %v", err)
 		}
 
-		// Non-interactive mode without --yes should error
+		// Non-interactive mode without --force should error
 		cmd := NewRootCmd()
 		cmd.SetIn(strings.NewReader("")) // non-interactive
 		cmd.SetOut(&bytes.Buffer{})
@@ -921,10 +903,10 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 
 		err := cmd.Execute()
 		if err == nil {
-			t.Fatal("expected error requiring --yes in non-interactive mode")
+			t.Fatal("expected error requiring --force in non-interactive mode")
 		}
-		if !strings.Contains(err.Error(), "--yes") {
-			t.Errorf("expected '--yes' in error, got: %v", err)
+		if !strings.Contains(err.Error(), "--force") {
+			t.Errorf("expected '--force' in error, got: %v", err)
 		}
 
 		// Verify the agent was NOT removed
@@ -1237,7 +1219,7 @@ func TestConfig_ZeroMatch(t *testing.T) {
 			cmd.SetErr(&bytes.Buffer{})
 			args := []string{"config", name, "name-that-doesnt-exist"}
 			if name == "remove" {
-				args = append(args, "--yes")
+				args = append(args, "--force")
 			}
 			cmd.SetArgs(args)
 

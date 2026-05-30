@@ -35,7 +35,7 @@ type Flags struct {
 	Quiet   bool
 	Verbose bool
 	Debug   bool
-	NoColor bool
+	Color   string
 	Local   bool
 	Global  bool
 	NoRole  bool

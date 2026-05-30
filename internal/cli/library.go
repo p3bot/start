@@ -54,7 +54,7 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		singular := normalizeCategoryArg(args[0])
 		if singular == "" {
-			return fmt.Errorf("unknown category %q: expected agents, roles, contexts, or tasks", args[0])
+			return usageError(fmt.Errorf("unknown category %q: expected agents, roles, contexts, or tasks", args[0]))
 		}
 		category = singular + "s"
 	}
@@ -102,7 +102,7 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	switch {
 	case exportFlag:
 		if category != "" {
-			return fmt.Errorf("category filter cannot be used with --export")
+			return usageError(fmt.Errorf("category filter cannot be used with --export"))
 		}
 		return printExportIndex(w, result.SourceDir)
 	case jsonFlag:

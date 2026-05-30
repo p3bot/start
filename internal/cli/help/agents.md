@@ -6,6 +6,11 @@ CLI orchestrator for AI agents. Manages prompt, role, and context injection.
 - Local config: ./.start/ (--local flag targets this)
 - See `start help config` for config structure
 - See `start help templates` for template placeholder syntax
+- See `start help schemas` for `--json` output shapes and exit codes
+
+Global flags: --color=auto|always|never, --quiet, --verbose, --debug, --local.
+Nine commands accept --json (list, library, search, update, doctor, doctor
+validate, config get, config list, config settings); see `start help schemas`.
 
 ```
 start

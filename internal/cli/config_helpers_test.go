@@ -559,26 +559,3 @@ func TestPromptSelectFromList_EmptyQuery(t *testing.T) {
 	})
 }
 
-func TestConfirmMultiRemoval_SingleItem(t *testing.T) {
-	w := &bytes.Buffer{}
-	// Non-TTY reader returns error, so just test the single-item prompt format
-	// via the non-TTY path returning the expected error.
-	_, err := confirmMultiRemoval(w, strings.NewReader(""), "task", []string{"my-task"}, false)
-	if err == nil {
-		t.Fatal("expected non-TTY error")
-	}
-	if !strings.Contains(err.Error(), "--yes") {
-		t.Errorf("expected '--yes' hint in error, got: %v", err)
-	}
-}
-
-func TestConfirmMultiRemoval_MultipleItems_NonTTY(t *testing.T) {
-	w := &bytes.Buffer{}
-	_, err := confirmMultiRemoval(w, strings.NewReader(""), "role", []string{"role-a", "role-b"}, false)
-	if err == nil {
-		t.Fatal("expected non-TTY error")
-	}
-	if !strings.Contains(err.Error(), "--yes") {
-		t.Errorf("expected '--yes' hint in error, got: %v", err)
-	}
-}

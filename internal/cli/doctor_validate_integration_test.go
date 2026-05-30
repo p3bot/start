@@ -30,8 +30,8 @@ func TestDoctorValidateJSONIntegration(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(io.Discard)
-	// --yes confirms intent to make network requests; --json selects the shape.
-	cmd.SetArgs([]string{"doctor", "validate", "--yes", "--json"})
+	// --force confirms intent to make network requests; --json selects the shape.
+	cmd.SetArgs([]string{"doctor", "validate", "--force", "--json"})
 
 	// A non-nil error is expected when the registry reports inconsistencies
 	// (validateError is silent); JSON is still written, so decode is the real

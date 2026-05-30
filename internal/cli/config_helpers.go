@@ -539,40 +539,6 @@ func extractTags(val cue.Value) []string {
 	return tags
 }
 
-// confirmMultiRemoval prompts the user to confirm removal of one or more config entities.
-// For a single name it mirrors the old single-item prompt. For multiple names it lists
-// them all and asks once. Requires --yes flag in non-interactive mode.
-func confirmMultiRemoval(w io.Writer, r io.Reader, entityType string, names []string, local bool) (bool, error) {
-	isTTY := isTerminal(r)
-
-	if !isTTY {
-		return false, fmt.Errorf("--yes flag required in non-interactive mode")
-	}
-
-	scope := scopeString(local)
-	if len(names) == 1 {
-		fmt.Fprintf(w, "Remove %s %q from %s config? %s ", entityType, names[0], scope, tui.Bracket("y/N"))
-	} else {
-		fmt.Fprintf(w, "Remove the following %ss from %s config?\n", entityType, scope)
-		for _, name := range names {
-			fmt.Fprintf(w, "  - %s\n", name)
-		}
-		fmt.Fprintf(w, "%s ", tui.Bracket("y/N"))
-	}
-
-	reader := bufio.NewReader(r)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return false, fmt.Errorf("reading input: %w", err)
-	}
-	input = strings.TrimSpace(strings.ToLower(input))
-	if input != "y" && input != "yes" {
-		fmt.Fprintln(w, "Cancelled.")
-		return false, nil
-	}
-	return true, nil
-}
-
 // scopeString returns "local" or "global" based on the flag.
 func scopeString(local bool) string {
 	if local {
@@ -646,17 +612,17 @@ func resolveAllMatchingNames[T any](items map[string]T, typeName, query string) 
 
 	terms := modules.ParseSearchPatterns(query)
 	if len(terms) == 0 {
-		return nil, fmt.Errorf("%s %q not found", typeName, query)
+		return nil, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
 	}
 
 	patterns, err := modules.CompileSearchTerms(terms)
 	if err != nil {
-		return nil, fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err)
+		return nil, notFoundError(fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err))
 	}
 
 	names := scoreAndSortNames(items, patterns)
 	if len(names) == 0 {
-		return nil, fmt.Errorf("%s %q not found", typeName, query)
+		return nil, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
 	}
 	return names, nil
 }
@@ -970,7 +936,7 @@ func promptSelectConfigMatchesFromList(w io.Writer, r io.Reader, query string, m
 // Returns empty string and nil if the user presses Enter without input.
 func promptSearchQuery(w io.Writer, r io.Reader) (string, error) {
 	if !isTerminal(r) {
-		return "", fmt.Errorf("query required in non-interactive mode")
+		return "", usageError(fmt.Errorf("query required in non-interactive mode"))
 	}
 	reader := bufio.NewReader(r)
 	for {
@@ -1006,22 +972,22 @@ func resolveInstalledName[T any](items map[string]T, typeName, query string) (st
 	// Regex-based search across map keys
 	terms := modules.ParseSearchPatterns(query)
 	if len(terms) == 0 {
-		return "", zero, fmt.Errorf("%s %q not found", typeName, query)
+		return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
 	}
 
 	patterns, err := modules.CompileSearchTerms(terms)
 	if err != nil {
-		return "", zero, fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err)
+		return "", zero, notFoundError(fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err))
 	}
 
 	names := scoreAndSortNames(items, patterns)
 	switch len(names) {
 	case 0:
-		return "", zero, fmt.Errorf("%s %q not found", typeName, query)
+		return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
 	case 1:
 		return names[0], items[names[0]], nil
 	default:
-		return "", zero, fmt.Errorf("ambiguous %s %q matches multiple entries: %s",
-			typeName, query, strings.Join(names, ", "))
+		return "", zero, usageError(fmt.Errorf("ambiguous %s %q matches multiple entries: %s",
+			typeName, query, strings.Join(names, ", ")))
 	}
 }

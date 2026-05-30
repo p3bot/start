@@ -54,17 +54,17 @@ To inspect strictly within --local, ensure the module is already installed.`,
 		RunE: runGet,
 	}
 
-	// Bind --global to flags.Global. AddCommand must run before
-	// MarkFlagsMutuallyExclusive so cobra's mergePersistentFlags() can see
-	// the inherited --local from root via VisitParents.
 	getCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	parent.AddCommand(getCmd)
-	getCmd.MarkFlagsMutuallyExclusive("local", "global")
 }
 
 // runGet resolves a module and writes its content to stdout.
 func runGet(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
+		return err
+	}
+
+	if err := validateScopeFlags(getFlags(cmd)); err != nil {
 		return err
 	}
 
@@ -128,7 +128,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 	items := cfg.Value.LookupPath(cue.ParsePath(cat.key))
 	item := items.LookupPath(cue.MakePath(cue.Str(match.Name)))
 	if !item.Exists() {
-		return fmt.Errorf("%s %q not found", strings.ToLower(cat.itemType), match.Name)
+		return notFoundError(fmt.Errorf("%s %q not found", strings.ToLower(cat.itemType), match.Name))
 	}
 
 	if cat.itemType == "Agent" {
@@ -143,7 +143,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, error) {
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
-			return "", fmt.Errorf("name required in non-interactive mode")
+			return "", usageError(fmt.Errorf("name required in non-interactive mode"))
 		}
 		return promptSearchQuery(stderr, stdin)
 	}
@@ -153,7 +153,7 @@ func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, 
 		return query, nil
 	}
 	if !isTerminal(stdin) {
-		return "", fmt.Errorf("query must be at least 3 characters")
+		return "", usageError(fmt.Errorf("query must be at least 3 characters"))
 	}
 	fmt.Fprintln(stderr, "Query must be at least 3 characters")
 	return promptSearchQuery(stderr, stdin)

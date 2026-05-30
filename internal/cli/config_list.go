@@ -219,7 +219,7 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			category = normalizeCategoryArg(args[0])
 			if category == "" {
-				return fmt.Errorf("unknown category %q: expected agent, role, context, or task", args[0])
+				return usageError(fmt.Errorf("unknown category %q: expected agent, role, context, or task", args[0]))
 			}
 		}
 		items, err := collectConfigListItems(scope, category)

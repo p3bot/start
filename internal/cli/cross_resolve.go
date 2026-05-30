@@ -176,7 +176,7 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 
 	switch len(allMatches) {
 	case 0:
-		return ModuleMatch{}, fmt.Errorf("no matches found for %q", query)
+		return ModuleMatch{}, notFoundError(fmt.Errorf("no matches found for %q", query))
 	case 1:
 		if err := r.installIfRegistry(allMatches[0]); err != nil {
 			return ModuleMatch{}, err
@@ -238,7 +238,7 @@ func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query stri
 			fmt.Fprintf(&b, "\n(showing %d of %d; refine search for more specific results)", len(shown), len(matches))
 		}
 		b.WriteString("\nSpecify exact name or run interactively")
-		return ModuleMatch{}, errors.New(b.String())
+		return ModuleMatch{}, usageError(errors.New(b.String()))
 	}
 
 	displayCount := min(len(matches), maxModuleResults)

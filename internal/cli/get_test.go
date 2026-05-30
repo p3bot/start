@@ -1194,21 +1194,20 @@ func TestGetGlobalScope(t *testing.T) {
 	})
 }
 
-// TestGetLocalAndGlobalMutuallyExclusive verifies that passing both --local
-// and --global returns the cobra mutual-exclusion error and writes nothing to
-// stdout. Cobra's parse-time validation (MarkFlagsMutuallyExclusive) rejects
-// the combination before runGet runs, so the cwd and HOME contents are
-// irrelevant on this path. The substring is the stable lead of cobra
-// v1.10.2's error format ("if any flags in the group [...] are set none of
-// the others can be; ... were all set") — the lead phrase survives a wider
-// range of minor wording changes than any mid-sentence fragment.
+// TestGetLocalAndGlobalMutuallyExclusive verifies that passing both --local and
+// --global is rejected as a usage error (exit 2) and writes nothing to stdout.
+// The check is explicit (validateScopeFlags) rather than Cobra's
+// MarkFlagsMutuallyExclusive, whose error is untyped and would map to exit 1.
 func TestGetLocalAndGlobalMutuallyExclusive(t *testing.T) {
 	stdout, _, err := runGetCmd(t, "--local", "--global", "any-name")
 	if err == nil {
 		t.Fatal("expected mutual-exclusion error when both --local and --global are set")
 	}
-	if !strings.Contains(err.Error(), "if any flags in the group") {
-		t.Errorf("error should match cobra's mutual-exclusion format, got: %v", err)
+	if ExitCodeFromError(err) != ExitUsage {
+		t.Errorf("mutual-exclusion should be a usage error (exit 2), got %d: %v", ExitCodeFromError(err), err)
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error should mention mutual exclusion, got: %v", err)
 	}
 	if stdout != "" {
 		t.Errorf("stdout should be empty on mutual-exclusion error, got: %q", stdout)

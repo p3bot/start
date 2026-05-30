@@ -127,17 +127,16 @@ To inspect strictly within --local, ensure the module is already installed.`,
 		RunE: runDescribe,
 	}
 
-	// Bind --global to flags.Global. AddCommand must run before
-	// MarkFlagsMutuallyExclusive so cobra's mergePersistentFlags() can see
-	// the inherited --local from root via VisitParents.
 	describeCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	parent.AddCommand(describeCmd)
-	describeCmd.MarkFlagsMutuallyExclusive("local", "global")
 }
 
 // runDescribe displays all configuration or searches for a specific item.
 func runDescribe(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
+		return err
+	}
+	if err := validateScopeFlags(getFlags(cmd)); err != nil {
 		return err
 	}
 
@@ -151,7 +150,7 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 		w := cmd.OutOrStdout()
 		stdin := cmd.InOrStdin()
 		if !isTerminal(stdin) {
-			return fmt.Errorf("query must be at least 3 characters")
+			return usageError(fmt.Errorf("query must be at least 3 characters"))
 		}
 		fmt.Fprintln(w, "Query must be at least 3 characters")
 		input, err := promptSearchQuery(w, stdin)
@@ -370,7 +369,7 @@ func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (
 
 		switch len(matches) {
 		case 0:
-			return DescribeResult{}, fmt.Errorf("%s %q not found", strings.ToLower(itemType), name)
+			return DescribeResult{}, notFoundError(fmt.Errorf("%s %q not found", strings.ToLower(itemType), name))
 		case 1:
 			resolvedName = matches[0]
 			item = items.LookupPath(cue.MakePath(cue.Str(resolvedName)))
@@ -413,9 +412,9 @@ func notifyScopeWidenedIfLocal(stderr io.Writer, flags *Flags, didInstall bool) 
 	printWarning(stderr, "--local widened to merged scope after registry install")
 }
 
-// scopeFromFlags derives the config scope from --local/--global. Cobra's
-// MarkFlagsMutuallyExclusive rejects the both-set combination at parse time
-// before RunE runs, so this helper does not return an error.
+// scopeFromFlags derives the config scope from --local/--global. Callers reject
+// the both-set combination first via validateScopeFlags, so this helper treats
+// --global as the winner without returning an error.
 func scopeFromFlags(flags *Flags) config.Scope {
 	if flags.Global {
 		return config.ScopeGlobal
@@ -424,6 +423,17 @@ func scopeFromFlags(flags *Flags) config.Scope {
 		return config.ScopeLocal
 	}
 	return config.ScopeMerged
+}
+
+// validateScopeFlags rejects the --local/--global both-set combination as a
+// usage error (exit 2). Done explicitly rather than via Cobra's
+// MarkFlagsMutuallyExclusive because Cobra's flag-group error is untyped and
+// bypasses FlagErrorFunc, so it would otherwise fall through to exit 1.
+func validateScopeFlags(flags *Flags) error {
+	if flags.Local && flags.Global {
+		return usageError(fmt.Errorf("--local and --global are mutually exclusive"))
+	}
+	return nil
 }
 
 // loadConfig loads CUE configuration for the given scope.

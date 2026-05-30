@@ -2,10 +2,12 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -15,15 +17,38 @@ import (
 
 // IsSilentError returns true if the error should not be printed to stderr.
 // Used by main.go to suppress output for errors that only set the exit code.
+//
+// The chain is walked with errors.As, mirroring ExitCodeFromError: main.go
+// classifies the same returned error with both helpers, so silence detection
+// must stay consistent with exit-code derivation even when a silenced error is
+// wrapped further up the chain.
 func IsSilentError(err error) bool {
 	type silent interface {
 		Silent() bool
 	}
-	if s, ok := err.(silent); ok {
+	var s silent
+	if errors.As(err, &s) {
 		return s.Silent()
 	}
 	return false
 }
+
+// silenced wraps err so main.go suppresses its own "Error:" stderr line — the
+// command has already reported the condition in its own words — while the
+// exit-code mapper still derives the process code from the wrapped chain.
+// Returns nil for nil.
+func silenced(err error) error {
+	if err == nil {
+		return nil
+	}
+	return silentErr{err: err}
+}
+
+type silentErr struct{ err error }
+
+func (e silentErr) Error() string { return e.err.Error() }
+func (e silentErr) Unwrap() error { return e.err }
+func (e silentErr) Silent() bool  { return true }
 
 // Build-time variables set via ldflags
 var (
@@ -75,10 +100,14 @@ Examples:
 			ctx := context.WithValue(cmd.Context(), flagsKey{}, flags)
 			cmd.SetContext(ctx)
 
-			// Apply --no-color flag to disable colors globally
-			if flags.NoColor {
-				color.NoColor = true
+			// Resolve colour to a single settled state from --color plus the
+			// environment, then drive fatih/color's global from it. An invalid
+			// value is a usage error (exit 2).
+			decorated, err := resolveColorMode(flags.Color, isTerminalWriter(cmd.OutOrStdout()))
+			if err != nil {
+				return err
 			}
+			color.NoColor = !decorated
 
 			// Debug implies verbose
 			if flags.Debug {
@@ -106,7 +135,7 @@ Examples:
 	cmd.PersistentFlags().BoolVarP(&flags.Quiet, "quiet", "q", false, "Suppress output")
 	cmd.PersistentFlags().BoolVar(&flags.Verbose, "verbose", false, "Detailed output")
 	cmd.PersistentFlags().BoolVar(&flags.Debug, "debug", false, "Debug output (implies --verbose)")
-	cmd.PersistentFlags().BoolVar(&flags.NoColor, "no-color", false, "Disable colored output")
+	cmd.PersistentFlags().StringVar(&flags.Color, "color", "auto", "Colour output: auto, always, never")
 	cmd.PersistentFlags().BoolVarP(&flags.Local, "local", "l", false, "Target local config (./.start/) instead of global")
 	cmd.PersistentFlags().BoolVar(&flags.NoRole, "no-role", false, "Skip role assignment")
 	cmd.MarkFlagsMutuallyExclusive("role", "no-role")
@@ -138,7 +167,36 @@ Examples:
 	// Replace default help command with one that includes agent-focused topic subcommands
 	addHelpCommand(cmd)
 
+	// Classify Cobra's own flag-parse and arg-count failures as usage errors
+	// (exit 2). FlagErrorFunc is inherited by every subcommand; wrapUsageArgs
+	// wraps each command's Args validator. Cobra's unknown-command error is
+	// produced earlier, during Find, and is intentionally left at exit 1 to
+	// match git/gh.
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return usageError(err)
+	})
+	wrapUsageArgs(cmd)
+
 	return cmd
+}
+
+// wrapUsageArgs wraps every command's positional-argument validator so an
+// arg-count failure carries the usage fault domain (exit 2) without changing
+// its message. A nil Args validator (Cobra's ArbitraryArgs default) never
+// errors, so it is left untouched.
+func wrapUsageArgs(cmd *cobra.Command) {
+	if cmd.Args != nil {
+		inner := cmd.Args
+		cmd.Args = func(c *cobra.Command, args []string) error {
+			if err := inner(c, args); err != nil {
+				return usageError(err)
+			}
+			return nil
+		}
+	}
+	for _, sub := range cmd.Commands() {
+		wrapUsageArgs(sub)
+	}
 }
 
 // Execute runs the root command. This is the main entry point for the CLI.
@@ -174,9 +232,60 @@ func noArgsOrHelp(cmd *cobra.Command, args []string) error {
 	return cobra.NoArgs(cmd, args)
 }
 
+// resolveColorMode collapses the --color value and the environment into a
+// single decoration decision. Precedence (Requirement 2): NO_COLOR (set to any
+// value) disables colour and wins even over --color=always; --color=never
+// disables; --color=always forces on; --color=auto enables only when stdout is
+// a TTY, with TERM=dumb disabling and FORCE_COLOR/CLICOLOR_FORCE forcing on
+// when stdout is not a TTY. An out-of-set value is a usage error (exit 2).
+func resolveColorMode(mode string, stdoutTTY bool) (decorated bool, err error) {
+	switch mode {
+	case "auto", "always", "never":
+	default:
+		return false, usageError(fmt.Errorf("invalid --color %q: must be one of auto, always, never", mode))
+	}
+
+	// NO_COLOR is absolute: it disables colour ahead of --color=always.
+	if os.Getenv("NO_COLOR") != "" {
+		return false, nil
+	}
+
+	switch mode {
+	case "never":
+		return false, nil
+	case "always":
+		return true, nil
+	default: // auto
+		if os.Getenv("TERM") == "dumb" {
+			return false, nil
+		}
+		force := envTruthy("FORCE_COLOR") || envTruthy("CLICOLOR_FORCE")
+		return stdoutTTY || force, nil
+	}
+}
+
+// envTruthy reports whether a cross-ecosystem boolean env var is on. Any
+// non-empty, non-falsy value is truthy, matching the de facto FORCE_COLOR /
+// CLICOLOR_FORCE convention so the same value behaves identically across tools.
+func envTruthy(name string) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
+	return v != "" && v != "0" && v != "false" && v != "no"
+}
+
 // isTerminal reports whether r is connected to a terminal.
 func isTerminal(r io.Reader) bool {
 	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(int(f.Fd()))
+}
+
+// isTerminalWriter reports whether w is connected to a terminal. Used for the
+// stdout TTY check that drives --color=auto; in tests the writer is a buffer,
+// so auto resolves to no colour unless FORCE_COLOR is set.
+func isTerminalWriter(w io.Writer) bool {
+	f, ok := w.(*os.File)
 	if !ok {
 		return false
 	}

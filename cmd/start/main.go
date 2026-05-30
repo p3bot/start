@@ -15,6 +15,6 @@ func main() {
 			red.Fprint(os.Stderr, "Error: ")
 			fmt.Fprintln(os.Stderr, err)
 		}
-		os.Exit(1)
+		os.Exit(cli.ExitCodeFromError(err))
 	}
 }

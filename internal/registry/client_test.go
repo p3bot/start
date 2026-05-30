@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"cuelabs.dev/go/oci/ociregistry"
 	"cuelang.org/go/mod/module"
 )
 
@@ -139,7 +140,8 @@ func TestFetch_RetryLogic(t *testing.T) {
 				fetchFunc: func(ctx context.Context, mv module.Version) (module.SourceLoc, error) {
 					callCount++
 					if callCount <= tt.failCount {
-						return module.SourceLoc{}, errors.New("network error")
+						// A transient (retryable) failure: only these are retried.
+						return module.SourceLoc{}, ociregistry.ErrTooManyRequests
 					}
 					return module.SourceLoc{
 						FS: &mockOSRootFS{root: "/cached/module"},
@@ -161,6 +163,22 @@ func TestFetch_RetryLogic(t *testing.T) {
 				return
 			}
 
+			// Exhausting retries must yield a typed transient FetchError that
+			// records how many attempts were spent, so the mapper classifies it
+			// as 75 and the message reports the attempt count.
+			if tt.wantErr {
+				var fe *FetchError
+				if !errors.As(err, &fe) {
+					t.Fatalf("Fetch() error = %v, want *FetchError", err)
+				}
+				if fe.Kind != FetchTransient {
+					t.Errorf("Fetch() error Kind = %v, want FetchTransient", fe.Kind)
+				}
+				if fe.Attempts != tt.retries {
+					t.Errorf("Fetch() error Attempts = %d, want %d", fe.Attempts, tt.retries)
+				}
+			}
+
 			if mock.fetchCalls != tt.wantFetchCalls {
 				t.Errorf("Fetch() called registry %d times, want %d", mock.fetchCalls, tt.wantFetchCalls)
 			}
@@ -177,7 +195,9 @@ func TestFetch_ContextCancellation(t *testing.T) {
 	t.Parallel()
 	mock := &mockRegistry{
 		fetchFunc: func(ctx context.Context, mv module.Version) (module.SourceLoc, error) {
-			return module.SourceLoc{}, errors.New("always fail")
+			// Transient so the retry loop engages and the cancel can interrupt
+			// it mid-backoff; an unclassifiable error would return immediately.
+			return module.SourceLoc{}, ociregistry.ErrTooManyRequests
 		},
 	}
 

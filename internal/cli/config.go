@@ -25,10 +25,6 @@ Use --local to target project-specific configuration.`,
 		RunE: runConfigList,
 	}
 
-	// Attach configCmd to root before registering subcommands. addConfigGetCommand
-	// calls MarkFlagsMutuallyExclusive("local", "global"); cobra's
-	// mergePersistentFlags() walks up the parent chain to find --local on root,
-	// so configCmd must already be attached when that runs.
 	parent.AddCommand(configCmd)
 
 	// Verb-first subcommands

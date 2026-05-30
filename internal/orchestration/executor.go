@@ -13,6 +13,7 @@ import (
 
 	"cuelang.org/go/cue"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/fault"
 )
 
 // quotedPlaceholderPattern detects placeholders that are incorrectly wrapped in quotes.
@@ -125,16 +126,19 @@ func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
 	// This avoids strings.Fields misparsing shell-quoted tokens when the
 	// bin path contains spaces (e.g. "/my tools/claude").
 	if bin == "" {
-		return "", fmt.Errorf(`agent 'bin' field is empty
+		return "", fault.UserConfig(fmt.Errorf(`agent 'bin' field is empty
 
-Check your agent's 'bin' field`)
+Check your agent's 'bin' field`))
 	}
 	if _, err := exec.LookPath(bin); err != nil {
-		return "", fmt.Errorf(`binary %q not found
+		// Binary absent from PATH is an environment the user must fix (78),
+		// not a missing config resource (3) — note the deliberately different
+		// domain from the "agent not found" config-absent case in ExtractAgent.
+		return "", fault.UserConfig(fmt.Errorf(`binary %q not found
 
   Error: %s
 
-Check your agent's 'bin' field or ensure the executable is in PATH`, cfg.Agent.Bin, err)
+Check your agent's 'bin' field or ensure the executable is in PATH`, cfg.Agent.Bin, err))
 	}
 
 	roleFile, err := ExpandTilde(cfg.RoleFile)
@@ -340,7 +344,9 @@ func escapeForShell(s string) string {
 func ExtractAgent(cfg cue.Value, name string) (Agent, error) {
 	agentVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyAgents)).LookupPath(cue.MakePath(cue.Str(name)))
 	if !agentVal.Exists() {
-		return Agent{}, fmt.Errorf("agent %q not found", name)
+		// Config-absent: the named agent is a missing resource (3), distinct
+		// from a configured agent whose binary is absent from PATH (78 above).
+		return Agent{}, fault.NotFound(fmt.Errorf("agent %q not found", name))
 	}
 
 	return extractAgentFields(agentVal, name), nil

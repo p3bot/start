@@ -187,7 +187,7 @@ start config add
 start config edit claude
 
 # Remove an item
-start config remove claude --yes
+start config remove claude --force
 
 # Show raw config fields for an item
 start config get claude
@@ -280,7 +280,7 @@ start list
 start update
 
 # Validate index and module version consistency (maintainer tool)
-start doctor validate --yes
+start doctor validate --force
 ```
 
 ### Configuration
@@ -313,7 +313,7 @@ start config get claude
 
 # Remove an item
 start config remove claude
-start config remove claude --yes
+start config remove claude --force
 
 # Reorder contexts or roles
 start config order
@@ -368,7 +368,7 @@ start completion fish
 | `--quiet`    | `-q`  | Suppress output                                         |
 | `--verbose`  |       | Detailed output                                         |
 | `--debug`    |       | Debug output (implies `--verbose`)                      |
-| `--no-color` |       | Disable coloured output                                 |
+| `--color`    |       | Colour output: `auto` (default), `always`, `never`      |
 | `--no-role`  |       | Skip role assignment (mutually exclusive with `--role`) |
 
 ### File Path Support

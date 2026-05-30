@@ -12,6 +12,7 @@ func TestHelp_Embedded(t *testing.T) {
 		"agentsHelp":    agentsHelp,
 		"templatesHelp": templatesHelp,
 		"configHelp":    configHelp,
+		"schemasHelp":   schemasHelp,
 	} {
 		if content == "" {
 			t.Errorf("%s is empty - embed failed", name)
@@ -66,11 +67,38 @@ func TestConfigHelp_ContainsExpectedContent(t *testing.T) {
 	}
 }
 
+func TestSchemasHelp_ContainsExpectedContent(t *testing.T) {
+	for _, want := range []string{
+		"# start JSON and Exit Code Reference",
+		"## JSON Contract",
+		"## Exit Codes",
+		"| 75 | Transient",
+		"| 78 | Config",
+		"| 2 | Usage",
+		"| 3 | Not found",
+		// Every --json-capable command must be documented.
+		"### list",
+		"### library",
+		"### search",
+		"### update",
+		"### doctor",
+		"### doctor validate",
+		"### config get",
+		"### config list",
+		"### config settings",
+	} {
+		if !strings.Contains(schemasHelp, want) {
+			t.Errorf("schemasHelp missing: %s", want)
+		}
+	}
+}
+
 func TestHelp_TokenEfficiency(t *testing.T) {
 	for name, content := range map[string]string{
 		"agentsHelp":    agentsHelp,
 		"templatesHelp": templatesHelp,
 		"configHelp":    configHelp,
+		"schemasHelp":   schemasHelp,
 	} {
 		words := len(strings.Fields(content))
 		estimated := int(float64(words) * 1.3)
@@ -93,11 +121,18 @@ func TestHelpCommands_Registered(t *testing.T) {
 		t.Fatal("help command not registered")
 	}
 
-	want := map[string]bool{"agents": false, "templates": false, "config": false}
+	want := map[string]bool{"agents": false, "templates": false, "config": false, "schemas": false}
+	var schemasCmd *cobra.Command
 	for _, c := range helpCmd.Commands() {
 		if _, ok := want[c.Name()]; ok {
 			want[c.Name()] = true
 		}
+		if c.Name() == "schemas" {
+			schemasCmd = c
+		}
+	}
+	if schemasCmd == nil || !schemasCmd.HasAlias("schema") {
+		t.Error("schemas topic should register the 'schema' alias")
 	}
 	for name, found := range want {
 		if !found {

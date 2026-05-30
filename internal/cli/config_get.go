@@ -37,17 +37,17 @@ commands operate on different data:
 	}
 	cmd.Flags().Bool("json", false, "Output as JSON")
 
-	// Bind --global to flags.Global. AddCommand must run before
-	// MarkFlagsMutuallyExclusive so cobra's mergePersistentFlags() can see
-	// the inherited --local from root via VisitParents.
 	cmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	parent.AddCommand(cmd)
-	cmd.MarkFlagsMutuallyExclusive("local", "global")
 }
 
 // runConfigGet is the handler for "config get [query]".
 func runConfigGet(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
+		return err
+	}
+
+	if err := validateScopeFlags(getFlags(cmd)); err != nil {
 		return err
 	}
 
@@ -58,10 +58,10 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 0 {
 		if jsonFlag {
-			return fmt.Errorf("query required with --json")
+			return usageError(fmt.Errorf("query required with --json"))
 		}
 		if !isTerminal(stdin) {
-			return fmt.Errorf("interactive get requires a terminal")
+			return usageError(fmt.Errorf("interactive get requires a terminal"))
 		}
 		return runConfigGetInteractive(stdin, stdout, scope)
 	}
@@ -79,7 +79,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 			}
 			return nil
 		}
-		return fmt.Errorf("%q not found", query)
+		return notFoundError(fmt.Errorf("%q not found", query))
 	}
 
 	if jsonFlag {
@@ -102,7 +102,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		selected = matches[0]
 	} else {
 		if !isTerminal(stdin) {
-			return fmt.Errorf("ambiguous query %q matches multiple items — use an exact name", query)
+			return usageError(fmt.Errorf("ambiguous query %q matches multiple items — use an exact name", query))
 		}
 		selected, err = promptSelectConfigMatch(stdout, stdin, query, matches)
 		if err != nil || selected.Category == "" {

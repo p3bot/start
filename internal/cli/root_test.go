@@ -2,11 +2,38 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 )
+
+// TestIsSilentError verifies silence detection walks the error chain, so it
+// stays consistent with the chain-aware ExitCodeFromError that main.go pairs it
+// with: a silenced error keeps its silence even when wrapped further up.
+func TestIsSilentError(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"plain error", errors.New("boom"), false},
+		{"silenced directly", silenced(errors.New("boom")), true},
+		{"silenced then wrapped", fmt.Errorf("context: %w", silenced(errors.New("boom"))), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsSilentError(tt.err); got != tt.want {
+				t.Errorf("IsSilentError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestExecute_Help(t *testing.T) {
 	t.Parallel()

@@ -67,10 +67,10 @@ func executeConfigSettings(cmd *cobra.Command, args []string) error {
 
 	if unset {
 		if len(args) == 0 {
-			return fmt.Errorf("--unset requires a setting key")
+			return usageError(fmt.Errorf("--unset requires a setting key"))
 		}
 		if len(args) > 1 {
-			return fmt.Errorf("--unset takes only one argument")
+			return usageError(fmt.Errorf("--unset takes only one argument"))
 		}
 		return unsetSetting(stdout, flags, args[0], flags.Local)
 	}
@@ -101,7 +101,7 @@ func executeConfigSettings(cmd *cobra.Command, args []string) error {
 		// Set setting
 		return setSetting(stdout, flags, args[0], args[1], flags.Local)
 	default:
-		return fmt.Errorf("too many arguments")
+		return usageError(fmt.Errorf("too many arguments"))
 	}
 }
 
@@ -180,7 +180,7 @@ func printSettingsEntries(w io.Writer, entries map[string]config.SettingEntry) {
 // showSetting displays a single setting value with its source.
 func showSetting(w io.Writer, key string, scope config.Scope) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
-		return fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString())
+		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))
 	}
 
 	paths, err := config.ResolvePaths("")
@@ -225,7 +225,7 @@ func listSettingsJSON(w io.Writer, scope config.Scope) error {
 // showSettingJSON outputs a single setting as a JSON object.
 func showSettingJSON(w io.Writer, key string, scope config.Scope) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
-		return fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString())
+		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))
 	}
 
 	paths, err := config.ResolvePaths("")
@@ -249,12 +249,12 @@ func showSettingJSON(w io.Writer, key string, scope config.Scope) error {
 func setSetting(w io.Writer, flags *Flags, key, value string, localOnly bool) error {
 	info, valid := config.SettingsRegistry[key]
 	if !valid {
-		return fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString())
+		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))
 	}
 
 	if info.Type == "int" {
 		if _, err := strconv.Atoi(value); err != nil {
-			return fmt.Errorf("setting %q requires an integer value", key)
+			return usageError(fmt.Errorf("setting %q requires an integer value", key))
 		}
 	}
 
@@ -405,7 +405,7 @@ func writeSettingsFile(path string, settings map[string]string) error {
 // unsetSetting removes a setting key from the settings file.
 func unsetSetting(w io.Writer, flags *Flags, key string, localOnly bool) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
-		return fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString())
+		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))
 	}
 
 	paths, err := config.ResolvePaths("")

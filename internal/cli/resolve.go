@@ -106,7 +106,7 @@ func (r *resolver) resolveModule(name, cueKey, category, displayType string, all
 		return "", err
 	}
 	if addr.HasPrefix && addr.Category != category {
-		return "", fmt.Errorf("%s expects category %q, got %q in %q", displayType, category, addr.Category, name)
+		return "", usageError(fmt.Errorf("%s expects category %q, got %q in %q", displayType, category, addr.Category, name))
 	}
 	name = addr.Name
 
@@ -269,7 +269,7 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 			return nil, err
 		}
 		if addr.HasPrefix && addr.Category != "contexts" {
-			return nil, fmt.Errorf("context expects category %q, got %q in %q", "contexts", addr.Category, term)
+			return nil, usageError(fmt.Errorf("context expects category %q, got %q in %q", "contexts", addr.Category, term))
 		}
 		term = addr.Name
 
@@ -528,7 +528,7 @@ func mergeModuleMatches(installed, reg []ModuleMatch) []ModuleMatch {
 func (r *resolver) selectSingleMatch(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
 	switch len(matches) {
 	case 0:
-		return ModuleMatch{}, fmt.Errorf("%s %q not found", categoryType, query)
+		return ModuleMatch{}, notFoundError(fmt.Errorf("%s %q not found", categoryType, query))
 	case 1:
 		return matches[0], nil
 	default:
@@ -546,8 +546,8 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		for _, m := range matches {
 			names = append(names, m.Name)
 		}
-		return ModuleMatch{}, fmt.Errorf("ambiguous %s %q matches: %s\nSpecify exact name or run interactively",
-			categoryType, query, strings.Join(names, ", "))
+		return ModuleMatch{}, usageError(fmt.Errorf("ambiguous %s %q matches: %s\nSpecify exact name or run interactively",
+			categoryType, query, strings.Join(names, ", ")))
 	}
 
 	displayCount := len(matches)

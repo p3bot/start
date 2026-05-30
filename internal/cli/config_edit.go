@@ -41,7 +41,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
-			return fmt.Errorf("interactive edit requires a terminal")
+			return usageError(fmt.Errorf("interactive edit requires a terminal"))
 		}
 		return runConfigEditInteractive(stdin, stdout, local)
 	}
@@ -54,7 +54,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(matches) == 0 {
-		return fmt.Errorf("%q not found", query)
+		return notFoundError(fmt.Errorf("%q not found", query))
 	}
 
 	var selected configMatch
@@ -62,7 +62,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 		selected = matches[0]
 	} else {
 		if !isTerminal(stdin) {
-			return fmt.Errorf("ambiguous query %q matches multiple items — use an exact name", query)
+			return usageError(fmt.Errorf("ambiguous query %q matches multiple items — use an exact name", query))
 		}
 		selected, err = promptSelectConfigMatch(stdout, stdin, query, matches)
 		if err != nil || selected.Category == "" {
@@ -71,7 +71,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	if !isTerminal(stdin) {
-		return fmt.Errorf("editing %q requires a terminal — use 'start config open' to edit the CUE file directly", selected.Name)
+		return usageError(fmt.Errorf("editing %q requires a terminal — use 'start config open' to edit the CUE file directly", selected.Name))
 	}
 
 	return configEditByCategory(stdin, stdout, local, selected.Category, selected.Name)

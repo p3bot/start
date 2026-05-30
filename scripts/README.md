@@ -10,19 +10,17 @@ Development and testing scripts for the `start` CLI.
 ./scripts/invoke-tests          # Run Go unit tests
 ```
 
-### CLI End-to-End Tests
-
-Manual CLI testing scripts from the p-012, p-013, p-014 testing projects.
+### Manual CLI Walkthrough
 
 ```bash
-./scripts/test-core-commands.sh        # p-012: start, prompt, task, global flags
-./scripts/test-config-commands.sh      # p-013: config, describe, merging, --local
-./scripts/test-supporting-commands.sh  # p-014: modules, doctor, completion
+./scripts/manual-test           # Step through every command interactively
+./scripts/manual-test --reset   # Clear saved progress and start over
 ```
 
-Options:
-- `-y, --yes` - Run without pausing between tests
-- `-h, --help` - Show usage
+Prints each command, copies it to the clipboard, and waits for Enter. Progress
+is saved between runs so you can resume where you left off. Covers the full
+current command surface: start, prompt, task, search, the config verb tree,
+describe, modules, doctor, and completion.
 
 ### Auto-Setup Wizard
 

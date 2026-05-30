@@ -255,6 +255,112 @@ func TestSearchTextOffline(t *testing.T) {
 	}
 }
 
+// captureStreams mirrors captureText but keeps stdout and stderr separate, so
+// tests can assert which stream carries what — the offline-search paths split
+// the friendly result/no-match line (stdout) from the outage warning (stderr).
+func captureStreams(t *testing.T, stub *registryStub, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+
+	cmd := NewRootCmd()
+	cmd.SetContext(WithProvider(cmd.Context(), func() (registry.Client, error) {
+		stub.providerCalls++
+		return stub, nil
+	}))
+
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(args)
+
+	err = cmd.Execute()
+	return out.String(), errBuf.String(), err
+}
+
+// TestSearchTextResultsOffline covers local matches + registry down in text
+// mode: the matches print and the command succeeds (exit 0), but the user is
+// warned the registry was unavailable so the result is known to be incomplete.
+func TestSearchTextResultsOffline(t *testing.T) {
+	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+	stub.SetFetchIndexError(transientFetchErr())
+
+	stdout, stderr, err := captureStreams(t, stub, "search", "assistant")
+	if err != nil {
+		t.Fatalf("local results should keep the command successful: %v", err)
+	}
+	if !strings.Contains(stdout, "assistant") {
+		t.Errorf("stdout should list the local match; got %q", stdout)
+	}
+	if !strings.Contains(stderr, "registry unavailable") {
+		t.Errorf("stderr should warn the registry was down; got %q", stderr)
+	}
+}
+
+// TestSearchTextEmptyOffline covers nothing-matched-anywhere + registry down in
+// text mode: the human gets a friendly no-matches line on stdout and the outage
+// warning on stderr, while the command still fails with the transient exit code
+// — silenced so main.go adds no duplicate Error: line.
+func TestSearchTextEmptyOffline(t *testing.T) {
+	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+	stub.SetFetchIndexError(transientFetchErr())
+
+	stdout, stderr, err := captureStreams(t, stub, "search", "zzznomatchanywhere")
+	if err == nil {
+		t.Fatal("expected a non-nil error so an agent retries instead of trusting an empty result")
+	}
+	if !IsSilentError(err) {
+		t.Errorf("error should be silenced to avoid a duplicate Error: line; got %v", err)
+	}
+	if got := ExitCodeFromError(err); got != ExitTransient {
+		t.Errorf("exit code = %d, want %d (transient)", got, ExitTransient)
+	}
+	if !strings.Contains(stdout, "No matches found") {
+		t.Errorf("stdout should carry the friendly no-matches line; got %q", stdout)
+	}
+	if !strings.Contains(stderr, "registry unavailable") {
+		t.Errorf("stderr should warn about the outage; got %q", stderr)
+	}
+}
+
+// TestSearchJSONEmptyOffline covers nothing-matched-anywhere + registry down
+// under --json: stdout must stay empty (the failure half of the JSON contract)
+// and the command fails with the transient code.
+func TestSearchJSONEmptyOffline(t *testing.T) {
+	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+	stub.SetFetchIndexError(transientFetchErr())
+
+	stdout, _, err := captureStreams(t, stub, "search", "zzznomatchanywhere", "--json")
+	if err == nil {
+		t.Fatal("expected a non-nil error under --json")
+	}
+	if got := ExitCodeFromError(err); got != ExitTransient {
+		t.Errorf("exit code = %d, want %d (transient)", got, ExitTransient)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("--json failure must leave stdout empty; got %q", stdout)
+	}
+}
+
+// TestSearchJSONResultsOffline covers local matches + registry down under
+// --json: the command succeeds (exit 0) and writes the results to stdout, but
+// the outage is surfaced on stderr so the consumer can tell the set is
+// incomplete. Without the stderr warning a partial result would be
+// indistinguishable from a complete one.
+func TestSearchJSONResultsOffline(t *testing.T) {
+	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+	stub.SetFetchIndexError(transientFetchErr())
+
+	stdout, stderr, err := captureStreams(t, stub, "search", "assistant", "--json")
+	if err != nil {
+		t.Fatalf("local results should keep the command successful: %v", err)
+	}
+	if !strings.Contains(stdout, "assistant") {
+		t.Errorf("stdout should carry the local match JSON; got %q", stdout)
+	}
+	if !strings.Contains(stderr, "registry unavailable") {
+		t.Errorf("stderr should warn the registry was down so the set is known incomplete; got %q", stderr)
+	}
+}
+
 // --- update (apply paths) --------------------------------------------------
 
 // TestUpdateAppliesUpgradeOffline drives the full update apply path offline:

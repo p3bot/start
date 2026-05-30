@@ -109,8 +109,8 @@ Exit codes:
 		Args: noArgsOrHelp,
 		RunE: runDoctorValidate,
 	}
-	cmd.Flags().Bool("yes", false, "Confirm intent to run network checks")
-	_ = cmd.Flags().MarkHidden("yes")
+	cmd.Flags().Bool("force", false, "Confirm intent to run network checks")
+	_ = cmd.Flags().MarkHidden("force")
 	cmd.Flags().Bool("json", false, "Output as JSON")
 	parent.AddCommand(cmd)
 }
@@ -126,9 +126,9 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done() // safety net: clears any active progress line on early return
 
-	// Gate: --yes is required to prevent casual traffic against public infrastructure.
-	yes, _ := cmd.Flags().GetBool("yes")
-	if !yes {
+	// Gate: --force is required to prevent casual traffic against public infrastructure.
+	force, _ := cmd.Flags().GetBool("force")
+	if !force {
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, "The 'start doctor validate' command is a maintainer tool for checking")
 		fmt.Fprintln(w, "consistency between git tags, the CUE registry, and the modules index.")
@@ -141,7 +141,7 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(w)
 		tui.ColorHiYellow.Fprintln(w, "A freely accessible public registry is a shared resource — don't be that person.")
 		fmt.Fprintln(w)
-		tui.ColorDim.Fprintln(w, "Run with --yes to proceed.")
+		tui.ColorDim.Fprintln(w, "Run with --force to proceed.")
 		return nil
 	}
 
@@ -275,7 +275,7 @@ func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	}
 	// Require and strip /index suffix
 	if !strings.HasSuffix(path, "/index") {
-		return "", fmt.Errorf("doctor validate requires an index path ending with /index (got %q); custom subpaths are not supported", path)
+		return "", usageError(fmt.Errorf("doctor validate requires an index path ending with /index (got %q); custom subpaths are not supported", path))
 	}
 	path = strings.TrimSuffix(path, "/index")
 	return "https://" + path, nil

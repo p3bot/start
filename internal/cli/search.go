@@ -64,12 +64,12 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	terms := modules.ParseSearchPatterns(query)
 	if err := modules.ValidateSearchQuery(terms, tags); err != nil {
 		if jsonFlag {
-			return err
+			return usageError(err)
 		}
 		w := cmd.OutOrStdout()
 		stdin := cmd.InOrStdin()
 		if !isTerminal(stdin) {
-			return err
+			return usageError(err)
 		}
 		if query != "" {
 			fmt.Fprintln(w, "Query must be at least 3 characters")
@@ -88,7 +88,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	// Validate regex patterns before searching
 	if len(terms) > 0 {
 		if _, err := modules.CompileSearchTerms(terms); err != nil {
-			return err
+			return usageError(err)
 		}
 	}
 
@@ -188,6 +188,27 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	displayQuery := query
+	if displayQuery == "" && len(tags) > 0 {
+		displayQuery = "--tag " + strings.Join(tags, ",")
+	}
+
+	// Nothing matched anywhere while the registry was unreachable: the empty
+	// result is not authoritative, so the command fails with the transient code
+	// and an agent retries instead of trusting a false "no matches". In --json
+	// mode stdout must stay empty, so return the raw error. In text mode the
+	// human still gets the friendly "no matches" line and the same outage
+	// warning the results path shows; the error is silenced so main.go adds no
+	// duplicate "Error:" line while the mapper still derives exit 75.
+	if len(sections) == 0 && registryErr != nil {
+		if jsonFlag {
+			return registryErr
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "No matches found for %q\n", displayQuery)
+		printWarning(cmd.ErrOrStderr(), "registry unavailable: %v", registryErr)
+		return silenced(registryErr)
+	}
+
 	if jsonFlag {
 		if sections == nil {
 			sections = []searchSection{}
@@ -195,19 +216,21 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		if err := writeJSON(cmd.OutOrStdout(), sections); err != nil {
 			return fmt.Errorf("marshalling search results: %w", err)
 		}
+		// Partial results during a registry outage are not authoritative: the
+		// registry portion is missing. The empty case already fails with the
+		// transient code above; here we have local matches, so the command
+		// still succeeds with exit 0, but the outage is surfaced on stderr (as
+		// the text path does) so a --json consumer can tell the set is
+		// incomplete. stderr carries diagnostics without breaking the
+		// stdout-JSON contract.
+		if registryErr != nil {
+			printWarning(cmd.ErrOrStderr(), "registry unavailable: %v", registryErr)
+		}
 		return nil
-	}
-
-	displayQuery := query
-	if displayQuery == "" && len(tags) > 0 {
-		displayQuery = "--tag " + strings.Join(tags, ",")
 	}
 
 	if len(sections) == 0 {
 		fmt.Fprintf(cmd.OutOrStdout(), "No matches found for %q\n", displayQuery)
-		if registryErr != nil {
-			printWarning(cmd.ErrOrStderr(), "registry unavailable: %v", registryErr)
-		}
 		return nil
 	}
 

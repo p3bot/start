@@ -11,6 +11,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	cueformat "cuelang.org/go/cue/format"
 	"cuelang.org/go/cue/load"
+	"github.com/start-cli/start/internal/fault"
 )
 
 // ErrNoCUEFiles is returned when no CUE files are found in the provided directories.
@@ -70,7 +71,7 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 			return result, fmt.Errorf("checking directory %s: %w", dir, err)
 		}
 		if !info.IsDir() {
-			return result, fmt.Errorf("%s is not a directory", dir)
+			return result, fault.UserConfig(fmt.Errorf("%s is not a directory", dir))
 		}
 
 		// Check if directory contains any CUE files
@@ -295,7 +296,7 @@ func (l *Loader) LoadSingle(dir string) (cue.Value, error) {
 		return cue.Value{}, fmt.Errorf("checking directory: %w", err)
 	}
 	if !info.IsDir() {
-		return cue.Value{}, fmt.Errorf("%s is not a directory", dir)
+		return cue.Value{}, fault.UserConfig(fmt.Errorf("%s is not a directory", dir))
 	}
 
 	hasCUE, err := HasCUEFiles(dir)
@@ -326,12 +327,15 @@ func (l *Loader) loadDir(dir string) (cue.Value, error) {
 
 	inst := insts[0]
 	if inst.Err != nil {
-		return cue.Value{}, fmt.Errorf("loading instance: %w", inst.Err)
+		// User-fault: their CUE files failed to load. Tagged so the mapper
+		// returns 78, distinct from the internal merged-source compile error
+		// in mergeWithReplacement which is our bug and stays general (1).
+		return cue.Value{}, fault.UserConfig(fmt.Errorf("loading instance: %w", inst.Err))
 	}
 
 	v := l.ctx.BuildInstance(inst)
 	if err := v.Err(); err != nil {
-		return cue.Value{}, fmt.Errorf("building instance: %w", err)
+		return cue.Value{}, fault.UserConfig(fmt.Errorf("building instance: %w", err))
 	}
 
 	return v, nil

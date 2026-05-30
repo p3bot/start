@@ -9,6 +9,7 @@ import (
 
 	"cuelang.org/go/cue"
 	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/start-cli/start/internal/fault"
 	"github.com/start-cli/start/internal/temp"
 	"golang.org/x/mod/semver"
 )
@@ -426,7 +427,7 @@ func (c *Composer) selectContexts(cfg cue.Value, selection ContextSelection) ([]
 func (c *Composer) resolveContext(cfg cue.Value, name string) (ProcessResult, error) {
 	ctxVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyContexts)).LookupPath(cue.MakePath(cue.Str(name)))
 	if !ctxVal.Exists() {
-		return ProcessResult{}, fmt.Errorf("context not found")
+		return ProcessResult{}, fault.NotFound(fmt.Errorf("context not found"))
 	}
 
 	fields := ExtractUTDFields(ctxVal)
@@ -480,7 +481,7 @@ func (c *Composer) resolveContext(cfg cue.Value, name string) (ProcessResult, er
 func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath string, err error) {
 	roleVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyRoles)).LookupPath(cue.MakePath(cue.Str(name)))
 	if !roleVal.Exists() {
-		return "", "", fmt.Errorf("role not found")
+		return "", "", fault.NotFound(fmt.Errorf("role not found"))
 	}
 
 	fields := ExtractUTDFields(roleVal)
@@ -676,7 +677,7 @@ func ExtractUTDFields(v cue.Value) UTDFields {
 func (c *Composer) ResolveTask(cfg cue.Value, name, instructions string) (ProcessResult, error) {
 	taskVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyTasks)).LookupPath(cue.MakePath(cue.Str(name)))
 	if !taskVal.Exists() {
-		return ProcessResult{}, fmt.Errorf("task %q not found", name)
+		return ProcessResult{}, fault.NotFound(fmt.Errorf("task %q not found", name))
 	}
 
 	fields := ExtractUTDFields(taskVal)

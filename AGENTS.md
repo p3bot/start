@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 Continue by reading the active project.
 
-Active Project: 02-project-cli-contract-alignment.md
+Active Project: 03-project-none-sentinel-for-role-and-context.md
 
 When a project is complete, update this file to point to the next active project
 
@@ -52,6 +52,7 @@ start config list               # List configuration entries
 start search <term>             # Search installed config and the module registry
 start doctor                    # Diagnose installation and configuration
 start doctor validate           # Maintainer check: index/registry/tag consistency
+start help schemas              # --json output shapes and exit-code reference
 start prompt                    # Compose and preview a prompt
 echo "summarise" | start        # Pipe text as a one-shot prompt (required contexts only)
 echo "..." | start prompt       # Pipe text to fill prompt's [text] arg
@@ -70,7 +71,7 @@ echo "..." | start task review  # Pipe text to fill task's [instructions] arg
 | `--quiet` | `-q` | Suppress non-essential output |
 | `--verbose` | | Show detailed output |
 | `--debug` | | Debug output (implies --verbose) |
-| `--no-color` | | Disable colored output |
+| `--color` | | Colour output: `auto` (default), `always`, `never` |
 | `--local` | `-l` | Target local config |
 | `--no-role` | | Skip role assignment (mutually exclusive with --role) |
 

@@ -195,7 +195,7 @@ func TestConfigRemove_Agent(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"config", "remove", "gemini", "--yes"})
+	cmd.SetArgs([]string{"config", "remove", "gemini", "--force"})
 
 	err := cmd.Execute()
 	if err != nil {

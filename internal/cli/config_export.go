@@ -66,7 +66,7 @@ func exportSingleCategory(w io.Writer, local bool, category string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("configuration file not found: %s", path)
+			return notFoundError(fmt.Errorf("configuration file not found: %s", path))
 		}
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
