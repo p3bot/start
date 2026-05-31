@@ -369,7 +369,8 @@ start completion fish
 | `--verbose`  |       | Detailed output                                         |
 | `--debug`    |       | Debug output (implies `--verbose`)                      |
 | `--color`    |       | Colour output: `auto` (default), `always`, `never`      |
-| `--no-role`  |       | Skip role assignment (mutually exclusive with `--role`) |
+
+`--role none` skips role assignment entirely. `--context none` suppresses the contexts that load automatically (required and default): used alone it yields zero contexts, and combined with selectors it keeps only those — `--context none,project` drops the required/default contexts and loads just `project`. The token is case-insensitive and accepts the aliases `nil`, `off`, and `0`.
 
 ### File Path Support
 

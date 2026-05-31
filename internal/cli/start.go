@@ -38,7 +38,15 @@ type Flags struct {
 	Color   string
 	Local   bool
 	Global  bool
-	NoRole  bool
+
+	// NoRole and NoImplicitContexts are derived skip state, set by none-sentinel
+	// normalisation in PersistentPreRunE rather than bound to a flag. NoRole
+	// skips role assignment. NoImplicitContexts suppresses the contexts that
+	// load automatically (required and default), leaving only the explicit
+	// selectors in Context — so "--context none" yields zero contexts and
+	// "--context none,foo" yields just foo.
+	NoRole             bool
+	NoImplicitContexts bool
 }
 
 // getFlags retrieves Flags from the command context.
@@ -316,6 +324,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 // executeStart is the shared execution logic for start commands.
 func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selection orchestration.ContextSelection, customText string) error {
+	if flags.NoImplicitContexts {
+		// Drop the auto-loaded required and default contexts; any explicit tag
+		// or path selectors in selection.Tags still apply.
+		selection.IncludeRequired = false
+		selection.IncludeDefaults = false
+	}
+
 	cfg, workingDir, err := loadExecutionConfig(stdout, stderr, stdin, flags)
 	if err != nil {
 		return err
@@ -370,7 +385,7 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 	var result orchestration.ComposeResult
 	var composeErr error
 	if flags.NoRole {
-		debugf(stderr, flags, dbgRole, "Skipping role (--no-role)")
+		debugf(stderr, flags, dbgRole, "Skipping role (--role none)")
 		result, composeErr = env.Composer.Compose(env.Cfg.Value, selection, customText)
 	} else {
 		result, composeErr = env.Composer.ComposeWithRole(env.Cfg.Value, selection, roleName, customText)

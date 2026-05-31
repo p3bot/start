@@ -8,11 +8,11 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 ### Active Project
 
-Continue by reading the active project.
+When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: 03-project-none-sentinel-for-role-and-context.md
+Active Project: none
 
-When a project is complete, update this file to point to the next active project
+When a project is complete, update this file to point to the next active project (or `none` if nothing is queued)
 
 ## Build & Test
 
@@ -64,16 +64,15 @@ echo "..." | start task review  # Pipe text to fill task's [instructions] arg
 | Flag | Short | Description |
 | ---- | ----- | ----------- |
 | `--agent` | `-a` | Override the configured agent |
-| `--role` | `-r` | Override role (config name or file path) |
+| `--role` | `-r` | Override role (config name or file path); `none` skips role assignment |
 | `--model` | `-m` | Override the model |
-| `--context` | `-c` | Select contexts (tags or file paths, repeatable) |
+| `--context` | `-c` | Select contexts (tags or file paths, repeatable); `none` drops auto-loaded required/default contexts (`none,foo` keeps only foo) |
 | `--dry-run` | | Preview execution without running |
 | `--quiet` | `-q` | Suppress non-essential output |
 | `--verbose` | | Show detailed output |
 | `--debug` | | Debug output (implies --verbose) |
 | `--color` | | Colour output: `auto` (default), `always`, `never` |
 | `--local` | `-l` | Target local config |
-| `--no-role` | | Skip role assignment (mutually exclusive with --role) |
 
 ## Architecture
 

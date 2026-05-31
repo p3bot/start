@@ -343,11 +343,14 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		debugf(stderr, flags, dbgRole, "Selected %q (--role flag)", flags.Role)
 	}
 
-	// Tasks load required contexts only.
+	// Tasks load required contexts only, unless --context none suppresses them.
 	selection := orchestration.ContextSelection{
 		IncludeRequired: true,
 		IncludeDefaults: false,
 		Tags:            contextTags,
+	}
+	if flags.NoImplicitContexts {
+		selection.IncludeRequired = false
 	}
 
 	debugf(stderr, flags, dbgContext, "Selection: required=%t, defaults=%t, tags=%v",
@@ -356,7 +359,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	var composeResult orchestration.ComposeResult
 	var composeErr error
 	if flags.NoRole {
-		debugf(stderr, flags, dbgRole, "Skipping role (--no-role)")
+		debugf(stderr, flags, dbgRole, "Skipping role (--role none)")
 		composeResult, composeErr = env.Composer.Compose(env.Cfg.Value, selection, taskResult.Content)
 	} else {
 		composeResult, composeErr = env.Composer.ComposeWithRole(env.Cfg.Value, selection, roleName, taskResult.Content)

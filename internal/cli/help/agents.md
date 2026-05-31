@@ -18,7 +18,9 @@ start --role go-expert
 start --role go-expert --model sonnet
 start --agent gemini --model flash
 start --context project,readme
-start --no-role
+start --role none
+start --context none
+start --context none,project
 start --dry-run
 start prompt "Fix the bug in main.go"
 start prompt ./notes.md

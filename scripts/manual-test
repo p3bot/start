@@ -206,8 +206,8 @@ cmd "start" "--role go-expert --dry-run" \
 cmd "start" "--role nonexistent --dry-run (expect error)" \
     "./start --role nonexistent-role-xyz --dry-run"
 
-cmd "start" "--role and --no-role (expect error)" \
-    "./start --role go-expert --no-role --dry-run"
+cmd "start" "--no-role removed (expect unknown-flag error)" \
+    "./start --no-role --dry-run"
 
 cmd "start" "--context default --dry-run" \
     "./start -c default --dry-run"
@@ -215,8 +215,14 @@ cmd "start" "--context default --dry-run" \
 cmd "start" "--context nonexistent (expect warning)" \
     "./start -c nonexistent-tag-xyz --dry-run"
 
-cmd "start" "--no-role --dry-run" \
-    "./start --no-role --dry-run"
+cmd "start" "--role none --dry-run" \
+    "./start --role none --dry-run"
+
+cmd "start" "--context none --dry-run" \
+    "./start --context none --dry-run"
+
+cmd "start" "--context none,default --dry-run (reset, keep default)" \
+    "./start --context none,default --dry-run"
 
 # --------------------------------------------------------------------------
 section "3. Prompt Command"
@@ -234,8 +240,8 @@ cmd "prompt" "prompt --debug --dry-run" \
 cmd "prompt" "prompt with file path --dry-run" \
     "./start prompt ./README.md --dry-run"
 
-cmd "prompt" "prompt --no-role --dry-run" \
-    "./start prompt 'Hello world' --no-role --dry-run"
+cmd "prompt" "prompt --role none --dry-run" \
+    "./start prompt 'Hello world' --role none --dry-run"
 
 cmd "prompt" "prompt --role go-expert --dry-run" \
     "./start prompt 'Hello world' --role go-expert --dry-run"
@@ -259,8 +265,8 @@ cmd "task" "task with instructions --dry-run" \
 cmd "task" "task --tag filter" \
     "./start task debug --tag golang"
 
-cmd "task" "task --no-role --dry-run" \
-    "./start task golang/debug --no-role --dry-run"
+cmd "task" "task --role none --dry-run" \
+    "./start task golang/debug --role none --dry-run"
 
 # --------------------------------------------------------------------------
 section "5. Error Handling"

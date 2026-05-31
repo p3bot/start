@@ -103,6 +103,19 @@ Examples:
 			if flags.Debug {
 				flags.Verbose = true
 			}
+
+			// Normalise the none sentinel once per invocation so downstream
+			// code drives off derived skip state, never per-call-site token
+			// parsing. Matched before any path/name resolution so a value like
+			// "none" is the sentinel, never a "./none.md"-style path.
+			if isNoneToken(flags.Role) {
+				flags.NoRole = true
+				flags.Role = ""
+			}
+			if skipContext, rest := resolveContextSkip(flags.Context); skipContext {
+				flags.NoImplicitContexts = true
+				flags.Context = rest
+			}
 			return nil
 		},
 	}
@@ -115,17 +128,15 @@ Examples:
 	cmd.SetVersionTemplate(versionTemplate)
 
 	cmd.PersistentFlags().StringVarP(&flags.Agent, "agent", "a", "", "Override agent selection")
-	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name or file path)")
+	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name or file path); 'none' skips role assignment (also: nil, off, 0)")
 	cmd.PersistentFlags().StringVarP(&flags.Model, "model", "m", "", "Override model selection")
-	cmd.PersistentFlags().StringSliceVarP(&flags.Context, "context", "c", nil, "Select contexts (tags or file paths)")
+	cmd.PersistentFlags().StringSliceVarP(&flags.Context, "context", "c", nil, "Select contexts (tags or file paths); 'none' drops auto-loaded contexts (also: nil, off, 0)")
 	cmd.PersistentFlags().BoolVar(&flags.DryRun, "dry-run", false, "Preview execution without launching agent")
 	cmd.PersistentFlags().BoolVarP(&flags.Quiet, "quiet", "q", false, "Suppress output")
 	cmd.PersistentFlags().BoolVar(&flags.Verbose, "verbose", false, "Detailed output")
 	cmd.PersistentFlags().BoolVar(&flags.Debug, "debug", false, "Debug output (implies --verbose)")
 	cmd.PersistentFlags().StringVar(&flags.Color, "color", "auto", "Colour output: auto, always, never")
 	cmd.PersistentFlags().BoolVarP(&flags.Local, "local", "l", false, "Target local config (./.start/) instead of global")
-	cmd.PersistentFlags().BoolVar(&flags.NoRole, "no-role", false, "Skip role assignment")
-	cmd.MarkFlagsMutuallyExclusive("role", "no-role")
 
 	cmd.RunE = runStart
 

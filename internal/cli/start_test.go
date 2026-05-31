@@ -212,9 +212,9 @@ func TestExecuteTask_NoRole(t *testing.T) {
 		t.Errorf("Expected instructions in output")
 	}
 
-	// Task has role: "assistant" configured, which --no-role must suppress.
+	// Task has role: "assistant" configured, which the role-skip state must suppress.
 	if strings.Contains(output, "You are a helpful assistant") {
-		t.Errorf("Expected no role content with --no-role, got:\n%s", output)
+		t.Errorf("Expected no role content with role skip, got:\n%s", output)
 	}
 }
 
@@ -2365,7 +2365,7 @@ func TestRunStart_PipedStdin(t *testing.T) {
 }
 
 // TestRunStart_PipedStdinHonoursFlags verifies that persistent flags
-// (--context, --no-role) are still honoured when stdin is piped.
+// (--context, --role none) are still honoured when stdin is piped.
 func TestRunStart_PipedStdinHonoursFlags(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
@@ -2376,7 +2376,7 @@ func TestRunStart_PipedStdinHonoursFlags(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader("review this"))
-	cmd.SetArgs([]string{"--dry-run", "--no-role", "--context", "project"})
+	cmd.SetArgs([]string{"--dry-run", "--role", "none", "--context", "project"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
@@ -2388,9 +2388,9 @@ func TestRunStart_PipedStdinHonoursFlags(t *testing.T) {
 		t.Errorf("piped text missing from output:\n%s", output)
 	}
 
-	// --no-role should suppress role content.
+	// --role none should suppress role content.
 	if strings.Contains(output, "You are a helpful assistant") {
-		t.Errorf("--no-role should suppress role content, got:\n%s", output)
+		t.Errorf("--role none should suppress role content, got:\n%s", output)
 	}
 
 	// --context project should load the default context even though piped
@@ -2496,7 +2496,7 @@ func TestRunTask_ArgWinsOverPipedStdin(t *testing.T) {
 }
 
 // TestRunTask_PipedStdinHonoursFlags verifies that persistent flags
-// (--no-role, --context) are still honoured when stdin is piped to
+// (--role none, --context) are still honoured when stdin is piped to
 // `start task`. Parallel to TestRunStart_PipedStdinHonoursFlags.
 func TestRunTask_PipedStdinHonoursFlags(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
@@ -2508,7 +2508,7 @@ func TestRunTask_PipedStdinHonoursFlags(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetIn(strings.NewReader("piped instructions"))
-	cmd.SetArgs([]string{"task", "test-task", "--dry-run", "--no-role", "--context", "project"})
+	cmd.SetArgs([]string{"task", "test-task", "--dry-run", "--role", "none", "--context", "project"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
@@ -2520,9 +2520,9 @@ func TestRunTask_PipedStdinHonoursFlags(t *testing.T) {
 		t.Errorf("piped instructions missing from output:\n%s", output)
 	}
 
-	// --no-role should suppress role content (task has role: "assistant" configured).
+	// --role none should suppress role content (task has role: "assistant" configured).
 	if strings.Contains(output, "You are a helpful assistant") {
-		t.Errorf("--no-role should suppress role content, got:\n%s", output)
+		t.Errorf("--role none should suppress role content, got:\n%s", output)
 	}
 
 	// --context project should load the default context even though tasks
