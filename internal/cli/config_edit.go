@@ -12,7 +12,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigEditCommand adds the "config edit [query]" command.
 func addConfigEditCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "edit [query]",
@@ -29,7 +28,6 @@ Always interactive — use 'start config open' to edit CUE files directly.`,
 	parent.AddCommand(cmd)
 }
 
-// runConfigEdit is the handler for "config edit [query]".
 func runConfigEdit(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -77,7 +75,6 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	return configEditByCategory(stdin, stdout, local, selected.Category, selected.Name)
 }
 
-// runConfigEditInteractive prompts for category then item, then edits.
 func runConfigEditInteractive(stdin io.Reader, stdout io.Writer, local bool) error {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "Edit:")
@@ -105,7 +102,6 @@ func runConfigEditInteractive(stdin io.Reader, stdout io.Writer, local bool) err
 	return configEditByCategory(stdin, stdout, local, singular, selected)
 }
 
-// configEditByCategory dispatches to the appropriate category edit function.
 func configEditByCategory(stdin io.Reader, stdout io.Writer, local bool, category, name string) error {
 	switch category {
 	case "agent":
@@ -120,7 +116,6 @@ func configEditByCategory(stdin io.Reader, stdout io.Writer, local bool, categor
 	return fmt.Errorf("unknown category %q", category)
 }
 
-// configAgentEdit is the inner edit logic for agents.
 func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -202,7 +197,6 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 	return nil
 }
 
-// configRoleEdit is the inner edit logic for roles.
 func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -306,7 +300,6 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 	return nil
 }
 
-// configContextEdit is the inner edit logic for contexts.
 func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name string) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -419,7 +412,6 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 	return nil
 }
 
-// configTaskEdit is the inner edit logic for tasks.
 func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {

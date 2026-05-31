@@ -1,9 +1,8 @@
 // Package cache manages CLI cache files in the XDG cache directory.
 //
-// The cache stores metadata about the registry index (version and fetch timestamp)
-// so that commands can reuse a known-good canonical version without a network call.
-// The actual index data is cached by CUE's module cache; this package only tracks
-// which version was last fetched and when.
+// It tracks only the registry index version and fetch timestamp so commands can
+// reuse a known-good version without a network call; the index data itself is
+// cached by CUE's module cache.
 package cache
 
 import (
@@ -15,10 +14,8 @@ import (
 )
 
 const (
-	// cacheDir is the subdirectory name under the XDG cache base.
 	cacheDir = "start"
 
-	// cacheFile is the filename for the cache.
 	cacheFile = "cache.cue"
 
 	// DefaultMaxAge is the default staleness threshold for the index cache.
@@ -46,7 +43,6 @@ func Dir() (string, error) {
 }
 
 // ReadIndex reads the index cache from disk.
-// Returns an error if the file is missing or malformed.
 func ReadIndex() (IndexCache, error) {
 	dir, err := Dir()
 	if err != nil {
@@ -62,8 +58,7 @@ func ReadIndex() (IndexCache, error) {
 }
 
 // WriteIndex writes the index version and current timestamp to the cache file.
-// Creates the cache directory if needed. Errors are returned but callers
-// should treat them as non-fatal (best-effort).
+// Callers should treat errors as non-fatal (best-effort).
 func WriteIndex(version string) error {
 	dir, err := Dir()
 	if err != nil {
@@ -78,13 +73,11 @@ func WriteIndex(version string) error {
 	return os.WriteFile(filepath.Join(dir, cacheFile), content, 0o644)
 }
 
-// formatCacheFile produces the CUE content for the cache file.
 func formatCacheFile(version string, updated time.Time) []byte {
 	return fmt.Appendf(nil, "index_updated: %q\nindex_version: %q\n",
 		updated.Format(time.RFC3339), version)
 }
 
-// parseCacheFile extracts IndexCache from raw CUE cache file bytes.
 func parseCacheFile(data []byte) (IndexCache, error) {
 	fields, err := parseSimpleCUE(data)
 	if err != nil {
@@ -111,10 +104,8 @@ func parseCacheFile(data []byte) (IndexCache, error) {
 	}, nil
 }
 
-// parseSimpleCUE parses a minimal CUE file with only top-level string fields.
-// Format: key: "value"\n
-// This avoids importing the full CUE library for two simple fields.
-// Note: does not handle escape sequences; values must not contain \ or ".
+// parseSimpleCUE parses top-level `key: "value"` fields, avoiding the full CUE
+// library for two fields. Does not handle escapes; values must not contain \ or ".
 func parseSimpleCUE(data []byte) (map[string]string, error) {
 	fields := make(map[string]string)
 	line := 0
@@ -124,7 +115,6 @@ func parseSimpleCUE(data []byte) (map[string]string, error) {
 	for i < len(src) {
 		line++
 
-		// Find end of line.
 		eol := i
 		for eol < len(src) && src[eol] != '\n' {
 			eol++
@@ -135,12 +125,10 @@ func parseSimpleCUE(data []byte) (map[string]string, error) {
 		}
 		i = eol
 
-		// Skip empty lines.
 		if len(text) == 0 {
 			continue
 		}
 
-		// Find colon separator.
 		colonIdx := -1
 		for j := 0; j < len(text); j++ {
 			if text[j] == ':' {
@@ -155,7 +143,6 @@ func parseSimpleCUE(data []byte) (map[string]string, error) {
 		key := strings.TrimSpace(text[:colonIdx])
 		val := strings.TrimSpace(text[colonIdx+1:])
 
-		// Expect quoted string value.
 		if len(val) < 2 || val[0] != '"' || val[len(val)-1] != '"' {
 			return nil, fmt.Errorf("line %d: value for %q is not a quoted string", line, key)
 		}

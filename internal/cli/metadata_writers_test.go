@@ -12,10 +12,8 @@ import (
 	internalcue "github.com/start-cli/start/internal/cue"
 )
 
-// noColorForTest forces fatih/color off for the duration of a test and
-// restores the original setting on cleanup. Required for byte-exact
-// assertions against the writer output because callers like
-// `tui.ColorDim.Sprint` emit ANSI escapes when colour is enabled.
+// noColorForTest disables fatih/color so writer output is byte-exact;
+// tui.ColorDim.Sprint emits ANSI escapes when colour is enabled.
 func noColorForTest(t *testing.T) {
 	t.Helper()
 	prev := color.NoColor
@@ -65,8 +63,6 @@ func TestWriteAgentMetadata_NoFields_EmitsNothing(t *testing.T) {
 	}
 }
 
-// TestWriteAgentMetadata_ModelsSortedByAlias verifies aliases render in
-// ascending order regardless of map iteration order.
 func TestWriteAgentMetadata_ModelsSortedByAlias(t *testing.T) {
 	noColorForTest(t)
 	agent := AgentConfig{
@@ -93,10 +89,6 @@ func TestWriteAgentMetadata_ModelsSortedByAlias(t *testing.T) {
 	}
 }
 
-// TestWriteAgentMetadata_BlankLineBeforeModels verifies the writer
-// unconditionally emits a blank line immediately before `Models:` whenever
-// the map is non-empty. This is the visual separator that pairs Tags with
-// Models for both render surfaces.
 func TestWriteAgentMetadata_BlankLineBeforeModels(t *testing.T) {
 	noColorForTest(t)
 	agent := AgentConfig{
@@ -113,18 +105,14 @@ func TestWriteAgentMetadata_BlankLineBeforeModels(t *testing.T) {
 	if idx == -1 {
 		t.Fatalf("missing Models: line\n%s", out)
 	}
-	// The two bytes immediately preceding `Models:` should be `\n\n` (i.e.
-	// the writer's blank line plus the newline ending the previous line).
 	if idx < 2 || out[idx-2:idx] != "\n\n" {
 		t.Errorf("expected blank line directly before Models:, got %q before it\n%s",
 			out[max(0, idx-4):idx], out)
 	}
 }
 
-// TestWriteAgentMetadata_LeadingBlankWhenDescriptionEmpty verifies the
-// writer emits its leading `\n` for any populated header field, not just
-// Description. Locks in the layout for agents that have Bin (or another
-// non-Description field) but no Description.
+// TestWriteAgentMetadata_LeadingBlankWhenDescriptionEmpty verifies the leading
+// `\n` fires for any populated header field, not just Description.
 func TestWriteAgentMetadata_LeadingBlankWhenDescriptionEmpty(t *testing.T) {
 	noColorForTest(t)
 	var buf bytes.Buffer
@@ -136,10 +124,8 @@ func TestWriteAgentMetadata_LeadingBlankWhenDescriptionEmpty(t *testing.T) {
 	}
 }
 
-// TestWriteAgentMetadata_InnerSeparatorWithBinAndModels verifies the
-// hasHeader/hasModels split: when Bin (a non-Description header field)
-// and Models are both set, the inner blank line before `Models:` must
-// fire — proving hasHeader counts non-Description fields.
+// TestWriteAgentMetadata_InnerSeparatorWithBinAndModels proves hasHeader counts
+// non-Description fields: Bin + Models must fire the inner blank line.
 func TestWriteAgentMetadata_InnerSeparatorWithBinAndModels(t *testing.T) {
 	noColorForTest(t)
 	var buf bytes.Buffer
@@ -154,12 +140,9 @@ func TestWriteAgentMetadata_InnerSeparatorWithBinAndModels(t *testing.T) {
 	}
 }
 
-// TestPrintMetadataBlock_OnlyModelsAgent_NoDoubleBlankLine verifies the
-// agent writer's hasHeader/hasModels split: an agent with only the
-// `models` map populated must surface exactly one blank line before
-// `Models:` end-to-end. The leading `\n` is the writer's own separator;
-// the inner `Models:` separator is suppressed because no header fields
-// were emitted.
+// TestPrintMetadataBlock_OnlyModelsAgent_NoDoubleBlankLine verifies a models-only
+// agent surfaces exactly one blank line before `Models:` end-to-end: the leading
+// `\n` separator with the inner one suppressed (no header fields emitted).
 func TestPrintMetadataBlock_OnlyModelsAgent_NoDoubleBlankLine(t *testing.T) {
 	noColorForTest(t)
 
@@ -197,10 +180,6 @@ func TestPrintMetadataBlock_OnlyModelsAgent_NoDoubleBlankLine(t *testing.T) {
 	if idx == -1 {
 		t.Fatalf("missing Models: line\n%s", out)
 	}
-	// Exactly one `\n` should precede `Models:` (the writer's leading
-	// blank line). Zero would mean the leading `\n` was dropped; two
-	// would mean the writer's inner `Models:` separator fired even
-	// though no header fields preceded it.
 	if idx == 0 || out[idx-1] != '\n' {
 		t.Errorf("expected `\\n` immediately before `Models:`, got:\n%q", out)
 	}
@@ -209,12 +188,9 @@ func TestPrintMetadataBlock_OnlyModelsAgent_NoDoubleBlankLine(t *testing.T) {
 	}
 }
 
-// TestPrintMetadataBlock_StripsDescribeOwnedFields verifies that for
-// role/context/task, printMetadataBlock zeroes File and Command on the
-// decoded struct before invoking the writer, so describe.go's
-// printVerboseDump can emit them once via ExtractUTDFields without
-// double-rendering. Removing the File/Command zeroing in printMetadataBlock
-// would cause this test to fail.
+// TestPrintMetadataBlock_StripsDescribeOwnedFields verifies printMetadataBlock
+// zeroes File/Command for role/context/task so describe.go's printVerboseDump
+// emits them once via ExtractUTDFields without double-rendering.
 func TestPrintMetadataBlock_StripsDescribeOwnedFields(t *testing.T) {
 	noColorForTest(t)
 
@@ -291,8 +267,6 @@ func TestPrintMetadataBlock_StripsDescribeOwnedFields(t *testing.T) {
 			if strings.Contains(out, "Command:") {
 				t.Errorf("expected Command: to be stripped from printMetadataBlock output, got:\n%s", out)
 			}
-			// Sanity: the writer ran (Description rendered) so the test
-			// is exercising the right code path.
 			if !strings.Contains(out, "Description:") {
 				t.Errorf("expected Description: to render (sanity check); writer did not run as expected:\n%s", out)
 			}
@@ -342,9 +316,6 @@ func TestWriteRoleMetadata_OptionalSkippedWhenFalse(t *testing.T) {
 	}
 }
 
-// TestWriteRoleMetadata_FileCommandSkippedWhenEmpty exercises the new
-// describe-side discard: the caller zeroes File/Command on the typed struct
-// so the writer can skip both lines.
 func TestWriteRoleMetadata_FileCommandSkippedWhenEmpty(t *testing.T) {
 	noColorForTest(t)
 	role := RoleConfig{
@@ -374,10 +345,8 @@ func TestWriteRoleMetadata_NoFields_EmitsNothing(t *testing.T) {
 	}
 }
 
-// TestWriteRoleMetadata_LeadingBlankWhenDescriptionEmpty verifies the
-// writer emits its leading `\n` for any populated field, not just
-// Description. Catches a regression where someone gates the leading `\n`
-// on `role.Description != ""`.
+// TestWriteRoleMetadata_LeadingBlankWhenDescriptionEmpty verifies the leading
+// `\n` fires for any populated field, not just Description.
 func TestWriteRoleMetadata_LeadingBlankWhenDescriptionEmpty(t *testing.T) {
 	noColorForTest(t)
 	var buf bytes.Buffer
@@ -418,10 +387,8 @@ Tags: system, env
 	}
 }
 
-// TestWriteContextMetadata_RequiredDefaultAlwaysEmitted verifies that for
-// contexts the writer prints Required: <bool> and Default: <bool>
-// unconditionally — even when the underlying value is false and other
-// fields are empty.
+// TestWriteContextMetadata_RequiredDefaultAlwaysEmitted verifies Required and
+// Default print unconditionally, even when false and other fields are empty.
 func TestWriteContextMetadata_RequiredDefaultAlwaysEmitted(t *testing.T) {
 	noColorForTest(t)
 	var buf bytes.Buffer
@@ -436,9 +403,6 @@ Default: false
 	}
 }
 
-// TestWriteContextMetadata_FileCommandSkippedWhenEmpty matches the role
-// case: the describe-side caller zeroes File/Command, so the writer must
-// skip them.
 func TestWriteContextMetadata_FileCommandSkippedWhenEmpty(t *testing.T) {
 	noColorForTest(t)
 	ctx := ContextConfig{
@@ -494,9 +458,8 @@ func TestWriteTaskMetadata_NoFields_EmitsNothing(t *testing.T) {
 	}
 }
 
-// TestWriteTaskMetadata_LeadingBlankWhenDescriptionEmpty verifies the
-// writer emits its leading `\n` for any populated field, not just
-// Description.
+// TestWriteTaskMetadata_LeadingBlankWhenDescriptionEmpty verifies the leading
+// `\n` fires for any populated field, not just Description.
 func TestWriteTaskMetadata_LeadingBlankWhenDescriptionEmpty(t *testing.T) {
 	noColorForTest(t)
 	var buf bytes.Buffer
@@ -546,9 +509,6 @@ func TestPromptTruncationLimit_AppliesToRoleContextTask(t *testing.T) {
 		if !strings.Contains(b.String(), "...") {
 			t.Errorf("%s: expected truncated prompt to contain '...', got %q", name, b.String())
 		}
-		// truncatePrompt(s, 100) means the visible body is at most 100 chars
-		// including the trailing "..."; the rendered line wraps the body so
-		// the longPrompt's full 200 x's cannot appear verbatim.
 		if strings.Contains(b.String(), longPrompt) {
 			t.Errorf("%s: prompt should have been truncated", name)
 		}

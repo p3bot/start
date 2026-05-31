@@ -35,13 +35,10 @@ func setupStartTestConfig(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 
-	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
-	// Isolate the index cache too: os.UserCacheDir() prefers XDG_CACHE_HOME over
-	// $HOME/.cache, so redirecting HOME alone leaves a real cache reachable.
-	// Tests that assert registry-client call counts (e.g. TestDoctorJSONOffline)
-	// depend on the cache being absent.
+	// os.UserCacheDir prefers XDG_CACHE_HOME over $HOME/.cache, so redirect it
+	// too; call-count tests depend on the cache being absent.
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(tmpDir, "cache"))
 
 	// CUE module cache writes read-only files; make them writable before cleanup.
@@ -136,17 +133,14 @@ func TestExecuteStart_DryRun(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show dry run header
 	if !strings.Contains(output, "Dry Run") {
 		t.Errorf("Expected 'Dry Run' in output, got:\n%s", output)
 	}
 
-	// Should show agent
 	if !strings.Contains(output, "echo") {
 		t.Errorf("Expected agent 'echo' in output")
 	}
 
-	// Should show role
 	if !strings.Contains(output, "assistant") {
 		t.Errorf("Expected role 'assistant' in output")
 	}
@@ -173,27 +167,22 @@ func TestExecuteStart_NoRole(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show dry run header
 	if !strings.Contains(output, "Dry Run") {
 		t.Errorf("Expected 'Dry Run' in output, got:\n%s", output)
 	}
 
-	// Should show agent
 	if !strings.Contains(output, "echo") {
 		t.Errorf("Expected agent 'echo' in output")
 	}
 
-	// Should still show contexts
 	if !strings.Contains(output, "env") {
 		t.Errorf("Expected context 'env' in output")
 	}
 
-	// Should NOT contain role content
 	if strings.Contains(output, "You are a helpful assistant") {
 		t.Errorf("Expected no role content in output, got:\n%s", output)
 	}
 
-	// Role name should be empty
 	if strings.Contains(output, "assistant") {
 		t.Errorf("Expected no role name 'assistant' in output, got:\n%s", output)
 	}
@@ -215,17 +204,15 @@ func TestExecuteTask_NoRole(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show task name
 	if !strings.Contains(output, "test-task") {
 		t.Errorf("Expected task name in output")
 	}
 
-	// Should show instructions
 	if !strings.Contains(output, "focus on testing") {
 		t.Errorf("Expected instructions in output")
 	}
 
-	// Should NOT contain role content (task has role: "assistant" configured)
+	// Task has role: "assistant" configured, which --no-role must suppress.
 	if strings.Contains(output, "You are a helpful assistant") {
 		t.Errorf("Expected no role content with --no-role, got:\n%s", output)
 	}
@@ -238,7 +225,7 @@ func TestExecuteTask_MissingTaskRole(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with a task referencing a role that does NOT exist
+	// Task references a role that does not exist.
 	config := `
 agents: {
 	echo: {
@@ -282,7 +269,6 @@ settings: {
 	}
 
 	// The resolver should have been invoked and failed (no registry in tests).
-	// Error should mention the role name.
 	if !strings.Contains(err.Error(), "missing-role") {
 		t.Errorf("Expected error to mention %q, got: %v", "missing-role", err)
 	}
@@ -295,9 +281,8 @@ func TestExecuteTask_AmbiguousTaskRole(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Two roles sharing the short name "assistant" plus a task referencing
-	// the ambiguous short name. The resolver should be invoked and return
-	// an actionable "ambiguous" error rather than a silent downstream failure.
+	// Two roles share the short name "assistant" and a task references it; the
+	// resolver should return an actionable "ambiguous" error.
 	config := `
 agents: {
 	echo: {
@@ -349,8 +334,6 @@ settings: {
 		t.Fatal("Expected error for ambiguous task role, got nil")
 	}
 
-	// The resolver should produce an "ambiguous" error listing the candidates,
-	// not a downstream failure about an unresolved role name.
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("Expected ambiguous error, got: %v", err)
 	}
@@ -419,17 +402,14 @@ func TestExecuteTask_DryRun(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show task name
 	if !strings.Contains(output, "test-task") {
 		t.Errorf("Expected task name in output")
 	}
 
-	// Should show instructions
 	if !strings.Contains(output, "focus on testing") {
 		t.Errorf("Expected instructions in output")
 	}
 
-	// Should show dry run header
 	if !strings.Contains(output, "Dry Run") {
 		t.Errorf("Expected 'Dry Run' in output")
 	}
@@ -533,7 +513,6 @@ func TestTaskResolution(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
 
-	// Load config for testing
 	cfg, err := loadMergedConfigFromDir("")
 	if err != nil {
 		t.Fatalf("loading config: %v", err)
@@ -595,7 +574,6 @@ func TestTaskResolution_AmbiguousPrefix(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Create config with multiple tasks that share a prefix
 	config := `
 agents: {
 	echo: {
@@ -632,7 +610,6 @@ settings: {
 		t.Fatalf("loading config: %v", err)
 	}
 
-	// Ambiguous prefix should return multiple matches
 	matches, err := findInstalledTasks(cfg, "review", nil)
 	if err != nil {
 		t.Fatalf("findInstalledTasks() error: %v", err)
@@ -641,7 +618,6 @@ settings: {
 		t.Fatalf("expected 3 matches, got %d: %v", len(matches), matches)
 	}
 
-	// Should contain all matching tasks
 	names := make(map[string]bool)
 	for _, m := range matches {
 		names[m.Name] = true
@@ -652,7 +628,7 @@ settings: {
 		}
 	}
 
-	// Multi-term AND should narrow results
+	// Multi-term AND should narrow results.
 	matches, err = findInstalledTasks(cfg, "review,code", nil)
 	if err != nil {
 		t.Fatalf("findInstalledTasks() error: %v", err)
@@ -689,10 +665,8 @@ func TestTaskResolution_ExactMatchFallsThrough(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config where "review" is both an exact task name AND a substring
-	// matching "start/review". The multipleInstalled path should cause
-	// executeTask to fall through to selection instead of silently
-	// running the exact match.
+	// "review" is both an exact task name and a substring of "start/review", so
+	// executeTask must fall through to selection instead of running the exact match.
 	config := `
 agents: {
 	echo: {
@@ -744,8 +718,8 @@ settings: {
 		t.Fatalf("expected 2 matches, got %d: %v", len(matches), matches)
 	}
 
-	// executeTask should NOT silently use the exact match.
-	// With non-TTY stdin, multiple matches produce an ambiguous error.
+	// executeTask must not silently use the exact match; non-TTY stdin with
+	// multiple matches produces an ambiguous error.
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 	flags := &Flags{Quiet: true}
@@ -782,9 +756,8 @@ func TestTaskResolution_ExactMatchTagFilter(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with tasks that have different tags. "review" is an exact
-	// name match but lacks the "golang" tag. When --tag golang is
-	// specified, the exact match should be skipped.
+	// "review" is an exact name match but lacks the "golang" tag, so --tag golang
+	// must skip it.
 	config := `
 agents: {
 	echo: {
@@ -841,9 +814,8 @@ settings: {
 		t.Fatalf("expected tag-filtered match %q, got %q", "golang/review", matches[0].Name)
 	}
 
-	// With --tag golang, exact match "review" should be skipped.
-	// Single remaining match "golang/review" should be used directly.
-	// Use --dry-run to capture the resolved task name without executing.
+	// --tag golang skips exact match "review"; the single remaining match
+	// "golang/review" is used directly. --dry-run captures the resolved name.
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 	flags := &Flags{DryRun: true}
@@ -852,7 +824,6 @@ settings: {
 		t.Fatalf("executeTask() error: %v", err)
 	}
 
-	// Dry-run output should show "golang/review", not "review"
 	output := stdout.String()
 	if !strings.Contains(output, "golang/review") {
 		t.Errorf("expected resolved task 'golang/review' in output, got:\n%s", output)
@@ -874,7 +845,6 @@ func TestTaskResolution_NoTasksDefined(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Create config without tasks
 	config := `
 agents: {
 	echo: {
@@ -912,13 +882,10 @@ settings: {
 	}
 }
 
-// File path integration tests
-
 func TestExecuteStart_FilePathRole(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
 
-	// Create a role file
 	roleContent := "You are a file-based role for testing."
 	roleFile := filepath.Join(tmpDir, "test-role.md")
 	if err := os.WriteFile(roleFile, []byte(roleContent), 0644); err != nil {
@@ -945,12 +912,10 @@ func TestExecuteStart_FilePathRole(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show file path as role name
 	if !strings.Contains(output, "./test-role.md") {
 		t.Errorf("Expected file path in role output, got:\n%s", output)
 	}
 
-	// Should include the role content
 	if !strings.Contains(output, "file-based role") {
 		t.Errorf("Expected role content in output, got:\n%s", output)
 	}
@@ -960,7 +925,6 @@ func TestExecuteStart_FilePathContext(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
 
-	// Create a context file
 	ctxContent := "File-based context content for testing."
 	ctxFile := filepath.Join(tmpDir, "test-context.md")
 	if err := os.WriteFile(ctxFile, []byte(ctxContent), 0644); err != nil {
@@ -987,7 +951,6 @@ func TestExecuteStart_FilePathContext(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show file path as context name
 	if !strings.Contains(output, "./test-context.md") {
 		t.Errorf("Expected file path in context output, got:\n%s", output)
 	}
@@ -997,7 +960,6 @@ func TestExecuteStart_MixedContextOrder(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
 
-	// Create context files
 	if err := os.WriteFile(filepath.Join(tmpDir, "first.md"), []byte("First file context"), 0644); err != nil {
 		t.Fatalf("writing first.md: %v", err)
 	}
@@ -1026,7 +988,7 @@ func TestExecuteStart_MixedContextOrder(t *testing.T) {
 
 	output := stdout.String()
 
-	// Verify order is preserved: first.md should appear before project (default), which should appear before last.md
+	// Order must be preserved: first.md before project (default) before last.md.
 	firstIdx := strings.Index(output, "./first.md")
 	projectIdx := strings.Index(output, "project")
 	lastIdx := strings.Index(output, "./last.md")
@@ -1053,7 +1015,6 @@ func TestExecuteTask_FilePathTask(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
 
-	// Create a task file
 	taskContent := "File-based task prompt for testing."
 	taskFile := filepath.Join(tmpDir, "test-task.md")
 	if err := os.WriteFile(taskFile, []byte(taskContent), 0644); err != nil {
@@ -1072,12 +1033,10 @@ func TestExecuteTask_FilePathTask(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show file path as task name
 	if !strings.Contains(output, "./test-task.md") {
 		t.Errorf("Expected file path in task output, got:\n%s", output)
 	}
 
-	// Should include task content
 	if !strings.Contains(output, "File-based task prompt") {
 		t.Errorf("Expected task content in output, got:\n%s", output)
 	}
@@ -1087,7 +1046,6 @@ func TestExecuteTask_FilePathWithInstructions(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)
 
-	// Create a task file with instructions placeholder
 	taskContent := "Review this code.\nInstructions: {{.instructions}}"
 	taskFile := filepath.Join(tmpDir, "review-task.md")
 	if err := os.WriteFile(taskFile, []byte(taskContent), 0644); err != nil {
@@ -1106,12 +1064,10 @@ func TestExecuteTask_FilePathWithInstructions(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should have substituted instructions
 	if !strings.Contains(output, "focus on security") {
 		t.Errorf("Expected instructions to be substituted, got:\n%s", output)
 	}
 
-	// Should NOT contain the placeholder
 	if strings.Contains(output, "{{.instructions}}") {
 		t.Errorf("Template placeholder was not substituted, got:\n%s", output)
 	}
@@ -1133,7 +1089,6 @@ func TestExecuteTask_FilePathMissing(t *testing.T) {
 		return
 	}
 
-	// Should include file path in error
 	if !strings.Contains(err.Error(), "./nonexistent.md") {
 		t.Errorf("Error should contain file path: %v", err)
 	}
@@ -1164,13 +1119,10 @@ func TestExecuteStart_FilePathContextMissing(t *testing.T) {
 
 	output := stdout.String()
 
-	// Should show the missing context with error indicator
 	if !strings.Contains(output, "./missing-context.md") {
 		t.Errorf("Expected missing file path in output, got:\n%s", output)
 	}
 }
-
-// Tests for unified task resolution
 
 func TestTaskInMatches(t *testing.T) {
 	t.Parallel()
@@ -1314,7 +1266,6 @@ settings: {
 }
 
 func TestFindRegistryTasks(t *testing.T) {
-	// Create mock registry index
 	index := &registry.Index{
 		Tasks: map[string]registry.IndexEntry{
 			"golang/debug": {
@@ -1406,12 +1357,11 @@ func TestMergeTaskMatches(t *testing.T) {
 
 	merged := mergeTaskMatches(installed, registry)
 
-	// Should have 4 unique tasks
 	if len(merged) != 4 {
 		t.Errorf("mergeTaskMatches returned %d results, want 4", len(merged))
 	}
 
-	// Check that golang/debug is from installed (not registry)
+	// golang/debug must come from installed, not registry.
 	for _, m := range merged {
 		if m.Name == "golang/debug" {
 			if m.Source != TaskSourceInstalled {
@@ -1420,7 +1370,6 @@ func TestMergeTaskMatches(t *testing.T) {
 		}
 	}
 
-	// Check results are sorted alphabetically
 	for i := 1; i < len(merged); i++ {
 		if merged[i-1].Name > merged[i].Name {
 			t.Errorf("results not sorted: %q > %q", merged[i-1].Name, merged[i].Name)
@@ -1429,7 +1378,6 @@ func TestMergeTaskMatches(t *testing.T) {
 }
 
 func TestMergeTaskMatches_Sorting(t *testing.T) {
-	// Test that results are sorted alphabetically
 	installed := []TaskMatch{
 		{Name: "zebra/task", Source: TaskSourceInstalled},
 		{Name: "alpha/task", Source: TaskSourceInstalled},
@@ -1445,7 +1393,6 @@ func TestMergeTaskMatches_Sorting(t *testing.T) {
 		t.Fatalf("expected 3 results, got %d", len(merged))
 	}
 
-	// Check alphabetical order
 	expected := []string{"alpha/task", "middle/task", "zebra/task"}
 	for i, want := range expected {
 		if merged[i].Name != want {
@@ -1455,20 +1402,17 @@ func TestMergeTaskMatches_Sorting(t *testing.T) {
 }
 
 func TestMergeTaskMatches_Empty(t *testing.T) {
-	// Test with empty inputs
 	merged := mergeTaskMatches(nil, nil)
 	if len(merged) != 0 {
 		t.Errorf("expected 0 results for empty inputs, got %d", len(merged))
 	}
 
-	// Test with only installed
 	installed := []TaskMatch{{Name: "task1", Source: TaskSourceInstalled}}
 	merged = mergeTaskMatches(installed, nil)
 	if len(merged) != 1 {
 		t.Errorf("expected 1 result, got %d", len(merged))
 	}
 
-	// Test with only registry
 	registry := []TaskMatch{{Name: "task2", Source: TaskSourceRegistry}}
 	merged = mergeTaskMatches(nil, registry)
 	if len(merged) != 1 {
@@ -1476,16 +1420,14 @@ func TestMergeTaskMatches_Empty(t *testing.T) {
 	}
 }
 
-// TestRegistryAwareGuard_MergedMatchesTriggerFallthrough verifies that the
-// multi-match guard in task.go correctly combines installed and registry matches.
-// When an exact installed match exists AND registry tasks also match the search
-// term, the merged count > 1 should trigger a fallthrough to the selection list.
+// TestRegistryAwareGuard_MergedMatchesTriggerFallthrough verifies that when an
+// exact installed match exists and registry tasks also match, the merged count
+// > 1 triggers a fallthrough to the selection list.
 func TestRegistryAwareGuard_MergedMatchesTriggerFallthrough(t *testing.T) {
 	t.Parallel()
 
-	// Simulate the guard logic from task.go lines 209-224.
-	// Scenario: "start" is an exact installed match with 1 installed substring match.
-	// The registry also contains "start/modules/agent/create" matching "start".
+	// "start" is an exact installed match; the registry also contains
+	// "start/modules/agent/create" matching "start".
 	installedMatches := []TaskMatch{
 		{Name: "start", Source: TaskSourceInstalled},
 	}
@@ -1506,12 +1448,10 @@ func TestRegistryAwareGuard_MergedMatchesTriggerFallthrough(t *testing.T) {
 
 	merged := mergeTaskMatches(installedMatches, registryMatches)
 
-	// Guard should trigger: merged > 1.
 	if len(merged) <= 1 {
 		t.Fatalf("expected merged > 1 to trigger guard, got %d", len(merged))
 	}
 
-	// Verify both sources are present.
 	sources := make(map[TaskSource]bool)
 	for _, m := range merged {
 		sources[m.Source] = true
@@ -1524,9 +1464,9 @@ func TestRegistryAwareGuard_MergedMatchesTriggerFallthrough(t *testing.T) {
 	}
 }
 
-// TestRegistryAwareGuard_DeduplicationPreservesInstalled verifies that when an
-// installed task has the same name as a registry task, the installed version
-// takes precedence and the total count is not inflated.
+// TestRegistryAwareGuard_DeduplicationPreservesInstalled verifies that an
+// installed task sharing a name with a registry task takes precedence and the
+// total count is not inflated.
 func TestRegistryAwareGuard_DeduplicationPreservesInstalled(t *testing.T) {
 	t.Parallel()
 
@@ -1550,7 +1490,6 @@ func TestRegistryAwareGuard_DeduplicationPreservesInstalled(t *testing.T) {
 
 	merged := mergeTaskMatches(installedMatches, registryMatches)
 
-	// Same name: deduplication should keep count at 1.
 	if len(merged) != 1 {
 		t.Fatalf("expected 1 merged match (deduplicated), got %d", len(merged))
 	}
@@ -1559,9 +1498,8 @@ func TestRegistryAwareGuard_DeduplicationPreservesInstalled(t *testing.T) {
 	}
 }
 
-// TestRegistryAwareGuard_NilIndexNoEffect verifies that when the registry
-// index is unavailable (nil), the guard is a no-op and does not affect
-// the installed-only match.
+// TestRegistryAwareGuard_NilIndexNoEffect verifies that with a nil registry
+// index the guard is a no-op and leaves the installed-only match untouched.
 func TestRegistryAwareGuard_NilIndexNoEffect(t *testing.T) {
 	t.Parallel()
 
@@ -1569,10 +1507,9 @@ func TestRegistryAwareGuard_NilIndexNoEffect(t *testing.T) {
 		{Name: "start", Source: TaskSourceInstalled},
 	}
 
-	// No registry index available — simulate ensureIndex returning nil.
+	// nil index simulates ensureIndex returning nil; skip the registry check.
 	var guardIndex *registry.Index
 
-	// Guard logic: if guardIndex == nil, skip registry check.
 	var registryGuardMatches []TaskMatch
 	if guardIndex != nil {
 		registryGuardMatches, _ = findRegistryTasks(guardIndex, "start", nil)
@@ -1580,7 +1517,6 @@ func TestRegistryAwareGuard_NilIndexNoEffect(t *testing.T) {
 
 	merged := mergeTaskMatches(installedMatches, registryGuardMatches)
 
-	// Should only have the installed match — guard does not trigger.
 	if len(merged) != 1 {
 		t.Fatalf("expected 1 match with nil index, got %d", len(merged))
 	}
@@ -1591,15 +1527,14 @@ func TestRegistryAwareGuard_NilIndexNoEffect(t *testing.T) {
 
 // TestTaskResolution_RegistryGuardAmbiguous tests the full executeTask flow
 // where a single installed exact match exists but registry tasks also match,
-// producing an ambiguous error in non-TTY mode. This requires a working
-// registry index (via cache or network).
+// producing an ambiguous error in non-TTY mode. Requires a working registry index.
 func TestTaskResolution_RegistryGuardAmbiguous(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// CUE module cache cleanup.
+	// CUE module cache writes read-only files; make them writable before cleanup.
 	t.Cleanup(func() {
 		_ = filepath.WalkDir(tmpDir, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -1615,7 +1550,6 @@ func TestTaskResolution_RegistryGuardAmbiguous(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with a single task "start" — exact match for search term "start".
 	config := `
 agents: {
 	echo: {
@@ -2213,7 +2147,6 @@ func TestEnsureIndex_FreshCacheSkipsFetchMessage(t *testing.T) {
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
 
-	// Call ensureIndex — with a fresh cache it should NOT print "Fetching registry index..."
 	_, _, _ = r.ensureIndex()
 
 	if strings.Contains(stdout.String(), "Fetching registry index") {
@@ -2250,7 +2183,6 @@ func TestEnsureIndex_StaleCacheShowsFetchMessage(t *testing.T) {
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
 
-	// Call ensureIndex — stale cache should print "Fetching registry index..."
 	_, _, _ = r.ensureIndex()
 
 	if !strings.Contains(stdout.String(), "Fetching registry index") {
@@ -2274,7 +2206,6 @@ func TestEnsureIndex_MissingCacheShowsFetchMessage(t *testing.T) {
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
 
-	// Call ensureIndex — missing cache should print "Fetching registry index..."
 	_, _, _ = r.ensureIndex()
 
 	if !strings.Contains(stdout.String(), "Fetching registry index") {
@@ -2333,7 +2264,6 @@ func TestEnsureIndex_MismatchedModuleShowsFetchMessage(t *testing.T) {
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
 
-	// Call ensureIndex — module mismatch should trigger a fresh fetch.
 	_, _, _ = r.ensureIndex()
 
 	if !strings.Contains(stdout.String(), "Fetching registry index") {
@@ -2404,8 +2334,6 @@ func TestRunStart_PipedStdin(t *testing.T) {
 
 	output := stdout.String()
 
-	// Dry-run prints a Prompt preview when customText is supplied. The piped
-	// text should appear there.
 	if !strings.Contains(output, "hi") {
 		t.Errorf("piped prompt text not found in output:\n%s", output)
 	}

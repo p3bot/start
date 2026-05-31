@@ -7,7 +7,6 @@ import (
 	"github.com/start-cli/start/internal/orchestration"
 )
 
-// addPromptCommand adds the prompt command to the parent command.
 func addPromptCommand(parent *cobra.Command) {
 	promptCmd := &cobra.Command{
 		Use:     "prompt [text]",
@@ -25,7 +24,6 @@ Use -c default to include contexts configured with default: true.`,
 	parent.AddCommand(promptCmd)
 }
 
-// runPrompt executes the prompt command.
 func runPrompt(cmd *cobra.Command, args []string) error {
 	customText := ""
 	if len(args) > 0 {
@@ -46,9 +44,8 @@ func runPrompt(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if piped {
-			// `start prompt` accepts empty piped stdin: execution proceeds
-			// with role + required contexts only, mirroring `start prompt`
-			// invoked with no argument and no pipe.
+			// Empty piped stdin is accepted: proceeds with role + required
+			// contexts only, like `start prompt` with no argument and no pipe.
 			customText = pipedText
 		} else {
 			interactive, err := promptText(cmd.OutOrStdout(), stdin, "Prompt text", "")

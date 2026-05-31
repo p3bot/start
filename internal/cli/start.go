@@ -24,8 +24,8 @@ import (
 // flagsKey is the context key for storing Flags.
 type flagsKey struct{}
 
-// Flags holds all CLI flag values. Each command instance gets its own Flags,
-// enabling parallel test execution without shared state.
+// Flags holds all CLI flag values. Each command instance gets its own Flags so
+// tests can run in parallel without shared state.
 type Flags struct {
 	Agent   string
 	Role    string
@@ -46,7 +46,7 @@ func getFlags(cmd *cobra.Command) *Flags {
 	if f, ok := cmd.Context().Value(flagsKey{}).(*Flags); ok {
 		return f
 	}
-	// Fallback for commands without context (shouldn't happen in normal use)
+	// Fallback for commands without context (shouldn't happen in normal use).
 	return &Flags{}
 }
 
@@ -82,8 +82,8 @@ type ExecutionEnv struct {
 }
 
 // loadExecutionConfig loads configuration and resolves the working directory.
-// This is the first phase of execution environment setup, separated so the
-// resolver can search installed config before building the full environment.
+// Separated from environment setup so the resolver can search installed config
+// before the full environment is built.
 func loadExecutionConfig(stdout, stderr io.Writer, stdin io.Reader, flags *Flags) (internalcue.LoadResult, string, error) {
 	workingDir, err := os.Getwd()
 	if err != nil {
@@ -103,7 +103,6 @@ func loadExecutionConfig(stdout, stderr io.Writer, stdin io.Reader, flags *Flags
 // It checks settings.default_agent, falls back to the only configured agent,
 // or prompts interactively when multiple agents exist and stdin is a TTY.
 func resolveAgentName(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) (string, error) {
-	// Try settings.default_agent
 	if def := cfg.Value.LookupPath(cue.ParsePath(internalcue.KeySettings + ".default_agent")); def.Exists() {
 		if s, err := def.String(); err == nil && s != "" {
 			debugf(stderr, flags, dbgAgent, "Selected %q (config default)", s)
@@ -111,7 +110,6 @@ func resolveAgentName(cfg internalcue.LoadResult, flags *Flags, stdout, stderr i
 		}
 	}
 
-	// No default - check configured agents
 	choices, err := getConfiguredAgents(cfg.Value)
 	if err != nil {
 		return "", err
@@ -124,10 +122,8 @@ func resolveAgentName(cfg internalcue.LoadResult, flags *Flags, stdout, stderr i
 		return choices[0].Name, nil
 	}
 
-	// Multiple agents - check if interactive selection is possible
 	isTTY := isTerminal(stdin)
 	if !isTTY {
-		// Non-TTY fallback: use first agent
 		name := choices[0].Name
 		debugf(stderr, flags, dbgAgent, "Selected %q (first agent, non-TTY)", name)
 		if !flags.Quiet {
@@ -136,8 +132,8 @@ func resolveAgentName(cfg internalcue.LoadResult, flags *Flags, stdout, stderr i
 		return name, nil
 	}
 
-	// Note: bufio.NewReader may buffer ahead from stdin. This is safe because
-	// nothing reads from stdin after agent resolution (the process is replaced by syscall.Exec).
+	// bufio.NewReader may buffer ahead, but nothing reads stdin after agent
+	// resolution (the process is replaced by syscall.Exec).
 	reader := bufio.NewReader(stdin)
 	selected, err := promptAgentSelection(stdout, reader, choices)
 	if err != nil {
@@ -152,8 +148,8 @@ func resolveAgentName(cfg internalcue.LoadResult, flags *Flags, stdout, stderr i
 	return selected, nil
 }
 
-// buildExecutionEnv builds the execution environment from a loaded config and agent name.
-// This is the second phase, called after the resolver has resolved flag values.
+// buildExecutionEnv builds the execution environment from a loaded config and
+// agent name, after the resolver has resolved flag values.
 func buildExecutionEnv(cfg internalcue.LoadResult, workingDir string, agentName string, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) (*ExecutionEnv, error) {
 	if agentName == "" {
 		resolved, err := resolveAgentName(cfg, flags, stdout, stderr, stdin)
@@ -215,12 +211,11 @@ func getConfiguredAgents(cfg cue.Value) ([]agentChoice, error) {
 	return choices, nil
 }
 
-// promptAgentSelection prompts the user to select an agent from multiple choices.
-// The caller is responsible for TTY detection; this function assumes interactive input.
+// promptAgentSelection prompts the user to select an agent from multiple
+// choices. The caller is responsible for TTY detection.
 func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoice) (string, error) {
 	fmt.Fprintf(w, "Multiple agents configured. Select an agent:\n\n")
 
-	// Find longest name for alignment
 	maxNameLen := 0
 	for _, c := range choices {
 		if len(c.Name) > maxNameLen {
@@ -249,7 +244,6 @@ func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoi
 		return "", fmt.Errorf("no selection provided")
 	}
 
-	// Try number
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= len(choices) {
 			return choices[choice-1].Name, nil
@@ -257,7 +251,6 @@ func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoi
 		return "", fmt.Errorf("invalid selection: %s (choose 1-%d)", input, len(choices))
 	}
 
-	// Try exact name match
 	inputLower := strings.ToLower(input)
 	for _, c := range choices {
 		if strings.ToLower(c.Name) == inputLower {
@@ -265,7 +258,6 @@ func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoi
 		}
 	}
 
-	// Try substring match
 	var subMatches []agentChoice
 	for _, c := range choices {
 		if strings.Contains(strings.ToLower(c.Name), inputLower) {
@@ -279,8 +271,8 @@ func promptAgentSelection(w io.Writer, reader *bufio.Reader, choices []agentChoi
 	return "", fmt.Errorf("invalid selection: %s", input)
 }
 
-// promptSetDefault asks the user whether to set the selected agent as default.
-// The caller is responsible for TTY detection; this function assumes interactive input.
+// promptSetDefault asks whether to set the selected agent as default. The
+// caller is responsible for TTY detection.
 func promptSetDefault(w io.Writer, reader *bufio.Reader, agentName string) bool {
 	fmt.Fprintf(w, "Set %q as default agent? %s: ", agentName, tui.Bracket("y/N"))
 
@@ -307,9 +299,6 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Non-blank piped content switches to prompt-mode (required contexts
-	// only). A blank or whitespace-only pipe means no prompt was given, so
-	// it runs the normal start flow with default contexts.
 	if piped && strings.TrimSpace(pipedText) != "" {
 		return executeStart(cmd.OutOrStdout(), cmd.ErrOrStderr(), stdin, flags, orchestration.ContextSelection{
 			IncludeRequired: true,
@@ -327,16 +316,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 // executeStart is the shared execution logic for start commands.
 func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selection orchestration.ContextSelection, customText string) error {
-	// Phase 1: Load config
 	cfg, workingDir, err := loadExecutionConfig(stdout, stderr, stdin, flags)
 	if err != nil {
 		return err
 	}
 
-	// Phase 2: Resolve module flags
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
 
-	// Resolve --agent flag
 	agentName := flags.Agent
 	if agentName != "" {
 		agentName, err = r.resolveAgent(agentName)
@@ -345,7 +331,6 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		}
 	}
 
-	// Resolve --role flag
 	roleName := flags.Role
 	if roleName != "" && !flags.NoRole {
 		roleName, err = r.resolveRole(roleName)
@@ -354,7 +339,6 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		}
 	}
 
-	// Resolve --context flags
 	if len(selection.Tags) > 0 {
 		selection.Tags, err = r.resolveContexts(selection.Tags)
 		if err != nil {
@@ -362,7 +346,6 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		}
 	}
 
-	// If any registry installs happened, reload config
 	if r.didInstall {
 		debugf(stderr, flags, dbgConfig, "Reloading config after registry installs")
 		if err := r.reloadConfig(workingDir); err != nil {
@@ -371,13 +354,11 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		cfg = r.cfg
 	}
 
-	// Phase 3: Build execution environment with resolved agent
 	env, err := buildExecutionEnv(cfg, workingDir, agentName, flags, stdout, stderr, stdin)
 	if err != nil {
 		return err
 	}
 
-	// Resolve --model flag against agent's models map
 	resolvedModel := flags.Model
 	if resolvedModel != "" {
 		resolvedModel = r.resolveModelName(resolvedModel, env.Agent)
@@ -386,7 +367,6 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 	debugf(stderr, flags, dbgContext, "Selection: required=%t, defaults=%t, tags=%v",
 		selection.IncludeRequired, selection.IncludeDefaults, selection.Tags)
 
-	// Compose prompt with or without role
 	var result orchestration.ComposeResult
 	var composeErr error
 	if flags.NoRole {
@@ -396,7 +376,7 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		result, composeErr = env.Composer.ComposeWithRole(env.Cfg.Value, selection, roleName, customText)
 	}
 	if composeErr != nil {
-		// Show UI with role resolutions before returning error
+		// Show role resolutions before returning the error.
 		if !flags.Quiet && len(result.RoleResolutions) > 0 {
 			printComposeError(stdout, env.Agent, result)
 		}
@@ -410,10 +390,8 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 	debugf(stderr, flags, dbgCompose, "Role: %d bytes", len(result.Role))
 	debugf(stderr, flags, dbgCompose, "Prompt: %d bytes (%d contexts)", len(result.Prompt), len(result.Contexts))
 
-	// Print warnings
 	printWarnings(flags, stderr, result.Warnings)
 
-	// Determine effective model and its source
 	model, modelSource := resolveModel(resolvedModel, env.Agent.DefaultModel)
 	if model != "" {
 		debugf(stderr, flags, dbgAgent, "Model: %s (%s)", model, modelSource)
@@ -421,7 +399,6 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		debugf(stderr, flags, dbgAgent, "Model: agent default (none specified)")
 	}
 
-	// Build execution config
 	execConfig := orchestration.ExecuteConfig{
 		Agent:      env.Agent,
 		Model:      resolvedModel,
@@ -432,7 +409,6 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		DryRun:     flags.DryRun,
 	}
 
-	// Build command and validate before proceeding
 	cmdStr, err := env.Executor.BuildCommand(execConfig)
 	if err != nil {
 		return err
@@ -444,19 +420,17 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		return executeDryRun(stdout, cmdStr, execConfig, result, env.Agent, model, modelSource)
 	}
 
-	// Print execution info
 	if !flags.Quiet {
 		printExecutionInfo(stdout, env.Agent, model, modelSource, result)
 	}
 
 	debugf(stderr, flags, dbgExec, "Executing agent (process replacement)")
-	// Execute agent (replaces current process) - command already validated
+	// Replaces the current process; command already validated.
 	return env.Executor.ExecuteCommand(cmdStr, execConfig)
 }
 
-// resolveModel determines the effective model and its source.
-// Returns the model name and source ("--model" or "config").
-// If both are empty, returns empty strings.
+// resolveModel determines the effective model and its source ("--model" or
+// "config"), or empty strings when both are empty.
 func resolveModel(flagModel, configModel string) (model, source string) {
 	if flagModel != "" {
 		return flagModel, "--model"
@@ -477,31 +451,26 @@ func printWarnings(flags *Flags, stderr io.Writer, warnings []string) {
 	}
 }
 
-// executeDryRun handles --dry-run mode.
-// cmdStr is the pre-built, pre-validated command string from the caller.
+// executeDryRun handles --dry-run mode. cmdStr is the pre-built, pre-validated
+// command string from the caller.
 func executeDryRun(w io.Writer, cmdStr string, cfg orchestration.ExecuteConfig, result orchestration.ComposeResult, agent orchestration.Agent, model, modelSource string) error {
-	// Create temp directory
 	tempMgr := temp.NewDryRunManager()
 	dir, err := tempMgr.DryRunDir()
 	if err != nil {
 		return fmt.Errorf("creating dry-run directory: %w", err)
 	}
 
-	// Get context names
 	var contextNames []string
 	for _, ctx := range result.Contexts {
 		contextNames = append(contextNames, ctx.Name)
 	}
 
-	// Generate command file content
 	cmdContent := orchestration.GenerateDryRunCommand(agent, cfg.Model, result.RoleName, contextNames, cfg.WorkingDir, cmdStr)
 
-	// Write files
 	if err := tempMgr.WriteDryRunFiles(dir, result.Role, result.Prompt, cmdContent); err != nil {
 		return fmt.Errorf("writing dry-run files: %w", err)
 	}
 
-	// Print summary
 	printDryRunSummary(w, agent, model, modelSource, result, dir)
 
 	return nil
@@ -528,13 +497,11 @@ func printDryRunSummary(w io.Writer, agent orchestration.Agent, model, modelSour
 	printContextTable(w, result.Contexts, result.Selection)
 	printRoleTable(w, result.RoleResolutions)
 
-	// Show role preview
 	if result.Role != "" {
 		printContentPreview(w, "Role", tui.ColorRoles, result.Role, 5)
 		fmt.Fprintln(w)
 	}
 
-	// Show prompt preview
 	if result.Prompt != "" {
 		printContentPreview(w, "Prompt", tui.ColorPrompts, result.Prompt, 5)
 		fmt.Fprintln(w)
@@ -547,8 +514,8 @@ func printDryRunSummary(w io.Writer, agent orchestration.Agent, model, modelSour
 	fmt.Fprintln(w, "  command.txt")
 }
 
-// printComposeError prints UI before a composition error.
-// Shows agent, contexts, and role resolutions so user understands what failed.
+// printComposeError shows agent, contexts, and role resolutions before a
+// composition error, so the user understands what failed.
 func printComposeError(w io.Writer, agent orchestration.Agent, result orchestration.ComposeResult) {
 	printHeader(w, "Starting AI Agent")
 	printSeparator(w)
@@ -562,8 +529,8 @@ func printComposeError(w io.Writer, agent orchestration.Agent, result orchestrat
 	printRoleTable(w, result.RoleResolutions)
 }
 
-// printContentPreview prints content with a header showing line count only when truncated.
-// Shows all content if total lines <= 2*maxLines, otherwise truncates to maxLines.
+// printContentPreview prints content, showing all lines when total <= 2*maxLines
+// and otherwise truncating to maxLines with a line-count header.
 func printContentPreview(w io.Writer, label string, labelColor *color.Color, text string, maxLines int) {
 	lines := strings.Split(text, "\n")
 	threshold := maxLines * 2
@@ -597,7 +564,6 @@ func loadMergedConfigFromDir(workingDir string) (internalcue.LoadResult, error) 
 
 // loadMergedConfigFromDirWithDebug loads configuration with debug logging.
 func loadMergedConfigFromDirWithDebug(stdout, stderr io.Writer, stdin io.Reader, workingDir string, flags *Flags) (internalcue.LoadResult, error) {
-	// Resolve paths first for debug output
 	paths, err := config.ResolvePaths(workingDir)
 	if err != nil {
 		return internalcue.LoadResult{}, fmt.Errorf("resolving config paths: %w", err)
@@ -606,13 +572,11 @@ func loadMergedConfigFromDirWithDebug(stdout, stderr io.Writer, stdin io.Reader,
 	debugf(stderr, flags, dbgConfig, "Global: %s (exists: %t)", paths.Global, paths.GlobalExists)
 	debugf(stderr, flags, dbgConfig, "Local: %s (exists: %t)", paths.Local, paths.LocalExists)
 
-	// Load using the standard function
 	result, err := loadMergedConfigWithIO(stdout, stderr, stdin, workingDir)
 	if err != nil {
 		return result, err
 	}
 
-	// Log what was loaded
 	var loaded []string
 	if result.GlobalLoaded {
 		loaded = append(loaded, "global")
@@ -634,14 +598,11 @@ func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDi
 		return internalcue.LoadResult{}, fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	// Validate existing configuration
 	validation := config.ValidateConfig(paths)
 
-	// If no valid config exists, trigger auto-setup
 	if !validation.AnyValid() {
-		// Check if there are validation errors (config exists but is invalid)
+		// Config exists but is invalid: report the first error with full details.
 		if validation.HasErrors() {
-			// Report the first error with full details
 			if validation.GlobalError != nil {
 				return internalcue.LoadResult{}, fmt.Errorf("%s", validation.GlobalError.DetailedError())
 			}
@@ -650,11 +611,10 @@ func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDi
 			}
 		}
 
-		// No config at all - trigger auto-setup
 		if err := runAutoSetup(stdout, stderr, stdin); err != nil {
 			return internalcue.LoadResult{}, err
 		}
-		// Re-resolve and validate after auto-setup
+		// Re-resolve and validate after auto-setup.
 		paths, err = config.ResolvePaths(workingDir)
 		if err != nil {
 			return internalcue.LoadResult{}, fmt.Errorf("resolving config paths: %w", err)
@@ -672,7 +632,6 @@ func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDi
 
 // runAutoSetup runs the auto-setup flow.
 func runAutoSetup(stdout, stderr io.Writer, stdin io.Reader) error {
-	// Check if stdin is a TTY
 	isTTY := isTerminal(stdin)
 
 	autoSetup := orchestration.NewAutoSetup(stdout, stderr, stdin, isTTY)

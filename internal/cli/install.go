@@ -19,19 +19,13 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// errNoModules is returned by installModule when no matching modules are found.
 var errNoModules = errors.New("no modules found")
 
-// NOTE(design): The post-fetch logic in this file overlaps with
-// update.go (config resolution, scope handling, command-specific
-// empty-state output). The repetition is kept inline because each call site
-// has command-specific UX baked into the same shape — extracting a helper
-// would either hide the per-command messages from the call site or require
-// parameterising them through callbacks, both of which reduce readability
-// more than they save lines. The shared registry-client + fetch +
-// cache-write sequence is centralised in fetchIndex (modules_shared.go).
+// Post-fetch logic here overlaps update.go but is kept inline: each call site
+// bakes command-specific UX into the same shape, so a shared helper would hide
+// the per-command messages or need callbacks. The shared client+fetch+cache
+// sequence is centralised in fetchIndex.
 
-// addInstallCommand adds the install command to the root command.
 func addInstallCommand(parent *cobra.Command) {
 	installCmd := &cobra.Command{
 		Use:     "install [query]...",
@@ -53,7 +47,6 @@ Use --local to install to project config (./.start/).`,
 	parent.AddCommand(installCmd)
 }
 
-// runInstall searches for and installs one or more modules.
 func runInstall(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -71,7 +64,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		prompted = true
 	}
 
-	// Validate all queries are at least 3 characters
 	w := cmd.OutOrStdout()
 	stdin := cmd.InOrStdin()
 	var validated []string
@@ -109,7 +101,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 	prog.Done()
 
-	// Determine config path
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -118,9 +109,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	configDir := paths.Dir(flags.Local)
 	scopeName := scopeString(flags.Local)
 
-	// Load CUE config once for existence checks across all queries.
-	// On error with no CUE files (fresh install), cfg is a zero-value cue.Value;
-	// LookupPath on it returns non-existent, so ModuleExists correctly returns false.
+	// On error with no CUE files (fresh install), cfg is a zero-value
+	// cue.Value, on which ModuleExists correctly returns false.
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {
@@ -130,7 +120,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Install each queried module
 	var errs []error
 	for _, query := range args {
 		if err := installModule(ctx, cmd, prog, client, index, query, configDir, scopeName, flags, cfg); err != nil {
@@ -152,7 +141,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, client registry.Client, index *registry.Index, query, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
 	w := cmd.OutOrStdout()
 
-	// Search for matching modules
 	results, err := modules.SearchIndex(index, query, nil)
 	if err != nil {
 		return err
@@ -163,7 +151,6 @@ func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, 
 		return notFoundError(fmt.Errorf("%w matching %q", errNoModules, query))
 	}
 
-	// Select module(s)
 	var selections []modules.SearchResult
 	if len(results) == 1 {
 		selections = results
@@ -178,7 +165,6 @@ func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, 
 		}
 	}
 
-	// Install each selected module
 	var errs []error
 	for _, selected := range selections {
 		if err := installSingleModule(ctx, w, prog, client, index, selected, configDir, scopeName, flags, cfg); err != nil {
@@ -192,7 +178,6 @@ func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, 
 
 // installSingleModule checks and installs a single selected module.
 func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, client registry.Client, index *registry.Index, selected modules.SearchResult, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
-	// Check if already installed
 	if modules.ModuleExists(cfg, selected.Category, selected.Name) {
 		origin := modules.GetInstalledOrigin(cfg, selected.Category, selected.Name)
 
@@ -237,7 +222,6 @@ func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, c
 		}
 	}
 
-	// Install the module
 	prog.Update("Fetching module...")
 	version, err := modules.InstallModule(ctx, client, index, selected, configDir)
 	if err != nil {
@@ -266,11 +250,10 @@ func installSingleModule(ctx context.Context, w io.Writer, prog *tui.Progress, c
 	return nil
 }
 
-// promptModuleSelection prompts the user to select one or more modules from multiple matches.
-// Supports single numbers, CSV (1,3,5), ranges (1-3), "all", or name matching.
-// Returns nil and nil if the user cancels (empty input).
+// promptModuleSelection prompts to select one or more modules from multiple
+// matches. Supports single numbers, CSV (1,3,5), ranges (1-3), "all", or name
+// matching. Returns nil, nil if the user cancels (empty input).
 func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchResult, cfg cue.Value) ([]modules.SearchResult, error) {
-	// Check if stdin is a TTY
 	isTTY := isTerminal(r)
 
 	if !isTTY {
@@ -319,7 +302,7 @@ func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchRes
 		return results, nil
 	}
 
-	// Try matching by name (single result)
+	// Match by name before parsing as indices.
 	inputLower := strings.ToLower(input)
 	for _, res := range results {
 		fullPath := formatAddress(res.Category, res.Name)
@@ -328,7 +311,6 @@ func promptModuleSelection(w io.Writer, r io.Reader, results []modules.SearchRes
 		}
 	}
 
-	// Parse as numbers, CSV, and/or ranges
 	indices, err := parseSelectionInput(input, len(results))
 	if err != nil {
 		return nil, err

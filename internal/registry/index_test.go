@@ -46,7 +46,6 @@ func TestLoadIndex_ValidIndex(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create a valid index CUE file
 	indexCUE := `
 package index
 
@@ -92,7 +91,6 @@ tasks: {
 		t.Fatalf("LoadIndex failed: %v", err)
 	}
 
-	// Verify agents
 	if len(index.Agents) != 2 {
 		t.Errorf("expected 2 agents, got %d", len(index.Agents))
 	}
@@ -109,17 +107,14 @@ tasks: {
 		}
 	}
 
-	// Verify roles
 	if len(index.Roles) != 1 {
 		t.Errorf("expected 1 role, got %d", len(index.Roles))
 	}
 
-	// Verify contexts
 	if len(index.Contexts) != 1 {
 		t.Errorf("expected 1 context, got %d", len(index.Contexts))
 	}
 
-	// Verify tasks
 	if len(index.Tasks) != 1 {
 		t.Errorf("expected 1 task, got %d", len(index.Tasks))
 	}
@@ -138,7 +133,6 @@ func TestLoadIndex_EmptyCategories(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Index with only agents
 	indexCUE := `
 package index
 
@@ -176,7 +170,6 @@ func TestLoadIndex_InvalidCUE(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Invalid CUE syntax
 	indexCUE := `
 package index
 
@@ -217,7 +210,6 @@ func TestDecodeIndex_AllCategories(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create an index with all categories populated
 	indexCUE := `
 package index
 
@@ -262,7 +254,6 @@ tasks: {
 		t.Fatalf("LoadIndex failed: %v", err)
 	}
 
-	// Verify all categories are populated
 	if len(index.Agents) != 1 {
 		t.Errorf("expected 1 agent, got %d", len(index.Agents))
 	}
@@ -276,7 +267,6 @@ tasks: {
 		t.Errorf("expected 1 task, got %d", len(index.Tasks))
 	}
 
-	// Verify agent fields are decoded correctly
 	claude := index.Agents["ai/claude"]
 	if claude.Module != "github.com/test/claude@v0" {
 		t.Errorf("wrong module: %s", claude.Module)
@@ -299,7 +289,6 @@ func TestDecodeIndex_MinimalEntry(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create an index with minimal entries (only required fields)
 	indexCUE := `
 package index
 
@@ -326,7 +315,6 @@ agents: {
 	if agent.Bin != "minimal" {
 		t.Errorf("wrong bin: %s", agent.Bin)
 	}
-	// Optional fields should be empty/nil
 	if agent.Description != "" {
 		t.Errorf("expected empty description, got: %s", agent.Description)
 	}
@@ -342,7 +330,6 @@ func TestDecodeIndex_InvalidEntryType(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create an index with invalid entry type (string instead of struct)
 	indexCUE := `
 package index
 
@@ -364,7 +351,6 @@ func TestDecodeIndex_WrongPackageName(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create CUE file with wrong package name
 	indexCUE := `
 package wrong_package
 
@@ -389,7 +375,6 @@ func TestDecodeIndex_MultipleFiles(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create multiple CUE files that should be merged
 	agentsCUE := `
 package index
 
@@ -421,7 +406,6 @@ tasks: {
 		t.Fatalf("LoadIndex failed: %v", err)
 	}
 
-	// Both categories should be populated from separate files
 	if len(index.Agents) != 1 {
 		t.Errorf("expected 1 agent, got %d", len(index.Agents))
 	}
@@ -430,7 +414,6 @@ tasks: {
 	}
 }
 
-// writeTestIndex creates a valid index CUE file in dir for FetchIndex tests.
 func writeTestIndex(t *testing.T, dir string) {
 	t.Helper()
 	indexCUE := `
@@ -484,7 +467,6 @@ func TestFetchIndex_ReturnsIndexAndVersion(t *testing.T) {
 		t.Fatalf("FetchIndex() error: %v", err)
 	}
 
-	// Verify index is populated.
 	if idx == nil {
 		t.Fatal("FetchIndex() returned nil index")
 		return
@@ -496,7 +478,6 @@ func TestFetchIndex_ReturnsIndexAndVersion(t *testing.T) {
 		t.Errorf("expected 1 task, got %d", len(idx.Tasks))
 	}
 
-	// Verify resolved canonical version is returned.
 	want := "github.com/test/index@v0.3.46"
 	if version != want {
 		t.Errorf("FetchIndex() version = %q, want %q", version, want)
@@ -528,7 +509,6 @@ func TestFetchIndex_CanonicalVersionSkipsResolution(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// Pass a canonical version — should not call ModuleVersions.
 	idx, version, err := client.FetchIndex(ctx, "github.com/test/index@v0.3.46")
 	if err != nil {
 		t.Fatalf("FetchIndex() error: %v", err)
@@ -613,7 +593,6 @@ func TestFetchIndex_LoadIndexError(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Write invalid CUE so LoadIndex fails.
 	if err := os.WriteFile(filepath.Join(tmpDir, "index.cue"), []byte("not valid {{{"), 0644); err != nil {
 		t.Fatalf("writing bad index: %v", err)
 	}
@@ -673,7 +652,6 @@ func TestFetchIndex_DefaultIndexPath(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// Pass empty string — should use IndexModulePath default.
 	_, _, err := client.FetchIndex(ctx, "")
 	if err != nil {
 		t.Fatalf("FetchIndex() error: %v", err)

@@ -9,11 +9,9 @@ import (
 	"github.com/start-cli/start/internal/config"
 )
 
-// openCategories is the ordered list of categories for the config open prompt.
-// Plural names are used so tui.CategoryColor returns the correct colour for each.
+// Plural names so tui.CategoryColor returns the correct colour for each.
 var openCategories = []string{"agents", "roles", "contexts", "tasks", "settings"}
 
-// addConfigOpenCommand registers the "config open [category]" subcommand.
 func addConfigOpenCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "open [category]",
@@ -30,7 +28,6 @@ Use --local to target project-specific configuration (.start/).`,
 	parent.AddCommand(cmd)
 }
 
-// runConfigOpen handles the "config open [category]" command.
 func runConfigOpen(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -66,10 +63,8 @@ func runConfigOpen(cmd *cobra.Command, args []string) error {
 	return openInEditor(path)
 }
 
-// resolveConfigOpenPath returns the absolute path to the CUE config file for
-// the given category. Both singular and plural forms are accepted.
+// resolveConfigOpenPath returns the CUE config file path; singular and plural forms accepted.
 func resolveConfigOpenPath(local bool, category string) (string, error) {
-	// Normalise plural to singular by stripping a trailing "s".
 	singular := strings.TrimSuffix(strings.ToLower(category), "s")
 
 	var filename string

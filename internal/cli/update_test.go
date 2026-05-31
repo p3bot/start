@@ -32,7 +32,6 @@ func TestUpdateResultJSON(t *testing.T) {
 	}
 	output := string(data)
 
-	// First result: updated, no error
 	if !strings.Contains(output, `"oldVersion": "v0.1.0"`) {
 		t.Errorf("output missing oldVersion, got: %s", output)
 	}
@@ -43,12 +42,11 @@ func TestUpdateResultJSON(t *testing.T) {
 		t.Errorf("output missing updated=true, got: %s", output)
 	}
 
-	// Second result: error serialised as string
 	if !strings.Contains(output, `"error": "network timeout"`) {
 		t.Errorf("output missing error string, got: %s", output)
 	}
 
-	// Verify the Error (interface) field is excluded from JSON
+	// The Error interface field must be excluded from JSON via json:"-".
 	var decoded []map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)

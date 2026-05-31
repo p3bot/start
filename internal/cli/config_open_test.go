@@ -20,22 +20,18 @@ func TestResolveConfigOpenPath(t *testing.T) {
 		wantFile string
 		wantErr  bool
 	}{
-		// singular
 		{name: "agent", category: "agent", wantFile: "agents.cue"},
 		{name: "role", category: "role", wantFile: "roles.cue"},
 		{name: "context", category: "context", wantFile: "contexts.cue"},
 		{name: "task", category: "task", wantFile: "tasks.cue"},
 		{name: "setting", category: "setting", wantFile: "settings.cue"},
-		// plural aliases
 		{name: "agents", category: "agents", wantFile: "agents.cue"},
 		{name: "roles", category: "roles", wantFile: "roles.cue"},
 		{name: "contexts", category: "contexts", wantFile: "contexts.cue"},
 		{name: "tasks", category: "tasks", wantFile: "tasks.cue"},
 		{name: "settings", category: "settings", wantFile: "settings.cue"},
-		// local flag
 		{name: "agent local", category: "agent", local: true, wantFile: "agents.cue"},
 		{name: "setting local", category: "setting", local: true, wantFile: "settings.cue"},
-		// error case
 		{name: "unknown", category: "unknown", wantErr: true},
 	}
 
@@ -144,10 +140,8 @@ func TestConfigOpen_InteractivePrompt(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
 
-	// Each test selects a number from the openCategories prompt and verifies
-	// the resolved path filename matches the expected CUE file.
 	tests := []struct {
-		input    string // number to enter at the prompt
+		input    string
 		wantFile string
 	}{
 		{"1\n", "agents.cue"},

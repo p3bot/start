@@ -37,12 +37,10 @@ func (v *Validator) Validate(value cue.Value, opts ...ValidationOption) error {
 		opt(cfg)
 	}
 
-	// Check for structural errors first
 	if err := value.Err(); err != nil {
 		return FormatError(err)
 	}
 
-	// If concrete validation requested, validate completeness
 	if cfg.concrete {
 		if err := value.Validate(cue.Concrete(true)); err != nil {
 			return FormatError(err)
@@ -76,7 +74,7 @@ type ValidationError struct {
 	Line     int
 	Column   int
 	Filename string
-	Context  string // Source context snippet around the error
+	Context  string
 }
 
 // Error returns a concise error string with file:line:message format.
@@ -93,19 +91,17 @@ func (e *ValidationError) Error() string {
 	return e.Message
 }
 
-// DetailedError returns a formatted error with source context.
-// This is intended for display to users when they need to fix config errors.
+// DetailedError returns a formatted error with source context for display to
+// users fixing config errors.
 func (e *ValidationError) DetailedError() string {
 	var result string
 
-	// Header with file path
 	if e.Filename != "" {
 		result = "Configuration error in " + e.Filename + "\n\n"
 	} else {
 		result = "Configuration error\n\n"
 	}
 
-	// Location and message
 	if e.Line > 0 {
 		result += "  Line " + strconv.Itoa(e.Line)
 		if e.Column > 0 {
@@ -116,7 +112,6 @@ func (e *ValidationError) DetailedError() string {
 		result += "  " + e.Message + "\n"
 	}
 
-	// Source context if available
 	if e.Context != "" {
 		result += "\n" + e.Context
 	}

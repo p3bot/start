@@ -12,7 +12,6 @@ import (
 )
 
 // ConfigListItem represents a single configured item for JSON output.
-// All optional fields use omitempty so absent fields are not emitted.
 type ConfigListItem struct {
 	Category     string            `json:"category"`
 	Name         string            `json:"name"`
@@ -32,8 +31,6 @@ type ConfigListItem struct {
 	Origin       string            `json:"origin,omitempty"`
 }
 
-// buildConfigListItem loads the full config data for a match and maps it to ConfigListItem.
-// Used by config get and config list JSON paths.
 func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, error) {
 	item := ConfigListItem{Category: m.Category, Name: m.Name}
 	switch m.Category {
@@ -112,9 +109,8 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 	return item, nil
 }
 
-// collectConfigListItems loads all configured items for the given category (or all if "").
-// All categories are sorted alphabetically for consistent, analysis-friendly JSON output.
-// The human-readable display preserves injection order for roles and contexts.
+// JSON output sorts all categories alphabetically; the human-readable display preserves
+// injection order for roles and contexts.
 func collectConfigListItems(scope config.Scope, category string) ([]ConfigListItem, error) {
 	var items []ConfigListItem
 
@@ -185,7 +181,6 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 	return items, nil
 }
 
-// addConfigListCommand adds the "config list [category]" command.
 func addConfigListCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "list [category]",
@@ -204,7 +199,6 @@ Plural aliases (agents, roles, contexts, tasks) are accepted.`,
 	parent.AddCommand(cmd)
 }
 
-// runConfigListCmd is the handler for "config list [category]".
 func runConfigListCmd(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -239,7 +233,6 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 	stderr := cmd.ErrOrStderr()
 
 	if len(args) == 0 {
-		// List all categories
 		if err := listAgents(w, stderr, scope); err != nil {
 			return err
 		}
@@ -273,7 +266,6 @@ func runConfigListCmd(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// listAgents prints the agents section to w.
 func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	agents, order, err := loadAgentsForScope(scope)
 	if err != nil {
@@ -316,7 +308,6 @@ func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	return nil
 }
 
-// listRoles prints the roles section to w.
 func listRoles(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	roles, order, err := loadRolesForScope(scope)
 	if err != nil {
@@ -350,7 +341,6 @@ func listRoles(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	return nil
 }
 
-// listContexts prints the contexts section to w.
 func listContexts(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	contexts, order, err := loadContextsForScope(scope)
 	if err != nil {
@@ -396,14 +386,12 @@ func listContexts(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	return nil
 }
 
-// runConfigTaskList is a Cobra-compatible wrapper used by task.go.
 func runConfigTaskList(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintln(cmd.OutOrStdout())
 	scope := config.ScopeFromLocal(getFlags(cmd).Local)
 	return listTasks(cmd.OutOrStdout(), cmd.ErrOrStderr(), scope)
 }
 
-// listTasks prints the tasks section to w.
 func listTasks(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	tasks, order, err := loadTasksForScope(scope)
 	if err != nil {

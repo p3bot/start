@@ -13,7 +13,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigAddCommand adds the "config add [category]" command.
 func addConfigAddCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "add [category]",
@@ -30,7 +29,6 @@ Always interactive — use 'start config open' to edit CUE files directly.`,
 	parent.AddCommand(cmd)
 }
 
-// runConfigAdd is the handler for "config add [category]".
 func runConfigAdd(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -40,7 +38,6 @@ func runConfigAdd(cmd *cobra.Command, args []string) error {
 	stdout := cmd.OutOrStdout()
 	local := getFlags(cmd).Local
 
-	// Always interactive
 	if !isTerminal(stdin) {
 		return usageError(fmt.Errorf("interactive add requires a terminal"))
 	}
@@ -61,7 +58,7 @@ func runConfigAdd(cmd *cobra.Command, args []string) error {
 		if err != nil || category == "" {
 			return err
 		}
-		// promptSelectCategory returns plural; normalize to singular
+		// promptSelectCategory returns plural; normalize to singular.
 		category = strings.TrimSuffix(category, "s")
 	} else {
 		fmt.Fprintln(stdout)
@@ -80,7 +77,6 @@ func runConfigAdd(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// configAgentAdd is the inner add logic for agents.
 func configAgentAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	name, err := promptString(stdout, stdin, "Agent name", "")
 	if err != nil {
@@ -171,7 +167,6 @@ func configAgentAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	return nil
 }
 
-// configRoleAdd is the inner add logic for roles.
 func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	name, err := promptString(stdout, stdin, "Role name", "")
 	if err != nil {
@@ -269,7 +264,6 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	return nil
 }
 
-// configContextAdd is the inner add logic for contexts.
 func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	name, err := promptString(stdout, stdin, "Context name", "")
 	if err != nil {
@@ -378,7 +372,6 @@ func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	return nil
 }
 
-// configTaskAdd is the inner add logic for tasks.
 func configTaskAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 	name, err := promptString(stdout, stdin, "Task name", "")
 	if err != nil {

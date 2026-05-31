@@ -18,14 +18,11 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// NOTE(design): The config-loading shape here (paths.ResolvePaths, AnyExists
-// gate, Load(merged) plus a separate LoadSingle(local) for scope detection) is
-// repeated in update.go. The repetition is kept inline because each
-// call site has command-specific empty-state UX baked into the same shape —
-// extracting a helper would either hide those messages from the call site or
-// require parameterising them through callbacks. Update checking uses
-// checkForUpdates rather than the fetchIndex helper because the index is
-// only fetched conditionally (--verbose path).
+// The config-loading shape here is repeated in update.go but kept inline:
+// each call site bakes command-specific empty-state UX into the same shape, so
+// a shared helper would hide those messages or need callbacks. Update checking
+// uses checkForUpdates rather than fetchIndex because the index is only
+// fetched on the --verbose path.
 
 // InstalledModule represents an installed module with version info.
 type InstalledModule struct {
@@ -42,7 +39,6 @@ type InstalledModule struct {
 	ConfigFile   string   `json:"configFile"`
 }
 
-// addListCommand adds the list command to the root command.
 func addListCommand(parent *cobra.Command) {
 	listCmd := &cobra.Command{
 		Use:     "list [category]",
@@ -66,13 +62,12 @@ Use --json to output machine-readable JSON.`,
 	parent.AddCommand(listCmd)
 }
 
-// runList lists installed modules with update status.
 func runList(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
 
-	// Validate category arg before any I/O
+	// Validate category arg before any I/O.
 	var category string
 	if len(args) > 0 {
 		singular := normalizeCategoryArg(args[0])
@@ -85,7 +80,6 @@ func runList(cmd *cobra.Command, args []string) error {
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 	ctx := context.Background()
 
-	// Load configuration
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -100,7 +94,6 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Load merged config
 	dirs := paths.ForScope(config.ScopeMerged)
 	loader := internalcue.NewLoader()
 	cfg, err := loader.Load(dirs)
@@ -108,7 +101,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Load local config separately for scope detection
+	// Load local config separately for scope detection.
 	var localCfg cue.Value
 	if paths.LocalExists {
 		if v, loadErr := loader.LoadSingle(paths.Local); loadErr == nil {
@@ -116,7 +109,6 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Collect installed modules from config
 	installed := collectInstalledModules(cfg.Value, paths, localCfg)
 
 	if len(installed) == 0 {
@@ -128,7 +120,6 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Filter by category if specified
 	if category != "" {
 		var filtered []InstalledModule
 		for _, a := range installed {
@@ -148,7 +139,6 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Check for updates if verbose
 	flags := getFlags(cmd)
 	if flags.Verbose {
 		client, err := getProvider(cmd)()
@@ -173,7 +163,6 @@ func runList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// collectInstalledModules extracts installed modules from the config.
 func collectInstalledModules(v cue.Value, paths config.Paths, localCfg cue.Value) []InstalledModule {
 	var installed []InstalledModule
 
@@ -193,26 +182,23 @@ func collectInstalledModules(v cue.Value, paths config.Paths, localCfg cue.Value
 			name := iter.Selector().Unquoted()
 			moduleVal := iter.Value()
 
-			// Extract origin field (registry provenance)
 			var origin string
 			if originVal := moduleVal.LookupPath(cue.ParsePath("origin")); originVal.Exists() {
 				origin, _ = originVal.String()
 			}
 
-			// Only include modules with origin (from registry)
+			// Registry-installed modules only (origin is registry provenance).
 			if origin == "" {
 				continue
 			}
 
 			installedVer := modules.VersionFromOrigin(origin)
 
-			// Extract description
 			var description string
 			if descVal := moduleVal.LookupPath(cue.ParsePath("description")); descVal.Exists() {
 				description, _ = descVal.String()
 			}
 
-			// Extract tags
 			var tags []string
 			if tagsVal := moduleVal.LookupPath(cue.ParsePath("tags")); tagsVal.Exists() {
 				tagIter, tagErr := tagsVal.List()
@@ -256,7 +242,6 @@ func collectInstalledModules(v cue.Value, paths config.Paths, localCfg cue.Value
 		}
 	}
 
-	// Sort by category then name
 	sort.Slice(installed, func(i, j int) bool {
 		if installed[i].Category != installed[j].Category {
 			return modules.CategoryOrder(installed[i].Category) < modules.CategoryOrder(installed[j].Category)
@@ -267,27 +252,26 @@ func collectInstalledModules(v cue.Value, paths config.Paths, localCfg cue.Value
 	return installed
 }
 
-// determineScopeAndFile determines whether a module is from global or local config
-// and returns the path to the config file.
+// determineScopeAndFile reports whether a module is global or local and the
+// path to its config file.
 func determineScopeAndFile(localCfg cue.Value, paths config.Paths, category, name string) (scope, configFile string) {
 	configFileName, ok := internalcue.ConfigFiles[category]
 	if !ok {
 		configFileName = internalcue.ConfigFiles[internalcue.KeySettings]
 	}
 
-	// Check local first (takes precedence)
+	// Local takes precedence over global.
 	if paths.LocalExists && modules.ModuleExists(localCfg, category, name) {
 		return "local", filepath.Join(paths.Local, configFileName)
 	}
 
-	// Default to global. Modules from collectInstalledModules came from CUE evaluation
-	// of these same files, so this fallback is for informational display purposes.
+	// Fall back to global; this path is for informational display only.
 	return "global", filepath.Join(paths.Global, configFileName)
 }
 
-// checkForUpdates checks registry for available updates.
+// checkForUpdates fills in LatestVer/UpdateAvail by comparing against the
+// registry index.
 func checkForUpdates(ctx context.Context, client registry.Client, installed []InstalledModule, indexPath string) {
-	// Fetch index for version info
 	index, indexVersion, err := client.FetchIndex(ctx, indexPath)
 	if err != nil {
 		return
@@ -303,7 +287,6 @@ func checkForUpdates(ctx context.Context, client registry.Client, installed []In
 	}
 }
 
-// findInIndex looks up a module in the index.
 func findInIndex(index *registry.Index, category, name string) *registry.IndexEntry {
 	var entries map[string]registry.IndexEntry
 
@@ -324,12 +307,10 @@ func findInIndex(index *registry.Index, category, name string) *registry.IndexEn
 	return nil
 }
 
-// printInstalledModules prints the list of installed modules.
 func printInstalledModules(w io.Writer, installed []InstalledModule, verbose bool) {
 	fmt.Fprintln(w, "Installed modules:")
 	fmt.Fprintln(w)
 
-	// Group by category
 	grouped := make(map[string][]InstalledModule)
 	for _, a := range installed {
 		grouped[a.Category] = append(grouped[a.Category], a)

@@ -12,34 +12,25 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// resolveCrossCategory resolves a module query across all categories via
-// three-tier search (exact installed → substring installed → registry) with
-// interactive selection on ambiguity. Auto-installs registry matches and
-// sets r.didInstall = true when an install occurs.
+// resolveCrossCategory resolves a module query across categories via three-tier
+// search (exact installed → substring installed → registry), prompting on
+// ambiguity. Auto-installs registry matches and sets r.didInstall on install.
 //
-// Writes:
+// Callers needing clean stdout (e.g. `start get` piping content) put stderr in
+// the stdout slot: newResolver(cfg, flags, stderr, stderr, stdin).
 //
-//	r.stdout — registry fetch progress, install notices, interactive selection prompts
-//	r.stderr — debug output only
-//
-// Callers needing clean stdout (e.g. `start get` piping content) should construct
-// the resolver with stderr in the stdout slot: newResolver(cfg, flags, stderr, stderr, stdin).
-//
-// Post-call contract: if r.didInstall is true and the caller subsequently reads
-// r.cfg.Value (e.g. to look up the resolved module's CUE value), the caller must
-// first call r.reloadConfig(workingDir) — the installed module is written to disk
-// but r.cfg is not refreshed in place. See runStart and runTask for the
-// established reload-after-install pattern. describe is exempt because
-// describeVerboseItem loads config independently via prepareDescribe.
+// Post-call: when r.didInstall is true, the module is on disk but r.cfg is not
+// refreshed; a caller that then reads r.cfg.Value must call r.reloadConfig
+// first (see runStart, runTask). describe is exempt — describeVerboseItem loads
+// config independently via prepareDescribe.
 func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	addr, err := parseAddress(query)
 	if err != nil {
 		return ModuleMatch{}, err
 	}
 
-	// When the address carries a category prefix, every per-category loop
-	// below scopes to that single category and the bare name is used for
-	// matching. With no prefix, all four categories are searched.
+	// A category prefix scopes every per-category loop below to that one
+	// category; with no prefix, all four categories are searched.
 	cats := describeCategories
 	if addr.HasPrefix {
 		if c := describeCategoryFor(addr.Category); c != nil {
@@ -48,14 +39,13 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	}
 	name := addr.Name
 
-	// Step 1: Exact match in installed config across the scoped categories.
+	// Step 1: exact match in installed config across the scoped categories.
 	var exactMatches []ModuleMatch
 	var ambiguousMatches []ModuleMatch
 	for _, cat := range cats {
 		resolved, err := findExactInstalledName(r.cfg.Value, cat.key, name)
 		if err != nil {
-			// Ambiguous short name within one category — collect all matches
-			// for interactive selection instead of erroring out.
+			// Ambiguous short name — collect all matches for selection.
 			matches, searchErr := searchInstalled(r.cfg.Value, cat.key, cat.category, name)
 			if searchErr != nil {
 				return ModuleMatch{}, searchErr
@@ -74,9 +64,7 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	}
 
 	if len(ambiguousMatches) > 0 {
-		// exactMatches and ambiguousMatches are installed-only by construction
-		// (Step 1 only). No installIfRegistry call is needed; if a future change
-		// mixes registry hits into either slice, restore the auto-install here.
+		// Both slices are installed-only here, so no install is needed.
 		allMatches := make([]ModuleMatch, 0, len(exactMatches)+len(ambiguousMatches))
 		allMatches = append(allMatches, exactMatches...)
 		allMatches = append(allMatches, ambiguousMatches...)
@@ -88,9 +76,7 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	}
 
 	if len(exactMatches) > 1 {
-		// exactMatches is installed-only by construction (Step 1 only). No
-		// installIfRegistry call is needed; if a future change mixes registry
-		// hits into this slice, restore the auto-install here.
+		// exactMatches is installed-only here, so no install is needed.
 		selected, err := promptCrossCategorySelection(r, exactMatches, query)
 		if err != nil {
 			return ModuleMatch{}, err
@@ -98,11 +84,9 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 		return selected, nil
 	}
 
-	// Step 2: Substring search in installed config. Computed once and reused
-	// for the single-exact-match disambiguation gate below and for the
-	// combined-search path further down. The exact match from Step 1, if any,
-	// also appears here as a self-substring — len(installedMatches) <= 1
-	// therefore means "no neighbours alongside the exact match".
+	// Step 2: substring search in installed config, reused by the gate below
+	// and the combined-search path. An exact match also appears here as a
+	// self-substring, so len(installedMatches) <= 1 means "no neighbours".
 	var installedMatches []ModuleMatch
 	for _, cat := range cats {
 		matches, err := searchInstalled(r.cfg.Value, cat.key, cat.category, name)
@@ -112,24 +96,21 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 		installedMatches = append(installedMatches, matches...)
 	}
 
-	// Single exact match with no other installed neighbours (in any category)
-	// — return directly. Any neighbour, even a single substring hit in a
-	// different category, falls through to the combined-search prompt so the
-	// user can disambiguate rather than silently getting the exact match.
+	// Single exact match with no neighbours — return directly. Any neighbour
+	// falls through to the prompt so the user disambiguates rather than
+	// silently getting the exact match.
 	if len(exactMatches) == 1 && len(installedMatches) <= 1 {
 		return exactMatches[0], nil
 	}
 
-	// No exact match, single substring match — return directly.
 	if len(exactMatches) == 0 && len(installedMatches) == 1 {
 		return installedMatches[0], nil
 	}
 
-	// Step 3: Registry search. Only reached when installed-only resolution
+	// Step 3: registry search. Only reached when installed-only resolution
 	// failed to produce a single match — this gates the network call.
 	index, _, _ := r.ensureIndex()
 
-	// Exact registry match (only when no installed matches).
 	if len(installedMatches) == 0 && index != nil {
 		for _, cat := range cats {
 			entries := registryEntries(index, cat.category)
@@ -156,7 +137,6 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 		}
 	}
 
-	// Combined search across installed + registry.
 	var registryMatches []ModuleMatch
 	if index != nil {
 		for _, cat := range cats {
@@ -194,9 +174,9 @@ func resolveCrossCategory(query string, r *resolver) (ModuleMatch, error) {
 	}
 }
 
-// installIfRegistry auto-installs the match when it originates from the
-// registry. On success r.autoInstall sets r.didInstall = true (resolve.go:631),
-// and callers flip their scope to config.ScopeMerged to see the new module.
+// installIfRegistry auto-installs the match when it comes from the registry. On
+// success r.autoInstall sets r.didInstall, and callers flip their scope to
+// config.ScopeMerged to see the new module.
 func (r *resolver) installIfRegistry(match ModuleMatch) error {
 	if match.Source != ModuleSourceRegistry {
 		return nil
@@ -208,11 +188,9 @@ func (r *resolver) installIfRegistry(match ModuleMatch) error {
 	})
 }
 
-// promptCrossCategorySelection asks the user to pick from multiple
-// cross-category matches and returns the chosen match. In non-TTY mode it
-// returns an ambiguity error listing all matches as "category:name". Each
-// candidate string round-trips: pasting it back as the command argument
-// resolves to that exact match.
+// promptCrossCategorySelection asks the user to pick from multiple matches. In
+// non-TTY mode it returns an ambiguity error listing matches as "category:name";
+// each candidate round-trips back to that exact match as a command argument.
 func promptCrossCategorySelection(r *resolver, matches []ModuleMatch, query string) (ModuleMatch, error) {
 	sort.SliceStable(matches, func(i, j int) bool {
 		return formatAddress(matches[i].Category, matches[i].Name) < formatAddress(matches[j].Category, matches[j].Name)

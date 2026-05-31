@@ -7,9 +7,8 @@ import (
 	"github.com/start-cli/start/internal/fault"
 )
 
-// TestResolveColorMode covers the --color precedence rules from Requirement 2.
-// Each case sets the relevant env vars via t.Setenv; cases that touch the same
-// process-global env cannot run in parallel.
+// TestResolveColorMode covers the --color precedence rules. Cases mutate
+// process-global env via t.Setenv, so they cannot run in parallel.
 func TestResolveColorMode(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -32,8 +31,7 @@ func TestResolveColorMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear the env vars the resolver consults so the host environment
-			// does not leak in, then apply the case's overrides.
+			// Clear the env vars the resolver consults so the host environment does not leak in.
 			for _, k := range []string{"NO_COLOR", "TERM", "FORCE_COLOR", "CLICOLOR_FORCE"} {
 				t.Setenv(k, "")
 			}

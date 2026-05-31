@@ -115,7 +115,6 @@ func TestRunner_RunWithResult(t *testing.T) {
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
-		// Bash version should be non-empty when running in bash
 		if result.Stdout == "" {
 			t.Log("BASH_VERSION was empty (may vary by system)")
 		}

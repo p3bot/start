@@ -12,10 +12,7 @@ import (
 
 func TestNewLoader(t *testing.T) {
 	t.Parallel()
-	// NewLoader is a value-constructor; a nil return or nil ctx is impossible
-	// by construction. We exercise it to keep the constructor from being
-	// dead-code-eliminated by future refactors and to fail loudly if someone
-	// changes it to return an error.
+	// Exercised so a future change making the constructor fallible breaks here.
 	l := NewLoader()
 	if l.ctx == nil {
 		t.Fatal("NewLoader().ctx is nil")
@@ -41,7 +38,6 @@ func TestLoader_Load(t *testing.T) {
 			t.Error("GlobalLoaded = false, want true")
 		}
 
-		// Verify value was loaded
 		name, err := result.Value.LookupPath(parsePath("name")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(name) error = %v", err)
@@ -55,14 +51,11 @@ func TestLoader_Load(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global config defines globalOnly field
 		writeCUEFile(t, globalDir, "settings.cue", `
 			globalOnly: true
 			shared: "from-global"
 		`)
 
-		// Local config defines localOnly field
-		// Different keys are additive (union)
 		writeCUEFile(t, localDir, "settings.cue", `
 			localOnly: true
 		`)
@@ -80,7 +73,6 @@ func TestLoader_Load(t *testing.T) {
 			t.Error("LocalLoaded = false, want true")
 		}
 
-		// Both unique fields should exist (additive for different keys)
 		globalOnly, err := result.Value.LookupPath(parsePath("globalOnly")).Bool()
 		if err != nil {
 			t.Fatalf("LookupPath(globalOnly) error = %v", err)
@@ -97,7 +89,6 @@ func TestLoader_Load(t *testing.T) {
 			t.Error("localOnly = false, want true")
 		}
 
-		// Global field should be present (not overridden by local)
 		shared, err := result.Value.LookupPath(parsePath("shared")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(shared) error = %v", err)
@@ -111,13 +102,11 @@ func TestLoader_Load(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global config
 		writeCUEFile(t, globalDir, "settings.cue", `
 			name: "global-value"
 			timeout: 30
 		`)
 
-		// Local config - same key should completely replace
 		writeCUEFile(t, localDir, "settings.cue", `
 			name: "local-value"
 		`)
@@ -128,7 +117,6 @@ func TestLoader_Load(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// Local should replace global for matching key
 		name, err := result.Value.LookupPath(parsePath("name")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(name) error = %v", err)
@@ -137,7 +125,6 @@ func TestLoader_Load(t *testing.T) {
 			t.Errorf("name = %q, want %q (local should replace global)", name, "local-value")
 		}
 
-		// Global-only field should still exist
 		timeout, err := result.Value.LookupPath(parsePath("timeout")).Int64()
 		if err != nil {
 			t.Fatalf("LookupPath(timeout) error = %v", err)
@@ -159,11 +146,9 @@ func TestLoader_Load(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// First directory (global position) doesn't exist, so GlobalLoaded is false
 		if result.GlobalLoaded {
 			t.Error("GlobalLoaded = true, want false (non-existent dir was at global position)")
 		}
-		// Second directory (local position) was loaded
 		if !result.LocalLoaded {
 			t.Error("LocalLoaded = false, want true (existing dir was at local position)")
 		}
@@ -180,11 +165,9 @@ func TestLoader_Load(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// First directory (global position) has no CUE files, so GlobalLoaded is false
 		if result.GlobalLoaded {
 			t.Error("GlobalLoaded = true, want false (empty dir was at global position)")
 		}
-		// Second directory (local position) was loaded
 		if !result.LocalLoaded {
 			t.Error("LocalLoaded = false, want true (cue dir was at local position)")
 		}
@@ -225,10 +208,9 @@ func TestLoader_Load(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global defines name as string
 		writeCUEFile(t, globalDir, "settings.cue", `name: "global"`)
 
-		// Local defines name as number - replacement allows this
+		// Replacement (not unification) allows the type to change here.
 		writeCUEFile(t, localDir, "settings.cue", `name: 42`)
 
 		l := NewLoader()
@@ -237,7 +219,6 @@ func TestLoader_Load(t *testing.T) {
 			t.Fatalf("Load() error = %v (replacement should allow type changes)", err)
 		}
 
-		// Local value should replace global
 		name, err := result.Value.LookupPath(parsePath("name")).Int64()
 		if err != nil {
 			t.Fatalf("LookupPath(name) error = %v", err)
@@ -318,7 +299,6 @@ func TestLoader_Context(t *testing.T) {
 		t.Fatal("Context() returned nil")
 	}
 
-	// Verify the context is functional
 	v := ctx.CompileString(`test: "value"`)
 	if err := v.Err(); err != nil {
 		t.Fatalf("Context not functional: %v", err)
@@ -386,8 +366,7 @@ func TestHasCUEFiles(t *testing.T) {
 
 func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 	t.Parallel()
-	// Derive fixture paths from this file's location so the test is not sensitive
-	// to the working directory at invocation time.
+	// Derive fixture paths from this file so the test is cwd-independent.
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
@@ -406,7 +385,6 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	// Verify both directories loaded
 	if !result.GlobalLoaded {
 		t.Error("GlobalLoaded = false, want true")
 	}
@@ -414,7 +392,6 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Error("LocalLoaded = false, want true")
 	}
 
-	// Verify agents from both sources exist (additive merge)
 	claudeCmd, err := result.Value.LookupPath(parsePath("agents.claude.command")).String()
 	if err != nil {
 		t.Fatalf("agents.claude.command error = %v (should exist from global)", err)
@@ -431,7 +408,6 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Error("agents.gemini.command should not be empty")
 	}
 
-	// Verify contexts from both sources exist
 	envFile, err := result.Value.LookupPath(parsePath("contexts.environment.file")).String()
 	if err != nil {
 		t.Fatalf("contexts.environment.file error = %v", err)
@@ -448,7 +424,6 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Error("contexts.project.file should not be empty")
 	}
 
-	// Verify roles from both sources exist
 	if !result.Value.LookupPath(parsePath("roles.assistant")).Exists() {
 		t.Error("roles.assistant should exist from global")
 	}
@@ -456,8 +431,7 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Error("roles.reviewer should exist from local")
 	}
 
-	// Verify settings field-level merge
-	// Global timeout should persist (not overridden by local)
+	// settings merge at field level: global timeout survives a local override of another field.
 	timeout, err := result.Value.LookupPath(parsePath("settings.timeout")).Int64()
 	if err != nil {
 		t.Fatalf("settings.timeout error = %v", err)
@@ -466,7 +440,6 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Errorf("settings.timeout = %d, want 120 (from global)", timeout)
 	}
 
-	// Global shell should persist
 	shell, err := result.Value.LookupPath(parsePath("settings.shell")).String()
 	if err != nil {
 		t.Fatalf("settings.shell error = %v", err)
@@ -475,7 +448,6 @@ func TestLoader_MergeWithTestdataFixtures(t *testing.T) {
 		t.Errorf("settings.shell = %q, want %q (from global)", shell, "/bin/bash")
 	}
 
-	// Local should override default_agent
 	agent, err := result.Value.LookupPath(parsePath("settings.default_agent")).String()
 	if err != nil {
 		t.Fatalf("settings.default_agent error = %v", err)
@@ -491,7 +463,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global defines agents.claude
 		writeCUEFile(t, globalDir, "settings.cue", `
 			agents: {
 				claude: {
@@ -501,7 +472,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			}
 		`)
 
-		// Local defines agents.gemini
 		writeCUEFile(t, localDir, "settings.cue", `
 			agents: {
 				gemini: {
@@ -517,7 +487,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// Both agents should exist
 		claudeCmd, err := result.Value.LookupPath(parsePath("agents.claude.command")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(agents.claude.command) error = %v", err)
@@ -539,7 +508,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global defines roles.reviewer with multiple fields
 		writeCUEFile(t, globalDir, "settings.cue", `
 			roles: {
 				reviewer: {
@@ -550,8 +518,7 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			}
 		`)
 
-		// Local defines roles.reviewer with different fields
-		// This should completely replace, not merge fields
+		// A same-named item is replaced entirely, not field-merged.
 		writeCUEFile(t, localDir, "settings.cue", `
 			roles: {
 				reviewer: {
@@ -567,7 +534,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// Description should be from local
 		desc, err := result.Value.LookupPath(parsePath("roles.reviewer.description")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(roles.reviewer.description) error = %v", err)
@@ -576,7 +542,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Errorf("roles.reviewer.description = %q, want %q", desc, "Local reviewer")
 		}
 
-		// Timeout should NOT exist (local replaced entirely, didn't merge fields)
 		timeoutPath := result.Value.LookupPath(parsePath("roles.reviewer.timeout"))
 		if timeoutPath.Exists() {
 			t.Error("roles.reviewer.timeout should not exist (local replaces entire item)")
@@ -587,7 +552,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global settings
 		writeCUEFile(t, globalDir, "settings.cue", `
 			settings: {
 				timeout: 120
@@ -596,7 +560,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			}
 		`)
 
-		// Local settings - only overrides some fields
 		writeCUEFile(t, localDir, "settings.cue", `
 			settings: {
 				default_agent: "gemini"
@@ -609,7 +572,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// Global-only field should persist
 		timeout, err := result.Value.LookupPath(parsePath("settings.timeout")).Int64()
 		if err != nil {
 			t.Fatalf("LookupPath(settings.timeout) error = %v", err)
@@ -618,7 +580,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Errorf("settings.timeout = %d, want 120", timeout)
 		}
 
-		// Global field should persist
 		shell, err := result.Value.LookupPath(parsePath("settings.shell")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(settings.shell) error = %v", err)
@@ -627,7 +588,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Errorf("settings.shell = %q, want %q", shell, "/bin/bash")
 		}
 
-		// Overridden field should be from local
 		agent, err := result.Value.LookupPath(parsePath("settings.default_agent")).String()
 		if err != nil {
 			t.Fatalf("LookupPath(settings.default_agent) error = %v", err)
@@ -641,7 +601,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 		globalDir := t.TempDir()
 		localDir := t.TempDir()
 
-		// Global with all collection types
 		writeCUEFile(t, globalDir, "settings.cue", `
 			agents: {
 				claude: { command: "claude" }
@@ -657,7 +616,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			}
 		`)
 
-		// Local adds to each collection
 		writeCUEFile(t, localDir, "settings.cue", `
 			agents: {
 				gemini: { command: "gemini" }
@@ -679,7 +637,6 @@ func TestLoader_MergeSemantics(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		// Verify all items from both sources exist
 		checks := []string{
 			"agents.claude.command",
 			"agents.gemini.command",
@@ -727,9 +684,7 @@ func TestLoader_LoadWithPackage(t *testing.T) {
 
 	t.Run("loads mixed files with and without package", func(t *testing.T) {
 		dir := t.TempDir()
-		// File without package
 		writeCUEFile(t, dir, "a.cue", `foo: "bar"`)
-		// Another file without package
 		writeCUEFile(t, dir, "b.cue", `baz: 123`)
 
 		l := NewLoader()
@@ -807,8 +762,6 @@ func TestIdentifyBrokenFiles(t *testing.T) {
 		}
 	})
 }
-
-// Helper functions
 
 func writeCUEFile(t *testing.T, dir, name, content string) {
 	t.Helper()

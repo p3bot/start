@@ -144,9 +144,8 @@ func TestReport_HasIssues(t *testing.T) {
 			want: false,
 		},
 		{
-			// Bare NotFound (no Fix) covers cwd/home-prefixed roles and
-			// contexts that legitimately may not exist; these must not
-			// cause a non-zero exit code.
+			// Bare NotFound (no Fix) is an optional missing file; it must
+			// not cause a non-zero exit code.
 			name: "not found only without fix",
 			sections: []SectionResult{
 				{Results: []CheckResult{{Status: StatusNotFound}}},
@@ -154,10 +153,7 @@ func TestReport_HasIssues(t *testing.T) {
 			want: false,
 		},
 		{
-			// NotFound with a Fix is actionable (e.g. a missing @module/
-			// extract whose origin field declared explicit intent). The
-			// Fix is the recovery path, so the result must surface as an
-			// issue rather than be silently swallowed.
+			// NotFound with a Fix is actionable and must surface as an issue.
 			name: "not found with fix",
 			sections: []SectionResult{
 				{Results: []CheckResult{{Status: StatusNotFound, Fix: "run install"}}},
@@ -260,8 +256,6 @@ func TestReport_Issues(t *testing.T) {
 	}
 }
 
-// TestReport_MissingCount confirms the new counter ignores bare NotFound
-// results and counts only those with a Fix string attached.
 func TestReport_MissingCount(t *testing.T) {
 	t.Parallel()
 	r := Report{
@@ -282,9 +276,6 @@ func TestReport_MissingCount(t *testing.T) {
 	}
 }
 
-// TestCheckResult_IsIssue covers the predicate that drives every report
-// helper and reporter path. The behavioural contract here is the single
-// source of truth for what counts as actionable.
 func TestCheckResult_IsIssue(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -329,7 +320,7 @@ func TestDefaultBuildInfo(t *testing.T) {
 func TestReporter_Print_Quiet_NoIssues(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	reporter := NewReporter(&buf, false, true) // quiet mode
+	reporter := NewReporter(&buf, false, true)
 
 	report := Report{
 		Sections: []SectionResult{
@@ -347,7 +338,7 @@ func TestReporter_Print_Quiet_NoIssues(t *testing.T) {
 func TestReporter_Print_Quiet_WithIssues(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	reporter := NewReporter(&buf, false, true) // quiet mode
+	reporter := NewReporter(&buf, false, true)
 
 	report := Report{
 		Sections: []SectionResult{
@@ -377,10 +368,6 @@ func TestReporter_Print_Quiet_WithIssues(t *testing.T) {
 	}
 }
 
-// TestReporter_Print_SummaryCountsMissing asserts the summary line lists
-// the actionable not-found count alongside errors and warnings. Bare
-// not-found results (no Fix) must not show up in the count — they remain
-// informational.
 func TestReporter_Print_SummaryCountsMissing(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
@@ -409,7 +396,6 @@ func TestReporter_Print_SummaryCountsMissing(t *testing.T) {
 	if !strings.Contains(output, "1 missing") {
 		t.Errorf("summary should report 1 missing, got: %q", output)
 	}
-	// Ensure the segments compose with comma separators.
 	if !strings.Contains(output, "1 error, 1 warning, 1 missing") {
 		t.Errorf("summary segments should compose with ', ' separators, got: %q", output)
 	}
@@ -418,9 +404,6 @@ func TestReporter_Print_SummaryCountsMissing(t *testing.T) {
 	}
 }
 
-// TestReporter_Print_SummaryOnlyMissing covers the edge case where the
-// only issues are actionable not-founds. The summary line must still
-// surface them rather than falling through to "No issues found".
 func TestReporter_Print_SummaryOnlyMissing(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
@@ -539,14 +522,12 @@ func TestReporter_Print_IndentAndNoIcon(t *testing.T) {
 	reporter.Print(report)
 
 	output := buf.String()
-	// Header should appear without a status symbol
 	if strings.Contains(output, "- Global") || strings.Contains(output, "✓ Global") {
 		t.Error("NoIcon result should not show status symbol before label")
 	}
 	if !strings.Contains(output, "  Global (~/.config/start)") {
 		t.Errorf("NoIcon result should show label at base indent, got:\n%s", output)
 	}
-	// Indented results should have extra indentation (4 spaces + symbol)
 	if !strings.Contains(output, "    ✓ agents.cue") {
 		t.Errorf("Indent=1 result should have 4-space indent, got:\n%s", output)
 	}

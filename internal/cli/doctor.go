@@ -15,7 +15,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// addDoctorCommand adds the doctor command to the parent command.
 func addDoctorCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "doctor",
@@ -41,15 +40,11 @@ Exit codes:
 
 	cmd.Flags().Bool("json", false, "Output as JSON")
 
-	// doctor is a parent command: zero args runs the diagnostic above,
-	// `doctor validate` routes to the maintainer check, and any other
-	// argument falls through to noArgsOrHelp's unknown-command error.
 	addDoctorValidateCommand(cmd)
 
 	parent.AddCommand(cmd)
 }
 
-// runDoctor executes the doctor command.
 func runDoctor(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -77,7 +72,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	reporter.Print(report)
 
 	if report.HasIssues() {
-		// Return a silent error to set exit code 1
+		// Silent error sets exit code 1.
 		cmd.SilenceErrors = true
 		cmd.SilenceUsage = true
 		return errDoctorIssuesFound
@@ -86,8 +81,8 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// errDoctorIssuesFound is returned when doctor finds issues.
-// It implements SilentError so main.go skips printing it.
+// errDoctorIssuesFound is returned when doctor finds issues. It implements
+// SilentError so main.go skips printing it.
 var errDoctorIssuesFound = &doctorError{}
 
 type doctorError struct{}
@@ -95,16 +90,13 @@ type doctorError struct{}
 func (e *doctorError) Error() string { return "issues found" }
 func (e *doctorError) Silent() bool  { return true }
 
-// prepareDoctor runs all checks and builds the report. The provider supplies
-// the registry client for the version-resolve and schema-fetch paths so tests
-// can run doctor offline against a stub.
+// prepareDoctor runs all checks and builds the report. The provider supplies the
+// registry client so tests can run doctor offline against a stub.
 func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 	var report doctor.Report
 
-	// Intro section
 	report.Sections = append(report.Sections, doctor.CheckIntro())
 
-	// Version section
 	indexPath := resolveLibraryIndexPath()
 	buildInfo := doctor.BuildInfo{
 		Version:      cliVersion,
@@ -117,20 +109,16 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 	}
 	report.Sections = append(report.Sections, doctor.CheckVersion(buildInfo))
 
-	// Cache section
 	report.Sections = append(report.Sections, doctor.CheckCache())
 
-	// Configuration section
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return report, err
 	}
 	report.Sections = append(report.Sections, doctor.CheckConfiguration(paths))
 
-	// Schema validation section
 	report.Sections = append(report.Sections, fetchAndValidateSchemas(paths, provider))
 
-	// Load config for remaining checks (if possible)
 	var cfgLoaded bool
 	var cfgResult internalcue.LoadResult
 
@@ -145,14 +133,13 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 		}
 	}
 
-	// Settings checks always run (reads settings.cue directly via config paths)
+	// Settings checks always run, reading settings.cue directly.
 	var settingsCfg cue.Value
 	if cfgLoaded {
 		settingsCfg = cfgResult.Value
 	}
 	report.Sections = append(report.Sections, doctor.CheckSettings(paths, settingsCfg))
 
-	// Agent checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckAgents(cfgResult.Value))
 	} else {
@@ -164,7 +151,6 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 		})
 	}
 
-	// Role checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckRoles(cfgResult.Value))
 	} else {
@@ -176,7 +162,6 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 		})
 	}
 
-	// Context checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckContexts(cfgResult.Value))
 	} else {
@@ -188,7 +173,6 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 		})
 	}
 
-	// Task checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckTasks(cfgResult.Value))
 	} else {
@@ -200,13 +184,11 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 		})
 	}
 
-	// Environment checks
 	report.Sections = append(report.Sections, doctor.CheckEnvironment(paths))
 
 	return report, nil
 }
 
-// fetchAndValidateSchemas fetches schemas from the registry and validates config files.
 func fetchAndValidateSchemas(paths config.Paths, provider clientProvider) doctor.SectionResult {
 	if !paths.AnyExists() {
 		return doctor.SectionResult{
@@ -263,16 +245,14 @@ func fetchAndValidateSchemas(paths config.Paths, provider clientProvider) doctor
 	return doctor.CheckSchemaValidation(paths, schemas)
 }
 
-// resolveIndexVersion returns the latest index version string (e.g., "v0.3.2").
-// Reads from cache first; falls back to a registry network call if cache is missing.
+// resolveIndexVersion returns the latest index version string. Reads cache first
+// to avoid a network call, falling back to a registry query.
 func resolveIndexVersion(indexPath string, provider clientProvider) string {
-	// Try cache first to avoid a network call.
 	cached, err := cache.ReadIndex()
 	if err == nil && cached.Version != "" {
 		return modules.VersionFromOrigin(cached.Version)
 	}
 
-	// Fall back to registry query.
 	client, err := provider()
 	if err != nil {
 		return ""

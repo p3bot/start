@@ -17,17 +17,14 @@ import (
 // Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
 // to any test that calls os.Chdir — it will cause data races on the working directory.
 
-// TestIntegration_ModulesListWithConfig tests listing modules from config.
 func TestIntegration_ModulesListWithConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create config directory
 	configDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Write config with modules
 	config := `
 agents: {
 	claude: {
@@ -59,10 +56,9 @@ tasks: {
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Change to temp directory
 	chdir(t, tmpDir)
 
-	// Override HOME to isolate from global config
+	// Override HOME to isolate from global config.
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
@@ -103,7 +99,6 @@ tasks: {
 	}
 }
 
-// TestIntegration_ModulesListJSON tests --json output for installed modules.
 func TestIntegration_ModulesListJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -156,7 +151,6 @@ roles: {
 			t.Errorf("expected non-empty JSON array, got: %s", buf.String())
 		}
 
-		// Verify expected fields are present
 		first := result[0]
 		for _, field := range []string{"category", "name", "scope", "origin"} {
 			if _, ok := first[field]; !ok {
@@ -188,7 +182,6 @@ roles: {
 	})
 }
 
-// TestIntegration_ModulesListCategory tests filtering installed modules by category.
 func TestIntegration_ModulesListCategory(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -287,13 +280,11 @@ roles: {
 	})
 }
 
-// TestIntegration_ModulesListNoConfig tests listing when no config exists.
 func TestIntegration_ModulesListNoConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	chdir(t, tmpDir)
 
-	// Override HOME to isolate
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
@@ -315,11 +306,9 @@ func TestIntegration_ModulesListNoConfig(t *testing.T) {
 	}
 }
 
-// TestIntegration_SearchIndex tests the search functionality.
+// TestIntegration_SearchIndex exercises the search logic directly because the
+// registry fetch is not easily mockable.
 func TestIntegration_SearchIndex(t *testing.T) {
-	// This test uses the internal search function directly
-	// since we can't easily mock the registry fetch
-
 	index := &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			"ai/claude": {
@@ -344,13 +333,11 @@ func TestIntegration_SearchIndex(t *testing.T) {
 		Contexts: map[string]registry.IndexEntry{},
 	}
 
-	// Test search for "golang" - should find both roles
 	results := searchIndexEntries(index, "golang")
 	if len(results) != 2 {
 		t.Errorf("expected 2 results for 'golang', got %d", len(results))
 	}
 
-	// Test search for "claude" - should find agent
 	results = searchIndexEntries(index, "claude")
 	if len(results) != 1 {
 		t.Errorf("expected 1 result for 'claude', got %d", len(results))
@@ -359,47 +346,42 @@ func TestIntegration_SearchIndex(t *testing.T) {
 		t.Errorf("expected ai/claude, got %s", results[0].Name)
 	}
 
-	// Test search for "programming" - should match description
 	results = searchIndexEntries(index, "programming")
 	if len(results) != 1 {
 		t.Errorf("expected 1 result for 'programming', got %d", len(results))
 	}
 }
 
-// searchResult mirrors cli.SearchResult for testing
+// searchResult mirrors cli.SearchResult for testing.
 type searchResult struct {
 	Category string
 	Name     string
 	Entry    registry.IndexEntry
 }
 
-// searchIndexEntries is a copy of the search logic for integration testing
+// searchIndexEntries duplicates cli's search logic for integration testing.
 func searchIndexEntries(index *registry.Index, query string) []searchResult {
 	var results []searchResult
 	queryLower := strings.ToLower(query)
 
-	// Search agents
 	for name, entry := range index.Agents {
 		if matchesQuery(name, entry, queryLower) {
 			results = append(results, searchResult{Category: "agents", Name: name, Entry: entry})
 		}
 	}
 
-	// Search roles
 	for name, entry := range index.Roles {
 		if matchesQuery(name, entry, queryLower) {
 			results = append(results, searchResult{Category: "roles", Name: name, Entry: entry})
 		}
 	}
 
-	// Search tasks
 	for name, entry := range index.Tasks {
 		if matchesQuery(name, entry, queryLower) {
 			results = append(results, searchResult{Category: "tasks", Name: name, Entry: entry})
 		}
 	}
 
-	// Search contexts
 	for name, entry := range index.Contexts {
 		if matchesQuery(name, entry, queryLower) {
 			results = append(results, searchResult{Category: "contexts", Name: name, Entry: entry})
@@ -427,7 +409,6 @@ func matchesQuery(name string, entry registry.IndexEntry, queryLower string) boo
 	return false
 }
 
-// TestIntegration_ModulesCommandHelp tests that help works for the flat module commands.
 func TestIntegration_ModulesCommandHelp(t *testing.T) {
 	tests := []struct {
 		name string

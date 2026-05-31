@@ -85,7 +85,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		terms = modules.ParseSearchPatterns(query)
 	}
 
-	// Validate regex patterns before searching
 	if len(terms) > 0 {
 		if _, err := modules.CompileSearchTerms(terms); err != nil {
 			return usageError(err)
@@ -112,7 +111,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	stderr := cmd.ErrOrStderr()
 
-	// Search local config
 	if paths.LocalExists {
 		cfg, err := loader.LoadSingle(paths.Local)
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
@@ -136,7 +134,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Search global config
 	if paths.GlobalExists {
 		cfg, err := loader.LoadSingle(paths.Global)
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
@@ -160,7 +157,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Search registry (graceful fallback if unavailable)
+	// Search registry; degrade gracefully if unavailable.
 	var registryErr error
 	ctx := context.Background()
 	client, err := getProvider(cmd)()
@@ -193,13 +190,11 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		displayQuery = "--tag " + strings.Join(tags, ",")
 	}
 
-	// Nothing matched anywhere while the registry was unreachable: the empty
-	// result is not authoritative, so the command fails with the transient code
-	// and an agent retries instead of trusting a false "no matches". In --json
-	// mode stdout must stay empty, so return the raw error. In text mode the
-	// human still gets the friendly "no matches" line and the same outage
-	// warning the results path shows; the error is silenced so main.go adds no
-	// duplicate "Error:" line while the mapper still derives exit 75.
+	// Nothing matched while the registry was unreachable: the empty result is
+	// not authoritative, so fail with the transient code so an agent retries.
+	// --json returns the raw error (stdout stays empty); text mode prints the
+	// no-matches line and outage warning but silences the error so main.go adds
+	// no duplicate "Error:" line.
 	if len(sections) == 0 && registryErr != nil {
 		if jsonFlag {
 			return registryErr
@@ -216,13 +211,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		if err := writeJSON(cmd.OutOrStdout(), sections); err != nil {
 			return fmt.Errorf("marshalling search results: %w", err)
 		}
-		// Partial results during a registry outage are not authoritative: the
-		// registry portion is missing. The empty case already fails with the
-		// transient code above; here we have local matches, so the command
-		// still succeeds with exit 0, but the outage is surfaced on stderr (as
-		// the text path does) so a --json consumer can tell the set is
-		// incomplete. stderr carries diagnostics without breaking the
-		// stdout-JSON contract.
+		// Local matches but registry down: succeed (exit 0) yet warn on stderr
+		// so a --json consumer can tell the set is incomplete without breaking
+		// the stdout-JSON contract.
 		if registryErr != nil {
 			printWarning(cmd.ErrOrStderr(), "registry unavailable: %v", registryErr)
 		}
@@ -263,13 +254,11 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 			fmt.Fprintln(w, section.Label)
 		}
 
-		// Group results by category
 		grouped := make(map[string][]modules.SearchResult)
 		for _, r := range section.Results {
 			grouped[r.Category] = append(grouped[r.Category], r)
 		}
 
-		// Print in category order
 		categories := []string{"agents", "roles", "contexts", "tasks"}
 		firstCat := true
 		for _, cat := range categories {

@@ -10,9 +10,7 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigCommand adds the config command group and its subcommands to the
-// parent. flags is forwarded to addConfigGetCommand so it can bind --global to
-// flags.Global; no other subcommand factory consumes it.
+// flags is forwarded only to addConfigGetCommand, which binds --global to flags.Global.
 func addConfigCommand(parent *cobra.Command, flags *Flags) {
 	configCmd := &cobra.Command{
 		Use:     "config",
@@ -27,7 +25,6 @@ Use --local to target project-specific configuration.`,
 
 	parent.AddCommand(configCmd)
 
-	// Verb-first subcommands
 	addConfigListCommand(configCmd)
 	addConfigGetCommand(configCmd, flags)
 	addConfigAddCommand(configCmd)
@@ -39,7 +36,6 @@ Use --local to target project-specific configuration.`,
 	addConfigExportCommand(configCmd)
 }
 
-// runConfigList displays an overview of all configuration.
 func runConfigList(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -51,7 +47,6 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	w := cmd.OutOrStdout()
 	flags := getFlags(cmd)
 
-	// Show config paths
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -74,13 +69,11 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(w, "%s ", paths.Local)
 	fmt.Fprintln(w, tui.Annotate("%s", localStatus))
 
-	// Determine scope for listing
 	scope := config.ScopeFromLocal(flags.Local)
 	scopeLabel := scope.String()
 
 	stderr := cmd.ErrOrStderr()
 
-	// Settings
 	entries, err := config.ResolveAllSettings(paths, scope)
 	if err != nil {
 		printWarning(stderr, "failed to load settings: %s", err)
@@ -94,7 +87,6 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		printSettingsEntries(w, entries)
 	}
 
-	// Agents
 	agents, agentOrder, err := loadAgentsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load agents: %s", err)
@@ -121,7 +113,6 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Roles
 	roles, roleOrder, err := loadRolesForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load roles: %s", err)
@@ -141,7 +132,6 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Contexts
 	contexts, contextOrder, err := loadContextsForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load contexts: %s", err)
@@ -173,7 +163,6 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Tasks
 	tasks, taskOrder, err := loadTasksForScope(scope)
 	if err != nil {
 		printWarning(stderr, "failed to load tasks: %s", err)

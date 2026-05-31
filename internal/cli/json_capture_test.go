@@ -15,17 +15,10 @@ import (
 )
 
 // captureJSON runs a --json command through a fresh root command with the
-// registry-client provider bound to stub, capturing stdout and decoding it as
-// JSON. Threading stub through the parameter keeps the seam visible at every
-// call site: a missing stub argument is a compile error, ruling out the
-// silent-bypass failure mode the sentinel smoke test guards against.
-//
-// decoded is the JSON value (an object or array depending on the command, so
-// the static type is any rather than map[string]any) for keys-and-types
-// assertions; raw is the bytes for sentinel-substring assertions. A non-nil
-// Execute error is tolerated only when JSON was still produced (doctor returns
-// a silent exit-code error alongside its report); failure to decode fails the
-// test with the underlying error.
+// provider bound to stub, returning the decoded JSON and raw bytes. Threading
+// stub as a parameter makes a bypass a compile error. A non-nil Execute error
+// is tolerated as long as JSON was still produced (doctor returns a silent
+// exit-code error alongside its report).
 func captureJSON(t *testing.T, stub *registryStub, args ...string) (decoded any, raw []byte) {
 	t.Helper()
 
@@ -50,14 +43,12 @@ func captureJSON(t *testing.T, stub *registryStub, args ...string) (decoded any,
 	return decoded, raw
 }
 
-// sentinelAgentName is a uniquely-named index entry the real registry would
-// never carry. Its presence in library --json output proves the stub was
-// consulted rather than silently bypassed.
+// sentinelAgentName is an index entry the real registry would never carry, so
+// its presence in output proves the stub was consulted, not bypassed.
 const sentinelAgentName = "stub-sentinel-agent"
 
 // stubLibraryIndex builds an index with representative entries across every
-// category, including the sentinel agent and a registry-origin agent matching
-// the config written by setupStartTestConfigWithRegistry's update fixture.
+// category, including the sentinel agent.
 func stubLibraryIndex() *registry.Index {
 	return &registry.Index{
 		Agents: map[string]registry.IndexEntry{
@@ -100,11 +91,9 @@ func stubLibraryIndex() *registry.Index {
 	}
 }
 
-// TestCaptureJSON_LibrarySentinel is the end-to-end wiring proof required by the
-// project: it asserts the sentinel entry, present only in the injected stub's
-// fixture, appears in captured library --json output. A real registry would
-// never carry the sentinel name, so its presence rules out a silent bypass of
-// the provider seam.
+// TestCaptureJSON_LibrarySentinel asserts the sentinel entry, present only in
+// the injected stub, appears in library --json output, ruling out a silent
+// bypass of the provider seam.
 func TestCaptureJSON_LibrarySentinel(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 
@@ -131,8 +120,6 @@ func TestCaptureJSON_LibrarySentinel(t *testing.T) {
 	}
 }
 
-// TestLibraryJSONOffline asserts library --json emits its documented object
-// shape offline against the stub.
 func TestLibraryJSONOffline(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 
@@ -149,8 +136,8 @@ func TestLibraryJSONOffline(t *testing.T) {
 	}
 }
 
-// TestSearchJSONOffline asserts search --json emits its documented array shape
-// offline and that the registry section (served by the stub) is populated.
+// TestSearchJSONOffline asserts search --json emits its array shape offline
+// with the stub-served registry section populated.
 func TestSearchJSONOffline(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 
@@ -173,10 +160,9 @@ func TestSearchJSONOffline(t *testing.T) {
 }
 
 // TestSearchJSONOffline_RegistryUnavailable asserts search degrades to
-// local-only results when the registry index is unavailable, preserving the
-// documented graceful-fallback semantics offline. The provider is still
-// consulted (the failure is in FetchIndex, after the client is built), and the
-// registry-only sentinel must not appear.
+// local-only results when the index is unavailable. The provider is still
+// consulted (the failure is in FetchIndex), and the registry-only sentinel
+// must not appear.
 func TestSearchJSONOffline_RegistryUnavailable(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 	stub.SetFetchIndexError(fmt.Errorf("registry unavailable"))
@@ -199,9 +185,8 @@ func TestSearchJSONOffline_RegistryUnavailable(t *testing.T) {
 }
 
 // TestUpdateJSONOffline asserts update --json runs offline through the provider
-// and emits its documented array shape. The fixture installs a registry-origin
-// agent so update collects it and consults the stub index rather than
-// short-circuiting on an empty install set.
+// and emits its array shape. The fixture installs a registry-origin agent so
+// update collects it rather than short-circuiting on an empty install set.
 func TestUpdateJSONOffline(t *testing.T) {
 	tmpDir, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 	writeInstalledRegistryAgent(t, tmpDir)
@@ -233,9 +218,9 @@ func TestUpdateJSONOffline(t *testing.T) {
 	}
 }
 
-// TestDoctorJSONOffline asserts doctor --json runs offline through the provider
-// and its schema-validation section degrades to the documented "Skipped" shape
-// when the stub returns an error for the schema module.
+// TestDoctorJSONOffline asserts doctor --json runs offline and its
+// schema-validation section degrades to "Skipped" when the stub errors on the
+// schema module.
 func TestDoctorJSONOffline(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 
@@ -263,9 +248,8 @@ func TestDoctorJSONOffline(t *testing.T) {
 }
 
 // writeInstalledRegistryAgent appends a registry-origin agent to the local
-// config so update collects it as an installed module. Its origin version
-// matches the stub index entry's version, so update finds no upgrade and stays
-// offline (no per-module Fetch).
+// config so update collects it. Its origin version matches the stub index, so
+// update finds no upgrade and stays offline (no per-module Fetch).
 func writeInstalledRegistryAgent(t *testing.T, tmpDir string) {
 	t.Helper()
 	content := `

@@ -31,23 +31,17 @@ func (r ValidationResult) HasErrors() bool {
 }
 
 // ValidateConfig validates the CUE configuration in the given paths.
-// It checks each directory that exists for valid CUE files.
-// A directory is considered valid if it contains at least one .cue file
-// that can be successfully parsed and loaded by CUE.
-//
-// Empty directories (no .cue files) are treated as "no config" rather than errors.
-// Only directories with invalid CUE files produce errors.
+// Empty directories (no .cue files) count as "no config", not errors; only
+// directories with invalid CUE files produce errors.
 func ValidateConfig(paths Paths) ValidationResult {
 	var result ValidationResult
 
-	// Validate global config if directory exists
 	if paths.GlobalExists {
 		valid, err := validateDirectory(paths.Global)
 		result.GlobalValid = valid
 		result.GlobalError = err
 	}
 
-	// Validate local config if directory exists
 	if paths.LocalExists {
 		valid, err := validateDirectory(paths.Local)
 		result.LocalValid = valid
@@ -57,13 +51,9 @@ func ValidateConfig(paths Paths) ValidationResult {
 	return result
 }
 
-// validateDirectory checks if a directory contains valid CUE configuration.
-// Returns:
-//   - (true, nil) if directory contains valid CUE files
-//   - (false, nil) if directory is empty or has no CUE files (not an error, just no config)
-//   - (false, error) if directory has CUE files but they are invalid
+// validateDirectory returns (true, nil) for valid CUE files, (false, nil) when
+// no CUE files are present, and (false, error) when CUE files are invalid.
 func validateDirectory(dir string) (valid bool, err *internalcue.ValidationError) {
-	// First check if directory contains any CUE files
 	hasCUE, readErr := internalcue.HasCUEFiles(dir)
 	if readErr != nil {
 		return false, &internalcue.ValidationError{
@@ -72,15 +62,12 @@ func validateDirectory(dir string) (valid bool, err *internalcue.ValidationError
 		}
 	}
 	if !hasCUE {
-		// No CUE files - not an error, just no config present
 		return false, nil
 	}
 
-	// Try to load the CUE configuration
 	loader := internalcue.NewLoader()
 	_, loadErr := loader.LoadSingle(dir)
 	if loadErr != nil {
-		// Convert to ValidationError with context
 		ve := internalcue.FormatErrorWithContext(loadErr)
 		if ve != nil {
 			return false, ve

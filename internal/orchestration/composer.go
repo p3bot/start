@@ -16,12 +16,9 @@ import (
 
 // ContextSelection specifies which contexts to include.
 type ContextSelection struct {
-	// IncludeRequired always includes required contexts.
 	IncludeRequired bool
-	// IncludeDefaults includes default contexts (for `start` command).
 	IncludeDefaults bool
-	// Tags specifies which tagged contexts to include.
-	Tags []string
+	Tags            []string
 }
 
 // Context represents a resolved context.
@@ -62,10 +59,8 @@ func NewComposer(processor *TemplateProcessor, workingDir string) *Composer {
 	}
 }
 
-// resolveFileToTemp reads a source file and writes it to .start/temp/.
-// Returns the temp file path, or empty string if no file to resolve.
-// The entityType is "task", "role", or "context".
-// The name is the entity name (e.g., "code-review", "start/create-task").
+// resolveFileToTemp copies a source file into .start/temp/, returning the temp path
+// (empty if filePath is empty). entityType is "task", "role", or "context".
 func (c *Composer) resolveFileToTemp(entityType, name, filePath string) (string, error) {
 	if filePath == "" {
 		return "", nil
@@ -84,27 +79,21 @@ func (c *Composer) resolveFileToTemp(entityType, name, filePath string) (string,
 	return tempPath, nil
 }
 
-// isCwdPath returns true if the file path is within the working directory (cwd).
-// Files within cwd don't need to be copied to temp - they're already accessible.
-// A file is within cwd if:
-//   - It's a relative path (e.g., "AGENTS.md", "./docs/file.md")
-//   - It's an absolute path that's a child of the working directory
+// isCwdPath reports whether filePath is within the working directory (relative paths,
+// or absolute paths under workingDir). Such files are already accessible to agents and
+// need no temp copy.
 func (c *Composer) isCwdPath(filePath string) bool {
 	if filePath == "" {
 		return false
 	}
 
-	// Relative paths are local
 	if !filepath.IsAbs(filePath) {
 		return true
 	}
 
-	// Absolute paths are local if they're under the working directory
-	// Clean both paths to normalize them
 	cleanPath := filepath.Clean(filePath)
 	cleanWorkDir := filepath.Clean(c.workingDir)
 
-	// Check if the file path starts with the working directory
 	return strings.HasPrefix(cleanPath, cleanWorkDir+string(filepath.Separator))
 }
 
@@ -135,7 +124,6 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 	var promptParts []string
 	addedContexts := make(map[string]bool)
 
-	// Helper to resolve and add a config context
 	addConfigContext := func(ctx Context) {
 		if addedContexts[ctx.Name] {
 			return
@@ -156,7 +144,6 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 		result.Contexts = append(result.Contexts, ctx)
 	}
 
-	// First: add required contexts (config definition order)
 	if selection.IncludeRequired {
 		requiredSelection := ContextSelection{IncludeRequired: true}
 		contexts, err := c.selectContexts(cfg, requiredSelection)
@@ -168,7 +155,7 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 		}
 	}
 
-	// Second: add default contexts if IncludeDefaults and no explicit tags
+	// Explicit tags suppress defaults.
 	if selection.IncludeDefaults && len(selection.Tags) == 0 {
 		defaultSelection := ContextSelection{IncludeDefaults: true}
 		contexts, err := c.selectContexts(cfg, defaultSelection)
@@ -180,10 +167,9 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 		}
 	}
 
-	// Third: process user tags in order (order is preserved)
+	// User tags are processed in given order.
 	for _, tag := range selection.Tags {
 		if IsFilePath(tag) {
-			// File path - create context directly
 			ctx := Context{
 				Name: tag,
 				File: tag,
@@ -201,7 +187,6 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 			}
 			result.Contexts = append(result.Contexts, ctx)
 		} else if tag == "default" {
-			// "default" pseudo-tag - add default contexts (config order)
 			defaultSelection := ContextSelection{IncludeDefaults: true}
 			contexts, err := c.selectContexts(cfg, defaultSelection)
 			if err != nil {
@@ -211,13 +196,12 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 				addConfigContext(ctx)
 			}
 		} else {
-			// Try exact context name match first (from search resolution)
+			// Exact context name match takes precedence over tag matching.
 			ctxVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyContexts))
 			if ctxVal.Exists() && ctxVal.LookupPath(cue.MakePath(cue.Str(tag))).Exists() {
 				ctx := Context{Name: tag}
 				addConfigContext(ctx)
 			} else {
-				// Fall back to tag matching
 				tagSelection := ContextSelection{Tags: []string{tag}}
 				contexts, err := c.selectContexts(cfg, tagSelection)
 				if err != nil {
@@ -233,13 +217,11 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 		}
 	}
 
-	// Append custom text or task instructions
 	if customText != "" {
 		promptParts = append(promptParts, strings.TrimRight(customText, "\n"))
 	}
 
-	// Append excluded default contexts with "skipped" status for visibility.
-	// Get all default contexts and add any not already included.
+	// Record excluded defaults as "skipped" so they remain visible in the UI.
 	defaultSelection := ContextSelection{IncludeDefaults: true}
 	allDefaults, err := c.selectContexts(cfg, defaultSelection)
 	if err != nil {
@@ -265,10 +247,8 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 		return result, err
 	}
 
-	// Track whether this is an explicit role selection
 	explicitRole := roleName != ""
 
-	// Resolve role
 	if roleName == "" {
 		var resolutions []RoleResolution
 		var selectErr error
@@ -276,7 +256,6 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 		result.RoleResolutions = resolutions
 
 		if selectErr != nil {
-			// Selection failed (required role missing or all optional roles skipped)
 			return result, selectErr
 		}
 	}
@@ -290,10 +269,8 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 		if IsFilePath(roleName) {
 			roleContent, roleErr = ReadFilePath(roleName)
 			if roleErr == nil {
-				// For file path roles, use the expanded path
 				roleFilePath, _ = ExpandFilePath(roleName)
 			}
-			// Add resolution tracking for file path roles
 			res := RoleResolution{
 				Name: roleName,
 				File: roleName,
@@ -308,7 +285,6 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 		} else {
 			roleContent, roleFilePath, roleErr = c.resolveRole(cfg, roleName)
 
-			// Add resolution tracking for config roles (if not already tracked)
 			if len(result.RoleResolutions) == 0 || result.RoleResolutions[len(result.RoleResolutions)-1].Name != roleName {
 				res := RoleResolution{
 					Name: roleName,
@@ -342,7 +318,7 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 func (c *Composer) selectContexts(cfg cue.Value, selection ContextSelection) ([]Context, error) {
 	contextsVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyContexts))
 	if !contextsVal.Exists() {
-		return nil, nil // No contexts defined is OK
+		return nil, nil
 	}
 
 	var contexts []Context
@@ -362,7 +338,6 @@ func (c *Composer) selectContexts(cfg cue.Value, selection ContextSelection) ([]
 
 		ctx := Context{Name: name}
 
-		// Extract context properties
 		if desc := ctxVal.LookupPath(cue.ParsePath("description")); desc.Exists() {
 			ctx.Description, _ = desc.String()
 		}
@@ -386,27 +361,22 @@ func (c *Composer) selectContexts(cfg cue.Value, selection ContextSelection) ([]
 			ctx.File, _ = file.String()
 		}
 
-		// Check if context should be included
 		include := false
 
-		// Required contexts always included
 		if selection.IncludeRequired && ctx.Required {
 			include = true
 		}
 
-		// Default contexts included if IncludeDefaults is set
 		if selection.IncludeDefaults && ctx.Default {
 			include = true
 		}
 
-		// Tagged contexts included if matching tag in selection
 		if len(selection.Tags) > 0 {
-			// Special handling for "default" pseudo-tag
+			// "default" pseudo-tag matches default contexts.
 			if tagSet["default"] && ctx.Default {
 				include = true
 			}
 
-			// Check actual tags
 			for _, tag := range ctx.Tags {
 				if tagSet[tag] {
 					include = true
@@ -441,12 +411,10 @@ func (c *Composer) resolveContext(cfg cue.Value, name string) (ProcessResult, er
 	}
 	fields.File = resolved
 
-	// Write file to temp for agent access (only for external files).
-	// Files within cwd are already accessible - no temp copy needed.
+	// Only external files are copied to temp; cwd files are already accessible.
 	var tempPath string
 	if fields.File != "" {
 		if c.isCwdPath(fields.File) {
-			// Expand tilde and validate cwd file exists (don't copy, just check)
 			expandedPath, err := ExpandFilePath(fields.File)
 			if err != nil {
 				return ProcessResult{}, fmt.Errorf("expanding context file path %s: %w", fields.File, err)
@@ -495,14 +463,12 @@ func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath st
 	}
 	fields.File = resolved
 
-	// Track the file path for {{.role_file}} placeholder.
-	// For file-based roles: use original path (cwd) or temp path (external).
-	// For inline roles: will write to temp after processing.
+	// roleFilePath backs the {{.role_file}} placeholder; for inline roles it is set
+	// to the temp file written after processing.
 	var roleFilePath string
 
 	if fields.File != "" {
 		if c.isCwdPath(fields.File) {
-			// Expand tilde and validate cwd file exists (don't copy, just check)
 			expandedPath, err := ExpandFilePath(fields.File)
 			if err != nil {
 				return "", "", fmt.Errorf("expanding role file path %s: %w", fields.File, err)
@@ -527,8 +493,7 @@ func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath st
 		return "", "", err
 	}
 
-	// For inline roles (no source file), write resolved content to temp.
-	// This ensures {{.role_file}} always has a valid path for agents that need it.
+	// Inline roles still need a temp file so {{.role_file}} always has a valid path.
 	if roleFilePath == "" && result.Content != "" {
 		tempPath, err := c.tempManager.WriteUTDFile("role", name, result.Content)
 		if err != nil {
@@ -548,7 +513,6 @@ func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath st
 // Returns empty roleName with nil error if no roles are defined.
 // Returns error if all roles fail or a required role fails.
 func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolutions []RoleResolution, err error) {
-	// Iterate through roles in definition order
 	roles := cfg.LookupPath(cue.ParsePath(internalcue.KeyRoles))
 	if !roles.Exists() {
 		return "", nil, nil
@@ -563,19 +527,17 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 		name := iter.Selector().Unquoted()
 		roleVal := iter.Value()
 
-		// Extract optional field (default: false)
 		optional := false
 		if opt := roleVal.LookupPath(cue.ParsePath("optional")); opt.Exists() {
 			optional, _ = opt.Bool()
 		}
 
-		// Extract file field
 		var filePath string
 		if file := roleVal.LookupPath(cue.ParsePath("file")); file.Exists() {
 			filePath, _ = file.String()
 		}
 
-		// Check if role is available
+		// Non-file roles (command/prompt only) are always available at selection time.
 		available := true
 		var checkErr string
 
@@ -585,7 +547,6 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 				checkErr = msg
 			}
 		}
-		// Non-file roles (command/prompt only) are always available at selection time
 
 		res := RoleResolution{
 			Name:     name,
@@ -599,7 +560,6 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 			return name, resolutions, nil
 		}
 
-		// Role not available
 		if optional {
 			res.Status = "skipped"
 			res.Error = checkErr
@@ -607,14 +567,12 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 			continue
 		}
 
-		// Required role failed
 		res.Status = "error"
 		res.Error = checkErr
 		resolutions = append(resolutions, res)
 		return "", resolutions, fmt.Errorf("role %q: %s", name, checkErr)
 	}
 
-	// All roles exhausted
 	if len(resolutions) > 0 {
 		return "", resolutions, fmt.Errorf("no roles available — all configured roles reference missing files\n  Run 'start config roles' to check your role configuration\n  Run 'start install <role-name>' to install a role from the registry")
 	}
@@ -691,12 +649,10 @@ func (c *Composer) ResolveTask(cfg cue.Value, name, instructions string) (Proces
 	}
 	fields.File = resolved
 
-	// Write file to temp for agent access (only for external files).
-	// Files within cwd are already accessible - no temp copy needed.
+	// Only external files are copied to temp; cwd files are already accessible.
 	var tempPath string
 	if fields.File != "" {
 		if c.isCwdPath(fields.File) {
-			// Expand tilde and validate cwd file exists (don't copy, just check)
 			expandedPath, err := ExpandFilePath(fields.File)
 			if err != nil {
 				return ProcessResult{}, fmt.Errorf("expanding task file path %s: %w", fields.File, err)
@@ -729,7 +685,7 @@ func (c *Composer) ResolveTask(cfg cue.Value, name, instructions string) (Proces
 // but still needs template processing for placeholders like {{.instructions}}.
 func (c *Composer) ProcessContent(content, instructions string) (ProcessResult, error) {
 	fields := UTDFields{
-		Prompt: content, // Use prompt field so content is treated as template
+		Prompt: content, // prompt field makes content go through template processing
 	}
 	return c.processor.Process(fields, instructions)
 }
@@ -778,10 +734,8 @@ func ResolveModulePath(path, origin string) (string, error) {
 		return "", fmt.Errorf("getting CUE cache dir: %w", err)
 	}
 
-	// Build the exact cache path from the origin.
-	// Origin: "github.com/.../holistic@v0.1.2"
-	// Cache:  cacheDir/mod/extract/github.com/.../holistic@v0.1.2/
-	// The CUE cache stores the version as part of the leaf directory name.
+	// The CUE cache stores the version as part of the leaf directory name, so the
+	// origin maps directly to cacheDir/mod/extract/<dir>/<base>@<version>/.
 	if idx := strings.LastIndex(origin, "@"); idx != -1 {
 		modulePath := origin[:idx]
 		version := origin[idx:]
@@ -793,8 +747,7 @@ func ResolveModulePath(path, origin string) (string, error) {
 		}
 	}
 
-	// Fallback: scan directory for matching version (origins without version
-	// or when the exact versioned directory is missing from cache).
+	// Fallback for unversioned origins or a missing exact directory: scan for a version.
 	originWithoutVersion := origin
 	if idx := strings.LastIndex(origin, "@"); idx != -1 {
 		originWithoutVersion = origin[:idx]

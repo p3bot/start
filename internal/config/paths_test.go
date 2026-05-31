@@ -30,10 +30,8 @@ func TestScope_String(t *testing.T) {
 }
 
 func TestResolvePaths(t *testing.T) {
-	// Create a temporary working directory
 	workDir := t.TempDir()
 
-	// Test with no config directories
 	t.Run("no config dirs", func(t *testing.T) {
 		p, err := ResolvePaths(workDir)
 		if err != nil {
@@ -48,7 +46,6 @@ func TestResolvePaths(t *testing.T) {
 		}
 	})
 
-	// Test with local config directory
 	t.Run("with local config", func(t *testing.T) {
 		localDir := filepath.Join(workDir, ".start")
 		if err := os.Mkdir(localDir, 0o755); err != nil {
@@ -71,14 +68,12 @@ func TestResolvePaths(t *testing.T) {
 }
 
 func TestResolvePaths_XDGConfigHome(t *testing.T) {
-	// Create a temporary XDG config directory
 	xdgDir := t.TempDir()
 	startDir := filepath.Join(xdgDir, "start")
 	if err := os.Mkdir(startDir, 0o755); err != nil {
 		t.Fatalf("Failed to create start config dir: %v", err)
 	}
 
-	// Set XDG_CONFIG_HOME (t.Setenv auto-restores on cleanup)
 	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 
 	workDir := t.TempDir()

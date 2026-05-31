@@ -1,16 +1,9 @@
 //go:build registry
 
-// This file is compiled only under the `registry` build tag (go test
-// -tags=registry). It exercises `doctor validate --json` against the live CUE
-// Central Registry and a real clone of the library repository, asserting the
-// ValidateResult / ValidateCategoryResult / ValidateModuleResult shape.
-//
-// doctor validate's per-module fetch-and-validate walk is the most expensive
-// registry interaction to stub, so it is carved out of the offline drift guard
-// (which covers library/search/update/doctor via the provider stub) and
-// covered here instead. The tag keeps this file out of the default compile and
-// the default `go test` discovery, so scripts/invoke-tests — which does not
-// pass -tags=registry — never reaches the network.
+// Built only under -tags=registry. Exercises `doctor validate --json` against
+// the live CUE registry and a real library clone. The per-module walk is too
+// expensive to stub, so it is carved out of the offline drift guard and gated
+// behind the build tag, keeping the default `go test` run offline.
 package cli
 
 import (
@@ -30,7 +23,6 @@ func TestDoctorValidateJSONIntegration(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(io.Discard)
-	// --force confirms intent to make network requests; --json selects the shape.
 	cmd.SetArgs([]string{"doctor", "validate", "--force", "--json"})
 
 	// A non-nil error is expected when the registry reports inconsistencies

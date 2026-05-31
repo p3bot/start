@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-// TestValidateScopeFlags unit-tests the scope-exclusion helper directly, so the
-// logic is guarded independently of any command's RunE wiring. Both-set is a
-// usage fault (exit 2); every other combination is permitted.
+// TestValidateScopeFlags guards the scope-exclusion helper independently of any
+// command's RunE wiring. Both-set is a usage fault (exit 2); all else permitted.
 func TestValidateScopeFlags(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -38,10 +37,9 @@ func TestValidateScopeFlags(t *testing.T) {
 }
 
 // TestScopeFlagsMutualExclusion guards the per-command wiring of
-// validateScopeFlags: because it replaced Cobra's declarative
-// MarkFlagsMutuallyExclusive with an explicit RunE call, every --global command
-// must invoke it. Each rejects --local --global with exit 2 and an empty stdout,
-// matching the --json error contract.
+// validateScopeFlags: it replaced declarative MarkFlagsMutuallyExclusive with an
+// explicit RunE call, so every --global command must invoke it. Each rejects
+// --local --global with exit 2 and an empty stdout, matching the --json contract.
 func TestScopeFlagsMutualExclusion(t *testing.T) {
 	commands := map[string][]string{
 		"describe":   {"describe", "echo", "--local", "--global"},
@@ -63,9 +61,8 @@ func TestScopeFlagsMutualExclusion(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s: expected mutual-exclusion error, got nil", name)
 			}
-			// Pin the failure to the mutual-exclusion error specifically, so the
-			// test cannot pass for an unrelated reason (e.g. a not-found from
-			// fixture scoping) that happens to share an exit code.
+			// Pin to the mutual-exclusion error so the test cannot pass for an
+			// unrelated reason that happens to share an exit code.
 			if msg := err.Error(); !strings.Contains(msg, "local") || !strings.Contains(msg, "global") {
 				t.Errorf("%s: error should name both flags, got: %v", name, err)
 			}

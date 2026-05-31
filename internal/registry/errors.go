@@ -10,38 +10,33 @@ import (
 	"cuelang.org/go/mod/modregistry"
 )
 
-// FetchKind classifies a registry failure by fault domain so the CLI's
-// exit-code mapper can branch on the typed value rather than re-deriving the
-// cause downstream. The distinction is produced here, at the boundary where
-// the upstream signal is still intact, and carried in the error value.
+// FetchKind classifies a registry failure by fault domain so the CLI's exit-code
+// mapper can branch on the typed value. Classified here while the upstream signal
+// is still intact, then carried in the error value.
 type FetchKind int
 
 const (
-	// FetchTransient is a network/server failure a retry could clear:
-	// connection refused, DNS, a 5xx/429 response, rate limiting, or a
-	// deadline. The CLI maps it to exit 75.
+	// FetchTransient is a retryable network/server failure (connection refused,
+	// DNS, 5xx/429, rate limit, deadline). The CLI maps it to exit 75.
 	FetchTransient FetchKind = iota
 
-	// FetchNotFound is a module or version that does not exist:
-	// modregistry.ErrNotFound, ociregistry.ErrNameUnknown, or a 404. The CLI
-	// maps it to exit 3. A typo'd name must never present as transient, so
-	// the Fetch retry loop short-circuits on this rather than retrying.
+	// FetchNotFound is a missing module or version (ErrNotFound, ErrNameUnknown,
+	// 404). The CLI maps it to exit 3; the Fetch retry loop short-circuits on it.
 	FetchNotFound
 
-	// FetchUsage is a caller-side mistake found before any network call —
-	// a module path string that does not parse. The CLI maps it to exit 2.
+	// FetchUsage is a caller-side mistake found before any network call (an
+	// unparseable module path). The CLI maps it to exit 2.
 	FetchUsage
 )
 
 // FetchError carries a registry failure together with its fault-domain
-// classification. Producers in this package return it (wrapped with %w) so the
-// mapper can errors.As it and read Kind; the underlying upstream error stays
-// reachable through Unwrap for diagnostics and further errors.Is checks.
+// classification. Returned wrapped with %w so the mapper can errors.As it and
+// read Kind; the upstream error stays reachable through Unwrap.
 type FetchError struct {
 	Kind     FetchKind
 	Op       string // the operation that failed, e.g. "fetch", "resolve", "parse"
 	Path     string // the module path involved
-	Attempts int    // retries spent before giving up; 0 when not a retry-exhausted failure
+	Attempts int    // retries spent before giving up; 0 when not retry-exhausted
 	Err      error  // the wrapped upstream error
 }
 
@@ -54,11 +49,10 @@ func (e *FetchError) Error() string {
 
 func (e *FetchError) Unwrap() error { return e.Err }
 
-// classifyFetch maps an upstream registry error to a FetchKind, plus a bool
-// reporting whether the error was classifiable at all. An unclassifiable error
-// (ok == false) is neither retried nor wrapped as a FetchError: it falls
-// through to the general exit code (1), per Requirement 5's treatment of the
-// modcache mid-stream-drop case that upstream flattens to an opaque string.
+// classifyFetch maps an upstream registry error to a FetchKind plus a bool
+// reporting whether it was classifiable. An unclassifiable error (ok == false)
+// is neither retried nor wrapped, falling through to the general exit code (1)
+// to cover cases upstream flattens to an opaque string (e.g. modcache drops).
 func classifyFetch(err error) (FetchKind, bool) {
 	if errors.Is(err, modregistry.ErrNotFound) || errors.Is(err, ociregistry.ErrNameUnknown) {
 		return FetchNotFound, true

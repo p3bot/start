@@ -5,9 +5,8 @@ import (
 	"strings"
 )
 
-// slowReader wraps an io.Reader and returns one byte per Read call.
-// This prevents bufio.NewReader from over-consuming the underlying reader when
-// multiple sequential prompt functions each create their own bufio.NewReader.
+// slowReader returns one byte per Read so sequential bufio.NewReader callers
+// don't over-consume the shared underlying reader.
 type slowReader struct{ r io.Reader }
 
 func (s *slowReader) Read(p []byte) (int, error) {
@@ -17,7 +16,6 @@ func (s *slowReader) Read(p []byte) (int, error) {
 	return s.r.Read(p[:1])
 }
 
-// slowStdin returns a slowReader wrapping the given string as stdin.
 func slowStdin(data string) io.Reader {
 	return &slowReader{r: strings.NewReader(data)}
 }

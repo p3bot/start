@@ -11,7 +11,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// buildTestCfg creates a LoadResult from a CUE string for testing.
 func buildTestCfg(t *testing.T, cueStr string) internalcue.LoadResult {
 	t.Helper()
 	cctx := cuecontext.New()
@@ -213,26 +212,23 @@ func TestMergeModuleMatches(t *testing.T) {
 		{Name: "gemini", Category: "agents", Source: ModuleSourceInstalled, Score: 3},
 	}
 	reg := []ModuleMatch{
-		{Name: "claude", Category: "agents", Source: ModuleSourceRegistry, Score: 5},  // dup
-		{Name: "openai", Category: "agents", Source: ModuleSourceRegistry, Score: 3},  // new
-		{Name: "copilot", Category: "agents", Source: ModuleSourceRegistry, Score: 1}, // new, low score
+		{Name: "claude", Category: "agents", Source: ModuleSourceRegistry, Score: 5},
+		{Name: "openai", Category: "agents", Source: ModuleSourceRegistry, Score: 3},
+		{Name: "copilot", Category: "agents", Source: ModuleSourceRegistry, Score: 1},
 	}
 
 	merged := mergeModuleMatches(installed, reg)
 
-	// Should have 4 unique entries (claude deduplicated)
 	if len(merged) != 4 {
 		t.Fatalf("mergeModuleMatches returned %d results, want 4", len(merged))
 	}
 
-	// Claude should be from installed (installed wins)
 	for _, m := range merged {
 		if m.Name == "claude" && m.Source != ModuleSourceInstalled {
 			t.Errorf("claude should be from installed, got %q", m.Source)
 		}
 	}
 
-	// Should be sorted by score desc, then name
 	for i := 1; i < len(merged); i++ {
 		if merged[i-1].Score < merged[i].Score {
 			t.Errorf("results not sorted by score: %d < %d at positions %d,%d",
@@ -250,7 +246,7 @@ func TestMergeModuleMatches_Empty(t *testing.T) {
 	}
 }
 
-// newTestResolver creates a resolver for testing that skips registry access.
+// newTestResolver creates a resolver that skips registry access.
 func newTestResolver(cfg internalcue.LoadResult) *resolver {
 	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
 	r.skipRegistry = true
@@ -499,7 +495,6 @@ func TestResolveModelName_MultipleMatches_Passthrough(t *testing.T) {
 
 	r := newTestResolver(internalcue.LoadResult{})
 	name := r.resolveModelName("sonnet", agent)
-	// Multiple substring matches -> passthrough
 	if name != "sonnet" {
 		t.Errorf("resolveModelName() = %q, want %q (passthrough on multiple)", name, "sonnet")
 	}
@@ -508,7 +503,7 @@ func TestResolveModelName_MultipleMatches_Passthrough(t *testing.T) {
 func TestResolveModelName_NilModels(t *testing.T) {
 	t.Parallel()
 
-	agent := orchestration.Agent{} // no models map
+	agent := orchestration.Agent{}
 	r := newTestResolver(internalcue.LoadResult{})
 	name := r.resolveModelName("sonnet", agent)
 	if name != "sonnet" {
@@ -529,17 +524,10 @@ func TestResolveModelName_Empty(t *testing.T) {
 	}
 }
 
-// TestResolveModelName_ObjectFormAgent chains the runtime agent-loading
-// path (orchestration.ExtractAgent, which uses the both-forms walk in
-// extractAgentFields) with resolveModelName to prove that --model resolution
-// works against an object-form agent loaded from CUE.
-//
-// The Models[...] assertions are intentional and overlap with
-// orchestration.TestExtractAgent. They split failure attribution: a break
-// in extractAgentFields fails the Models check (clear "ExtractAgent didn't
-// pull the id" signal); a break in resolveModelName fails only the final
-// assertions. Without the split, a regression in either layer would surface
-// as a confusing resolveModelName failure. Do not collapse.
+// TestResolveModelName_ObjectFormAgent chains ExtractAgent with resolveModelName
+// to prove --model resolution works against an object-form agent loaded from CUE.
+// The overlapping Models[...] assertions split failure attribution between
+// extractAgentFields and resolveModelName; do not collapse them.
 func TestResolveModelName_ObjectFormAgent(t *testing.T) {
 	t.Parallel()
 
@@ -670,7 +658,6 @@ func TestResolveContexts_NoMatchPassthrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// No matches -> pass through as-is (composer will warn)
 	if len(resolved) != 1 || resolved[0] != "nonexistent" {
 		t.Errorf("resolveContexts([nonexistent]) = %v, want [nonexistent]", resolved)
 	}
@@ -810,10 +797,9 @@ func TestSearchRegistryCategory(t *testing.T) {
 	}
 }
 
-// TestResolveModule_SingleInstalledPlusRegistryMatch verifies that when a single
-// installed substring match exists and the registry also has a matching module,
-// both are presented for selection (error in non-TTY) rather than silently
-// returning the installed match. This covers the structural bug fixed in p-041.
+// TestResolveModule_SingleInstalledPlusRegistryMatch verifies a single installed
+// substring match plus a registry match are both presented for selection (error
+// in non-TTY) rather than silently returning the installed match.
 func TestResolveModule_SingleInstalledPlusRegistryMatch(t *testing.T) {
 	t.Parallel()
 
@@ -827,7 +813,7 @@ func TestResolveModule_SingleInstalledPlusRegistryMatch(t *testing.T) {
 	}`)
 
 	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	// Inject fake registry index - "assistant" matches both installed and registry.
+	// "assistant" matches both installed and registry.
 	r.didFetch = true
 	r.index = &registry.Index{
 		Roles: map[string]registry.IndexEntry{
@@ -853,8 +839,8 @@ func TestResolveModule_SingleInstalledPlusRegistryMatch(t *testing.T) {
 	}
 }
 
-// TestResolveModule_SingleInstalledNoRegistryMatch verifies that a single
-// installed substring match resolves directly when the registry has no match.
+// TestResolveModule_SingleInstalledNoRegistryMatch verifies a single installed
+// substring match resolves directly when the registry has no match.
 func TestResolveModule_SingleInstalledNoRegistryMatch(t *testing.T) {
 	t.Parallel()
 
@@ -868,7 +854,6 @@ func TestResolveModule_SingleInstalledNoRegistryMatch(t *testing.T) {
 	}`)
 
 	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	// Registry has no assistant match.
 	r.didFetch = true
 	r.index = &registry.Index{
 		Roles: map[string]registry.IndexEntry{
@@ -888,8 +873,8 @@ func TestResolveModule_SingleInstalledNoRegistryMatch(t *testing.T) {
 	}
 }
 
-// TestResolveModule_ExactFullNameSkipsRegistry verifies that an exact full name
-// match in installed config resolves via Phase 1 without touching the registry.
+// TestResolveModule_ExactFullNameSkipsRegistry verifies an exact installed match
+// resolves via Phase 1 without touching the registry.
 func TestResolveModule_ExactFullNameSkipsRegistry(t *testing.T) {
 	t.Parallel()
 
@@ -901,7 +886,7 @@ func TestResolveModule_ExactFullNameSkipsRegistry(t *testing.T) {
 		}
 	}`)
 
-	// skipRegistry=true: any registry call would return nil. Phase 1 must catch it.
+	// skipRegistry=true: any registry call returns nil, so Phase 1 must catch it.
 	r := newTestResolver(cfg)
 	name, err := r.resolveModule("golang/assistant", internalcue.KeyRoles, "roles", "Role", true)
 	if err != nil {
@@ -913,7 +898,7 @@ func TestResolveModule_ExactFullNameSkipsRegistry(t *testing.T) {
 }
 
 // TestResolveModule_AgentSingleInstalledPlusRegistryMatch verifies the same
-// fix applies for agent resolution via resolveAgent.
+// behaviour for agent resolution via resolveAgent.
 func TestResolveModule_AgentSingleInstalledPlusRegistryMatch(t *testing.T) {
 	t.Parallel()
 
@@ -952,8 +937,7 @@ func TestResolveModule_AgentSingleInstalledPlusRegistryMatch(t *testing.T) {
 func TestContextScoreThreshold_LowScoreExcluded(t *testing.T) {
 	t.Parallel()
 
-	// "env" prompt doesn't contain "golang" so it should score 0.
-	// "golang-env" has "golang" in name (3 points) + tag (1 point) = 4.
+	// "env" scores 0 (no "golang"); "golang-env" scores 4 (name 3 + tag 1).
 	cfg := buildTestCfg(t, `{
 		contexts: {
 			env: {
@@ -973,7 +957,6 @@ func TestContextScoreThreshold_LowScoreExcluded(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should only find golang-env (score 4), not env (score 0)
 	if len(resolved) != 1 {
 		t.Fatalf("resolveContexts() returned %d items, want 1: %v", len(resolved), resolved)
 	}
@@ -982,8 +965,8 @@ func TestContextScoreThreshold_LowScoreExcluded(t *testing.T) {
 	}
 }
 
-// TestResolveAgent_PrefixMatching verifies that agents:<name> strips the
-// matching category prefix and resolves the bare name as usual.
+// TestResolveAgent_PrefixMatching verifies agents:<name> strips the matching
+// category prefix and resolves the bare name.
 func TestResolveAgent_PrefixMatching(t *testing.T) {
 	t.Parallel()
 
@@ -1006,8 +989,8 @@ func TestResolveAgent_PrefixMatching(t *testing.T) {
 	}
 }
 
-// TestResolveAgent_PrefixMismatchError verifies that a mismatched prefix
-// (e.g. roles:foo passed via --agent) returns an error naming the mismatch.
+// TestResolveAgent_PrefixMismatchError verifies a mismatched prefix (e.g.
+// roles:foo via --agent) returns an error naming the mismatch.
 func TestResolveAgent_PrefixMismatchError(t *testing.T) {
 	t.Parallel()
 
@@ -1022,8 +1005,6 @@ func TestResolveAgent_PrefixMismatchError(t *testing.T) {
 	}
 }
 
-// TestResolveAgent_UnknownPrefixError verifies an unknown category prefix
-// returns the unknown-category error.
 func TestResolveAgent_UnknownPrefixError(t *testing.T) {
 	t.Parallel()
 
@@ -1037,8 +1018,8 @@ func TestResolveAgent_UnknownPrefixError(t *testing.T) {
 	}
 }
 
-// TestResolveContexts_PrefixMatching verifies a contexts: prefix on a context
-// term is stripped and resolution proceeds normally.
+// TestResolveContexts_PrefixMatching verifies a contexts: prefix is stripped
+// and resolution proceeds.
 func TestResolveContexts_PrefixMatching(t *testing.T) {
 	t.Parallel()
 
@@ -1061,8 +1042,6 @@ func TestResolveContexts_PrefixMatching(t *testing.T) {
 	}
 }
 
-// TestResolveContexts_PrefixMismatchError verifies a non-contexts prefix on a
-// context term returns a mismatch error.
 func TestResolveContexts_PrefixMismatchError(t *testing.T) {
 	t.Parallel()
 

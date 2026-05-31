@@ -24,7 +24,7 @@ func setupDoctorTestConfig(t *testing.T) (string, config.Paths) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Create a valid config with echo agent (available on all systems)
+	// echo agent is available on all systems.
 	configContent := `
 agents: {
 	echo: {
@@ -75,18 +75,15 @@ settings: {
 func TestDoctor_ValidConfig_AllPass(t *testing.T) {
 	tmpDir, paths := setupDoctorTestConfig(t)
 
-	// Change to temp directory
 	chdir(t, tmpDir)
 
-	// Build the report manually (simulating what the CLI does)
+	// Build the report manually, mirroring what the CLI does.
 	report := runDoctorChecks(t, paths)
 
-	// Check that we have sections
 	if len(report.Sections) == 0 {
 		t.Fatal("report should have sections")
 	}
 
-	// Configuration check should pass
 	var hasConfigSection bool
 	for _, section := range report.Sections {
 		if section.Name == "Configuration" {
@@ -106,7 +103,6 @@ func TestDoctor_ValidConfig_AllPass(t *testing.T) {
 		t.Error("report should have Configuration section")
 	}
 
-	// Agent check should pass (echo is available)
 	var hasAgentSection bool
 	for _, section := range report.Sections {
 		if section.Name == "Agents" {
@@ -134,7 +130,6 @@ func TestDoctor_InvalidCUESyntax_ReportsError(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Write invalid CUE syntax
 	invalidCUE := `this is not valid { cue syntax {{{{`
 	if err := os.WriteFile(filepath.Join(configDir, "bad.cue"), []byte(invalidCUE), 0644); err != nil {
 		t.Fatalf("writing invalid config: %v", err)
@@ -147,10 +142,8 @@ func TestDoctor_InvalidCUESyntax_ReportsError(t *testing.T) {
 		LocalExists:  true,
 	}
 
-	// Run configuration check
 	section := doctor.CheckConfiguration(paths)
 
-	// Should have a failure
 	hasFail := false
 	for _, result := range section.Results {
 		if result.Status == doctor.StatusFail {
@@ -170,7 +163,6 @@ func TestDoctor_MissingAgentBinary_ReportsError(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with non-existent binary
 	configContent := `
 agents: {
 	nonexistent: {
@@ -186,17 +178,14 @@ settings: { default_agent: "nonexistent" }
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Load config
 	loader := internalcue.NewLoader()
 	cfgValue, err := loader.LoadSingle(configDir)
 	if err != nil {
 		t.Fatalf("loading config: %v", err)
 	}
 
-	// Run agent check
 	section := doctor.CheckAgents(cfgValue)
 
-	// Should have a failure for missing binary
 	hasFail := false
 	var failLabel string
 	for _, r := range section.Results {
@@ -221,7 +210,6 @@ func TestDoctor_MissingContextFile_ReportsNotFound(t *testing.T) {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Config with context referencing non-existent file.
 	// Missing files are reported as StatusNotFound regardless of `required`;
 	// `required` is a composition rule ("if it exists, it must be used"),
 	// not a doctor severity rule.
@@ -304,7 +292,6 @@ roles: {
 }
 
 func TestDoctor_QuietMode_NoOutputOnSuccess(t *testing.T) {
-	// Create a healthy report
 	report := doctor.Report{
 		Sections: []doctor.SectionResult{
 			{
@@ -326,7 +313,6 @@ func TestDoctor_QuietMode_NoOutputOnSuccess(t *testing.T) {
 }
 
 func TestDoctor_QuietMode_OutputOnFailure(t *testing.T) {
-	// Create a report with issues
 	report := doctor.Report{
 		Sections: []doctor.SectionResult{
 			{
@@ -409,20 +395,16 @@ func TestDoctor_ExitCode_ErrorReturnsOne(t *testing.T) {
 func TestDoctor_FullReport_Integration(t *testing.T) {
 	tmpDir, paths := setupDoctorTestConfig(t)
 
-	// Change to temp directory
 	chdir(t, tmpDir)
 
-	// Build full report
 	report := runDoctorChecks(t, paths)
 
-	// Output the report
 	var buf bytes.Buffer
 	reporter := doctor.NewReporter(&buf, false, false)
 	reporter.Print(report)
 
 	output := buf.String()
 
-	// Verify expected sections are present
 	expectedSections := []string{
 		"Repository",
 		"Version",
@@ -440,19 +422,16 @@ func TestDoctor_FullReport_Integration(t *testing.T) {
 		}
 	}
 
-	// Verify header
 	if !strings.Contains(output, "start doctor") {
 		t.Error("output should contain 'start doctor' header")
 	}
 
-	// Verify unicode separator
 	if !strings.Contains(output, "═") {
 		t.Error("output should contain header separator")
 	}
 }
 
 func TestDoctor_VerboseMode_ShowsDetails(t *testing.T) {
-	// Create a report with details
 	report := doctor.Report{
 		Sections: []doctor.SectionResult{
 			{
@@ -507,7 +486,6 @@ func TestDoctor_Environment_WritableDirectory(t *testing.T) {
 
 	section := doctor.CheckEnvironment(paths)
 
-	// Config directory should be writable
 	hasWritable := false
 	for _, r := range section.Results {
 		if r.Label == "Config directory" && r.Status == doctor.StatusPass {
@@ -546,7 +524,6 @@ func TestDoctor_SummarySection_CountsIssues(t *testing.T) {
 
 	output := buf.String()
 
-	// Should show correct counts
 	if !strings.Contains(output, "2 errors") {
 		t.Error("summary should show '2 errors'")
 	}
@@ -560,17 +537,13 @@ func runDoctorChecks(t *testing.T, paths config.Paths) doctor.Report {
 	t.Helper()
 	var report doctor.Report
 
-	// Intro section
 	report.Sections = append(report.Sections, doctor.CheckIntro())
 
-	// Version section
 	buildInfo := doctor.DefaultBuildInfo()
 	report.Sections = append(report.Sections, doctor.CheckVersion(buildInfo))
 
-	// Configuration section
 	report.Sections = append(report.Sections, doctor.CheckConfiguration(paths))
 
-	// Load config for remaining checks
 	var cfgLoaded bool
 	var cfgResult internalcue.LoadResult
 
@@ -586,7 +559,6 @@ func runDoctorChecks(t *testing.T, paths config.Paths) doctor.Report {
 		}
 	}
 
-	// Agent checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckAgents(cfgResult.Value))
 	} else {
@@ -598,7 +570,6 @@ func runDoctorChecks(t *testing.T, paths config.Paths) doctor.Report {
 		})
 	}
 
-	// Role checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckRoles(cfgResult.Value))
 	} else {
@@ -610,7 +581,6 @@ func runDoctorChecks(t *testing.T, paths config.Paths) doctor.Report {
 		})
 	}
 
-	// Context checks
 	if cfgLoaded {
 		report.Sections = append(report.Sections, doctor.CheckContexts(cfgResult.Value))
 	} else {
@@ -622,7 +592,6 @@ func runDoctorChecks(t *testing.T, paths config.Paths) doctor.Report {
 		})
 	}
 
-	// Environment checks
 	report.Sections = append(report.Sections, doctor.CheckEnvironment(paths))
 
 	return report

@@ -31,13 +31,12 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "empty global directory",
 			setupGlobal: func(dir string) {
-				// Just create the directory, no files
 			},
 			setupLocal:      nil,
 			wantGlobalValid: false,
 			wantLocalValid:  false,
 			wantAnyValid:    false,
-			wantGlobalErr:   false, // Empty dir is not an error
+			wantGlobalErr:   false, // empty dir is not an error
 		},
 		{
 			name: "valid global config",
@@ -106,12 +105,10 @@ func TestValidateConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temp directories
 			tempDir := t.TempDir()
 			globalDir := filepath.Join(tempDir, "global")
 			localDir := filepath.Join(tempDir, "local")
 
-			// Setup directories based on test case
 			if tt.setupGlobal != nil {
 				_ = os.MkdirAll(globalDir, 0755)
 				tt.setupGlobal(globalDir)
@@ -121,7 +118,6 @@ func TestValidateConfig(t *testing.T) {
 				tt.setupLocal(localDir)
 			}
 
-			// Create Paths struct
 			paths := Paths{
 				Global:       globalDir,
 				Local:        localDir,
@@ -129,10 +125,8 @@ func TestValidateConfig(t *testing.T) {
 				LocalExists:  tt.setupLocal != nil,
 			}
 
-			// Run validation
 			result := ValidateConfig(paths)
 
-			// Check results
 			if result.GlobalValid != tt.wantGlobalValid {
 				t.Errorf("GlobalValid = %v, want %v", result.GlobalValid, tt.wantGlobalValid)
 			}

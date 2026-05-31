@@ -12,8 +12,8 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// cleanupCUECache makes CUE module cache files writable before t.TempDir() cleanup.
-// CUE extracts registry modules with read-only permissions which prevents automatic cleanup.
+// cleanupCUECache makes CUE cache files writable before t.TempDir cleanup; CUE
+// extracts modules read-only, which otherwise blocks removal.
 func cleanupCUECache(t *testing.T, dir string) {
 	t.Helper()
 	t.Cleanup(func() {
@@ -29,7 +29,6 @@ func cleanupCUECache(t *testing.T, dir string) {
 func TestDoctorCommand_Exists(t *testing.T) {
 	cmd := NewRootCmd()
 
-	// Find the doctor command
 	doctorCmd, _, err := cmd.Find([]string{"doctor"})
 	if err != nil {
 		t.Fatalf("doctor command not found: %v", err)
@@ -44,14 +43,11 @@ func TestDoctorCommand_Exists(t *testing.T) {
 	}
 }
 
-// Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
-// to any test that calls os.Chdir — it will cause data races on the working directory.
+// Tests below use os.Chdir, so they must not run in parallel.
 
 func TestDoctorCommand_NoConfig(t *testing.T) {
-	// Create isolated temp directory with no config
 	tmpDir := t.TempDir()
 
-	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -64,12 +60,10 @@ func TestDoctorCommand_NoConfig(t *testing.T) {
 	cmd.SetErr(stderr)
 	cmd.SetArgs([]string{"doctor"})
 
-	// Should complete without panic, may return error for issues
 	_ = cmd.Execute()
 
 	output := stdout.String()
 
-	// Should show intro section
 	if !strings.Contains(output, "start") {
 		t.Errorf("output should contain 'start', got: %s", output)
 	}
@@ -79,11 +73,9 @@ func TestDoctorCommand_WithConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	cleanupCUECache(t, tmpDir)
 
-	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create local .start config
 	configDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
@@ -133,7 +125,6 @@ settings: {
 
 	output := stdout.String()
 
-	// Should show various sections
 	expectedSections := []string{
 		"Version",
 		"Configuration",
@@ -151,7 +142,6 @@ settings: {
 func TestDoctorCommand_Verbose(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -166,7 +156,6 @@ func TestDoctorCommand_Verbose(t *testing.T) {
 
 	_ = cmd.Execute()
 
-	// Verbose mode should produce output
 	if stdout.Len() == 0 {
 		t.Error("verbose mode should produce output")
 	}
@@ -175,7 +164,6 @@ func TestDoctorCommand_Verbose(t *testing.T) {
 func TestPrepareDoctor(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -186,12 +174,10 @@ func TestPrepareDoctor(t *testing.T) {
 		t.Fatalf("prepareDoctor() error = %v", err)
 	}
 
-	// Should have multiple sections
 	if len(report.Sections) == 0 {
 		t.Error("report should have sections")
 	}
 
-	// Check for expected section names
 	sectionNames := make(map[string]bool)
 	for _, s := range report.Sections {
 		sectionNames[s.Name] = true
@@ -209,11 +195,9 @@ func TestPrepareDoctor_WithValidConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	cleanupCUECache(t, tmpDir)
 
-	// Isolate from global config
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create local config
 	configDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
@@ -251,13 +235,11 @@ contexts: {
 		t.Fatalf("prepareDoctor() error = %v", err)
 	}
 
-	// Should have agent, role, context sections when config is loaded
 	sectionNames := make(map[string]bool)
 	for _, s := range report.Sections {
 		sectionNames[s.Name] = true
 	}
 
-	// These sections should be present when config loads successfully
 	if !sectionNames["Schema Validation"] {
 		t.Error("missing Schema Validation section")
 	}
@@ -279,7 +261,6 @@ func TestDoctorError(t *testing.T) {
 		t.Errorf("Error() = %q, want %q", err.Error(), "issues found")
 	}
 
-	// Verify it's the same as the package-level error
 	if errDoctorIssuesFound.Error() != "issues found" {
 		t.Errorf("errDoctorIssuesFound.Error() = %q, want %q", errDoctorIssuesFound.Error(), "issues found")
 	}
@@ -322,7 +303,6 @@ func TestDoctorCommand_JSONOutput(t *testing.T) {
 		t.Fatal("'sections' should be a non-empty array")
 	}
 
-	// Verify first section has expected fields
 	firstSection, ok := sectionList[0].(map[string]any)
 	if !ok {
 		t.Fatal("section should be an object")
@@ -334,7 +314,6 @@ func TestDoctorCommand_JSONOutput(t *testing.T) {
 		t.Error("section missing 'results' field")
 	}
 
-	// Verify a check result has status as string
 	results, _ := firstSection["results"].([]any)
 	if len(results) > 0 {
 		result, _ := results[0].(map[string]any)

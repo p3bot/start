@@ -13,12 +13,9 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// Client is the registry surface consumed across the codebase. The interface
-// keeps the natural name so call sites read unchanged; the concrete fetcher is
-// the unexported client below. Defining it here (rather than where consumed)
-// is deliberate: consumers span internal/cli, internal/modules, and
-// internal/orchestration, so the "interface where consumed" rule cannot place
-// it in a single consumer package.
+// Client is the registry surface consumed across the codebase. It lives here
+// rather than in a consumer package because consumers span internal/cli,
+// internal/modules, and internal/orchestration.
 type Client interface {
 	FetchIndex(ctx context.Context, indexPath string) (*Index, string, error)
 	Fetch(ctx context.Context, modulePath string) (FetchResult, error)
@@ -27,7 +24,6 @@ type Client interface {
 	Registry() modconfig.Registry
 }
 
-// client fetches CUE modules from the registry with retry logic.
 type client struct {
 	registry modconfig.Registry
 	retries  int
@@ -50,8 +46,7 @@ func NewClient() (Client, error) {
 
 // FetchResult contains the result of fetching a module.
 type FetchResult struct {
-	// SourceDir is the filesystem path to the fetched module.
-	SourceDir string
+	SourceDir string // filesystem path to the fetched module
 }
 
 // Registry returns the underlying modconfig.Registry for use with cue/load.
@@ -62,17 +57,12 @@ func (c *client) Registry() modconfig.Registry {
 // Fetch downloads a module from the registry with retry logic.
 // The module path should include version, e.g., "github.com/user/repo/path@v0".
 //
-// The retry loop spends attempts only on genuinely transient failures. A
-// not-found condition discovered inside Fetch short-circuits and returns a
-// FetchError the mapper classifies as exit 3, so a typo'd name never burns
-// retries or surfaces as transient. A failure upstream flattens to an opaque
-// string (classifyFetch returns ok == false) is returned unwrapped and
-// unretried, degrading to the general exit code rather than a false 75.
+// Only transient failures are retried; not-found short-circuits (exit 3) and
+// unclassifiable errors return unwrapped to degrade to the general exit code.
 func (c *client) Fetch(ctx context.Context, modulePath string) (FetchResult, error) {
 	mv, err := module.ParseVersion(modulePath)
 	if err != nil {
-		// A local parse failure is a caller mistake, knowable before any
-		// network call — the only reachable registry usage (2) condition.
+		// Parse failure is a caller mistake knowable before any network call.
 		return FetchResult{}, &FetchError{Kind: FetchUsage, Op: "parsing module path", Path: modulePath, Err: err}
 	}
 
@@ -89,7 +79,6 @@ func (c *client) Fetch(ctx context.Context, modulePath string) (FetchResult, err
 
 		loc, err := c.registry.Fetch(ctx, mv)
 		if err == nil {
-			// Get the OS path from the SourceLoc
 			dir, err := sourceLocToPath(loc)
 			if err != nil {
 				return FetchResult{}, fmt.Errorf("resolving source location for %s: %w", modulePath, err)
@@ -99,8 +88,7 @@ func (c *client) Fetch(ctx context.Context, modulePath string) (FetchResult, err
 
 		kind, ok := classifyFetch(err)
 		if !ok {
-			// Unclassifiable upstream error: do not retry, do not mislabel as
-			// transient. Falls through to the general exit code.
+			// Unclassifiable: do not retry or mislabel as transient.
 			return FetchResult{}, fmt.Errorf("fetching module %s: %w", modulePath, err)
 		}
 		if kind != FetchTransient {
@@ -121,38 +109,29 @@ func (c *client) ModuleVersions(ctx context.Context, modulePath string) ([]strin
 // ResolveLatestVersion resolves a module path with major version (e.g., @v0) to
 // the latest canonical version (e.g., @v0.0.1).
 func (c *client) ResolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
-	// Parse the module path to extract base path and major version
 	mv, err := module.ParseVersion(modulePath)
 	if err == nil && mv.Version() != "" {
-		// Already has a version, check if it's canonical
 		v := mv.Version()
 		if semver.Canonical(v) == v {
 			return modulePath, nil
 		}
 	}
 
-	// Get available versions
 	versions, err := c.ModuleVersions(ctx, modulePath)
 	if err != nil {
-		// Classify the network failure so version resolution carries the same
-		// transient-vs-permanent distinction as Fetch; an unclassifiable error
-		// is returned unwrapped and degrades to the general exit code.
+		// Classify so resolution carries Fetch's transient-vs-permanent distinction.
 		if kind, ok := classifyFetch(err); ok {
 			return "", &FetchError{Kind: kind, Op: "resolve", Path: modulePath, Err: err}
 		}
 		return "", fmt.Errorf("getting versions for %s: %w", modulePath, err)
 	}
 	if len(versions) == 0 {
-		// No published versions: the module does not exist at any version.
 		return "", &FetchError{Kind: FetchNotFound, Op: "resolve", Path: modulePath, Err: fmt.Errorf("no versions found")}
 	}
 
-	// Sort versions by semver to find the latest
 	slices.SortFunc(versions, semver.Compare)
 	latestVersion := versions[len(versions)-1]
 
-	// Replace the version in the module path
-	// Module path format: path@version
 	atIdx := strings.LastIndex(modulePath, "@")
 	if atIdx == -1 {
 		return "", fmt.Errorf("invalid module path %s: no version", modulePath)
@@ -161,9 +140,7 @@ func (c *client) ResolveLatestVersion(ctx context.Context, modulePath string) (s
 	return modulePath[:atIdx+1] + latestVersion, nil
 }
 
-// sourceLocToPath extracts the OS filesystem path from a module.SourceLoc.
 func sourceLocToPath(loc module.SourceLoc) (string, error) {
-	// SourceLoc.FS may implement OSRootFS which provides the OS path.
 	type osRootFS interface {
 		OSRoot() string
 	}

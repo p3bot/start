@@ -26,7 +26,6 @@ func TestDetectAgents_NoBinField(t *testing.T) {
 			"ai/test": {
 				Module:      "github.com/test/agent@v0",
 				Description: "Test agent without bin",
-				// No Bin field
 			},
 		},
 	}
@@ -39,7 +38,6 @@ func TestDetectAgents_NoBinField(t *testing.T) {
 
 func TestDetectAgents_CommonBinaries(t *testing.T) {
 	t.Parallel()
-	// Test with binaries that are likely to exist on most systems
 	index := &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			"test/bash": {
@@ -57,7 +55,6 @@ func TestDetectAgents_CommonBinaries(t *testing.T) {
 
 	detected := DetectAgents(index)
 
-	// bash should be detected on most Unix systems
 	var foundBash bool
 	for _, d := range detected {
 		if d.Key == "test/bash" {
@@ -106,7 +103,7 @@ func TestIsBinaryAvailable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsBinaryAvailable(tt.bin)
-			// bash might not exist on all systems, so only check definitively false cases
+			// bash may be absent; only assert the definitively-false cases.
 			if tt.bin == "" || tt.bin == "this-binary-definitely-does-not-exist-12345" {
 				if got != tt.wantAvail {
 					t.Errorf("IsBinaryAvailable(%q) = %v, want %v", tt.bin, got, tt.wantAvail)
@@ -116,9 +113,7 @@ func TestIsBinaryAvailable(t *testing.T) {
 	}
 }
 
-// TestDetectAgents_ReturnsAllVariants asserts that DetectAgents no longer
-// dedupes per-binary. Auto-setup is responsible for choosing among variants;
-// detection's job is to surface every index entry whose bin is in PATH.
+// Guards against per-binary dedup: every entry whose bin is in PATH must surface.
 func TestDetectAgents_ReturnsAllVariants(t *testing.T) {
 	t.Parallel()
 	if !IsBinaryAvailable("bash") {
@@ -148,7 +143,6 @@ func TestDetectAgents_ReturnsAllVariants(t *testing.T) {
 
 func TestDetectAgents_ParallelExecution(t *testing.T) {
 	t.Parallel()
-	// Test that parallel detection works correctly with multiple agents
 	index := &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			"test/a": {Module: "a@v0", Bin: "nonexistent-a-12345"},
@@ -159,7 +153,7 @@ func TestDetectAgents_ParallelExecution(t *testing.T) {
 		},
 	}
 
-	// Run multiple times to catch race conditions
+	// Repeat to expose races under -race.
 	for i := range 10 {
 		detected := DetectAgents(index)
 		if len(detected) != 0 {

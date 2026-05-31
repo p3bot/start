@@ -12,7 +12,6 @@ import (
 	"cuelang.org/go/mod/module"
 )
 
-// mockRegistry implements a subset of modconfig.Registry for testing.
 type mockRegistry struct {
 	fetchFunc    func(ctx context.Context, mv module.Version) (module.SourceLoc, error)
 	versionsFunc func(ctx context.Context, path string) ([]string, error)
@@ -38,7 +37,6 @@ func (m *mockRegistry) Requirements(ctx context.Context, mv module.Version) ([]m
 	return nil, nil
 }
 
-// mockOSRootFS implements the osRootFS interface for testing sourceLocToPath.
 type mockOSRootFS struct {
 	fs.FS
 	root string
@@ -52,7 +50,6 @@ func (m *mockOSRootFS) Open(name string) (fs.File, error) {
 	return nil, errors.New("not implemented")
 }
 
-// TestSourceLocToPath tests the sourceLocToPath function.
 func TestSourceLocToPath(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -93,12 +90,11 @@ func TestSourceLocToPath(t *testing.T) {
 	}
 }
 
-// TestFetch_RetryLogic tests the retry behaviour of Fetch.
 func TestFetch_RetryLogic(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name           string
-		failCount      int // Number of times to fail before succeeding
+		failCount      int
 		retries        int
 		wantErr        bool
 		wantFetchCalls int
@@ -140,7 +136,6 @@ func TestFetch_RetryLogic(t *testing.T) {
 				fetchFunc: func(ctx context.Context, mv module.Version) (module.SourceLoc, error) {
 					callCount++
 					if callCount <= tt.failCount {
-						// A transient (retryable) failure: only these are retried.
 						return module.SourceLoc{}, ociregistry.ErrTooManyRequests
 					}
 					return module.SourceLoc{
@@ -152,7 +147,7 @@ func TestFetch_RetryLogic(t *testing.T) {
 			client := &client{
 				registry: mock,
 				retries:  tt.retries,
-				baseWait: time.Millisecond, // Fast retries for testing
+				baseWait: time.Millisecond,
 			}
 
 			ctx := context.Background()
@@ -163,9 +158,7 @@ func TestFetch_RetryLogic(t *testing.T) {
 				return
 			}
 
-			// Exhausting retries must yield a typed transient FetchError that
-			// records how many attempts were spent, so the mapper classifies it
-			// as 75 and the message reports the attempt count.
+			// Exhausted retries must yield a transient FetchError recording the attempt count.
 			if tt.wantErr {
 				var fe *FetchError
 				if !errors.As(err, &fe) {
@@ -190,13 +183,11 @@ func TestFetch_RetryLogic(t *testing.T) {
 	}
 }
 
-// TestFetch_ContextCancellation tests that Fetch respects context cancellation.
 func TestFetch_ContextCancellation(t *testing.T) {
 	t.Parallel()
 	mock := &mockRegistry{
 		fetchFunc: func(ctx context.Context, mv module.Version) (module.SourceLoc, error) {
-			// Transient so the retry loop engages and the cancel can interrupt
-			// it mid-backoff; an unclassifiable error would return immediately.
+			// Transient so the retry loop engages and the cancel interrupts mid-backoff.
 			return module.SourceLoc{}, ociregistry.ErrTooManyRequests
 		},
 	}
@@ -204,13 +195,11 @@ func TestFetch_ContextCancellation(t *testing.T) {
 	client := &client{
 		registry: mock,
 		retries:  5,
-		baseWait: time.Second, // Long retry wait so the 50 ms cancel always arrives first.
+		baseWait: time.Second, // long wait so the 50 ms cancel always arrives first
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Cancel after a short delay; the large baseWait gives a ~950 ms margin
-	// so goroutine scheduling variance cannot cause the retry timer to fire first.
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
@@ -223,7 +212,6 @@ func TestFetch_ContextCancellation(t *testing.T) {
 	}
 }
 
-// TestFetch_InvalidModulePath tests Fetch with invalid module paths.
 func TestFetch_InvalidModulePath(t *testing.T) {
 	t.Parallel()
 	client := &client{
@@ -264,7 +252,6 @@ func TestFetch_InvalidModulePath(t *testing.T) {
 	}
 }
 
-// TestResolveLatestVersion tests version resolution logic.
 func TestResolveLatestVersion(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -278,7 +265,7 @@ func TestResolveLatestVersion(t *testing.T) {
 		{
 			name:       "canonical version returned as-is",
 			modulePath: "github.com/test/module@v0.0.1",
-			versions:   nil, // Should not be called
+			versions:   nil,
 			want:       "github.com/test/module@v0.0.1",
 			wantErr:    false,
 		},
@@ -347,11 +334,10 @@ func TestResolveLatestVersion(t *testing.T) {
 	}
 }
 
-// TestIsCanonicalVersion tests the canonical version detection logic.
+// TestIsCanonicalVersion exercises ResolveLatestVersion's inline canonical check
+// by observing whether it makes a network call (non-canonical) or not (canonical).
 func TestIsCanonicalVersion(t *testing.T) {
 	t.Parallel()
-	// This tests the inline logic in ResolveLatestVersion by checking
-	// whether it makes a network call (non-canonical) or returns immediately (canonical).
 	tests := []struct {
 		version     string
 		isCanonical bool
@@ -359,10 +345,10 @@ func TestIsCanonicalVersion(t *testing.T) {
 		{"v0.0.1", true},
 		{"v1.2.3", true},
 		{"v10.20.30", true},
-		{"v0.0.1-beta", true}, // Valid semver with pre-release
+		{"v0.0.1-beta", true},
 		{"v0", false},
 		{"v1", false},
-		{"v0.1", false}, // Only one dot
+		{"v0.1", false},
 		{"", false},
 	}
 

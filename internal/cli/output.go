@@ -11,9 +11,8 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// writeJSON encodes v as indented JSON to w with HTML escaping disabled.
-// Use this instead of json.MarshalIndent to prevent shell characters like
-// >, <, and & from being escaped to \u003e, \u003c, and \u0026.
+// writeJSON disables HTML escaping so shell characters are not escaped (unlike
+// json.MarshalIndent), e.g. > stays > rather than becoming its \u form.
 func writeJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
@@ -21,33 +20,27 @@ func writeJSON(w io.Writer, v any) error {
 	return enc.Encode(v)
 }
 
-// printWarning prints a warning message in yellow with exactly one trailing
-// newline regardless of whether the caller included one in the format string.
+// printWarning emits exactly one trailing newline regardless of the format string.
 func printWarning(w io.Writer, format string, args ...any) {
 	tui.ColorWarning.Fprint(w, "Warning: ")
 	msg := strings.TrimRight(fmt.Sprintf(format, args...), "\n")
 	fmt.Fprintln(w, msg)
 }
 
-// printHeader prints a header/title in green with a leading blank line.
 func printHeader(w io.Writer, text string) {
 	fmt.Fprintln(w)
 	tui.ColorHeader.Fprintln(w, text)
 }
 
-// printSeparator prints a separator line in magenta.
 func printSeparator(w io.Writer) {
 	tui.ColorSeparator.Fprintln(w, strings.Repeat("─", 79))
 }
 
-// printContextTable prints contexts in a table format.
-// Shows all contexts (loaded, skipped, and failed) with status indicator.
 func printContextTable(w io.Writer, contexts []orchestration.Context, selection orchestration.ContextSelection) {
 	if len(contexts) == 0 {
 		return
 	}
 
-	// Build selection label from criteria (exclude file paths)
 	var parts []string
 	if selection.IncludeRequired {
 		parts = append(parts, "required")
@@ -67,7 +60,6 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 	}
 	fmt.Fprintln(w)
 
-	// Calculate column widths
 	nameWidth := 4 // "Name" header
 	tagsWidth := 4 // "Tags" header
 	fileWidth := 4 // "File" header
@@ -81,13 +73,11 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 
 	rows := make([]row, len(contexts))
 	for i, ctx := range contexts {
-		// Status: ✓ for loaded, ○ for skipped/error
 		status := "✓"
 		if ctx.Status == "skipped" || ctx.Status == "error" {
 			status = "○"
 		}
 
-		// Tags: combine required, default, and tags
 		var tags []string
 		if ctx.Required {
 			tags = append(tags, "required")
@@ -101,7 +91,6 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 			tagStr = "-"
 		}
 
-		// File: show basename, add error info if failed
 		file := ctx.File
 		if file != "" {
 			file = filepath.Base(file)
@@ -119,7 +108,6 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 			file:   file,
 		}
 
-		// Update widths
 		if len(ctx.Name) > nameWidth {
 			nameWidth = len(ctx.Name)
 		}
@@ -131,11 +119,9 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 		}
 	}
 
-	// Print header
 	tui.ColorDim.Fprintf(w, "  %-*s  %s  %-*s  %s\n",
 		nameWidth, "Name", "Status", tagsWidth, "Tags", "File")
 
-	// Print rows
 	for _, r := range rows {
 		fmt.Fprint(w, "  ")
 		fmt.Fprintf(w, "%-*s  ", nameWidth, r.name)
@@ -149,7 +135,6 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 	fmt.Fprintln(w)
 }
 
-// printAgentModel prints the Agent and Model lines with colour formatting.
 func printAgentModel(w io.Writer, agent orchestration.Agent, model, modelSource string) {
 	tui.ColorAgents.Fprint(w, "Agent:")
 	fmt.Fprintf(w, " %s\n", agent.Name)
@@ -162,8 +147,6 @@ func printAgentModel(w io.Writer, agent orchestration.Agent, model, modelSource 
 	fmt.Fprintln(w)
 }
 
-// printRoleTable prints the role resolution chain in a table format.
-// Shows status indicator: ✓ for loaded, ○ for skipped/error.
 func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 	if len(resolutions) == 0 {
 		return
@@ -172,7 +155,6 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 	tui.ColorRoles.Fprint(w, "Role:")
 	fmt.Fprintln(w)
 
-	// Calculate column widths
 	nameWidth := 4 // "Name" header
 	for _, r := range resolutions {
 		if len(r.Name) > nameWidth {
@@ -180,24 +162,20 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 		}
 	}
 
-	// Print header
 	tui.ColorDim.Fprintf(w, "  %-*s  %s  %s\n", nameWidth, "Name", "Status", "File")
 
 	// Print rows
 	for _, r := range resolutions {
-		// Determine status symbol
 		status := "○"
 		if r.Status == "loaded" {
 			status = "✓"
 		}
 
-		// Determine file display
 		file := filepath.Base(r.File)
 		if file == "" || file == "." {
 			file = "-"
 		}
 
-		// Add status info for non-loaded roles
 		switch r.Status {
 		case "skipped":
 			file = "skipped"
@@ -209,7 +187,6 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 			}
 		}
 
-		// Print row
 		fmt.Fprint(w, "  ")
 		fmt.Fprintf(w, "%-*s  ", nameWidth, r.Name)
 		if status == "✓" {

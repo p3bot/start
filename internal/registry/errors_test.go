@@ -48,14 +48,12 @@ func TestClassifyFetch(t *testing.T) {
 	}
 }
 
-// newHTTPError builds an ociregistry.HTTPError carrying the given status code.
 func newHTTPError(status int) error {
 	return ociregistry.NewHTTPError(errors.New("http failure"), status, nil, nil)
 }
 
-// TestFetchError_Error verifies the message format, including that a
-// retry-exhausted transient failure reports the attempt count for diagnostics
-// while other producers (Attempts == 0) omit it.
+// TestFetchError_Error verifies that the message reports the attempt count only
+// for retry-exhausted failures (Attempts > 0).
 func TestFetchError_Error(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -84,9 +82,8 @@ func TestFetchError_Error(t *testing.T) {
 	}
 }
 
-// TestFetchError_KindPreservedThroughWrap verifies the typed kind survives the
-// %w wrapping that FetchIndex and the cli commands apply, so the mapper's
-// errors.As still recovers it downstream.
+// TestFetchError_KindPreservedThroughWrap verifies the typed Kind survives %w
+// wrapping so the mapper's errors.As recovers it downstream.
 func TestFetchError_KindPreservedThroughWrap(t *testing.T) {
 	t.Parallel()
 	base := &FetchError{Kind: FetchTransient, Op: "fetch", Path: "x", Err: errors.New("boom")}

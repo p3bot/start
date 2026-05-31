@@ -5,13 +5,10 @@ import (
 	"testing"
 )
 
-// This file is the drift guard for `start help schemas`: it runs the
-// --json-capable commands and asserts their real output matches the documented
-// shape — structural keys and types, not data values — so the reference cannot
-// silently diverge from behaviour. The registry-backed four (library, search,
-// update, doctor) are covered offline in json_capture_test.go; the local four
-// are covered here. doctor validate is excluded from the offline guard and
-// covered by a //go:build registry integration test.
+// Drift guard for `start help schemas`: runs the --json-capable commands and
+// asserts their output matches the documented shape (structural keys and types,
+// not data values). The registry-backed four are covered in json_capture_test.go;
+// the local four here. doctor validate is covered by a registry integration test.
 
 // requireKeys fails the test if obj is missing any of the named keys.
 func requireKeys(t *testing.T, label string, obj map[string]any, keys ...string) {

@@ -9,7 +9,6 @@ import (
 
 func TestNewDryRunManager(t *testing.T) {
 	t.Parallel()
-	// NewDryRunManager is a value-constructor; a nil return is impossible.
 	m := NewDryRunManager()
 
 	if m.BaseDir == "" {
@@ -22,7 +21,6 @@ func TestNewDryRunManager(t *testing.T) {
 
 func TestNewUTDManager(t *testing.T) {
 	t.Parallel()
-	// NewUTDManager is a value-constructor; a nil return is impossible.
 	m := NewUTDManager("/project")
 
 	want := filepath.Join("/project", ".start", "temp")
@@ -42,7 +40,6 @@ func TestManager_DryRunDir(t *testing.T) {
 			t.Fatalf("DryRunDir() error = %v", err)
 		}
 
-		// Check directory was created
 		info, err := os.Stat(dir)
 		if err != nil {
 			t.Fatalf("stat dir error = %v", err)
@@ -51,7 +48,6 @@ func TestManager_DryRunDir(t *testing.T) {
 			t.Error("expected directory")
 		}
 
-		// Check name format
 		base := filepath.Base(dir)
 		if !strings.HasPrefix(base, "start-") {
 			t.Errorf("dir name = %q, want prefix 'start-'", base)
@@ -59,21 +55,17 @@ func TestManager_DryRunDir(t *testing.T) {
 	})
 
 	t.Run("handles collision with suffix", func(t *testing.T) {
-		// Create first directory
 		dir1, err := m.DryRunDir()
 		if err != nil {
 			t.Fatalf("DryRunDir() 1 error = %v", err)
 		}
 
-		// Create second directory in same second (may collide)
 		dir2, err := m.DryRunDir()
 		if err != nil {
 			t.Fatalf("DryRunDir() 2 error = %v", err)
 		}
 
-		// Both should exist and be different
 		if dir1 == dir2 {
-			// This is fine if they were created in different seconds
 			t.Log("directories created in same path (different seconds)")
 		}
 
@@ -105,7 +97,6 @@ func TestManager_WriteDryRunFiles(t *testing.T) {
 		t.Fatalf("WriteDryRunFiles() error = %v", err)
 	}
 
-	// Check files were created
 	files := map[string]string{
 		"role.md":     role,
 		"prompt.md":   prompt,
@@ -163,12 +154,10 @@ func TestManager_WriteUTDFile(t *testing.T) {
 				t.Fatalf("WriteUTDFile() error = %v", err)
 			}
 
-			// Check filename
 			if filepath.Base(path) != tt.wantFileName {
 				t.Errorf("filename = %q, want %q", filepath.Base(path), tt.wantFileName)
 			}
 
-			// Check content
 			content, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("reading file: %v", err)
@@ -259,7 +248,6 @@ func TestManager_Clean(t *testing.T) {
 	tmpDir := t.TempDir()
 	m := NewUTDManager(tmpDir)
 
-	// Create some files
 	_, err := m.WriteUTDFile("role", "test1", "content1")
 	if err != nil {
 		t.Fatalf("WriteUTDFile 1 error = %v", err)
@@ -269,7 +257,6 @@ func TestManager_Clean(t *testing.T) {
 		t.Fatalf("WriteUTDFile 2 error = %v", err)
 	}
 
-	// Verify files exist
 	entries, err := os.ReadDir(m.BaseDir)
 	if err != nil {
 		t.Fatalf("ReadDir error = %v", err)
@@ -278,12 +265,10 @@ func TestManager_Clean(t *testing.T) {
 		t.Fatalf("expected 2 files, got %d", len(entries))
 	}
 
-	// Clean
 	if err := m.Clean(); err != nil {
 		t.Fatalf("Clean() error = %v", err)
 	}
 
-	// Verify files removed
 	entries, err = os.ReadDir(m.BaseDir)
 	if err != nil {
 		t.Fatalf("ReadDir after clean error = %v", err)
@@ -297,7 +282,6 @@ func TestManager_Clean_NonexistentDir(t *testing.T) {
 	t.Parallel()
 	m := &Manager{BaseDir: "/nonexistent/path/12345"}
 
-	// Should not error for nonexistent directory
 	if err := m.Clean(); err != nil {
 		t.Errorf("Clean() on nonexistent dir error = %v", err)
 	}

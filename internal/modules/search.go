@@ -19,9 +19,7 @@ type SearchResult struct {
 	MatchScore int                 `json:"matchScore"`
 }
 
-// ParseSearchTerms splits an input string into unique, lowercased search terms.
-// It splits on both whitespace and commas, removes empty strings and duplicates.
-// Returns nil if no valid terms remain.
+// ParseSearchTerms splits input into unique, lowercased terms (on whitespace and commas).
 // Use ParseSearchPatterns instead when terms will be compiled as regex patterns.
 func ParseSearchTerms(input string) []string {
 	normalized := strings.ReplaceAll(input, ",", " ")
@@ -39,11 +37,9 @@ func ParseSearchTerms(input string) []string {
 	return terms
 }
 
-// ParseSearchPatterns splits an input string into unique search patterns,
-// preserving original case. Deduplication is case-insensitive but the
-// first occurrence's casing is kept. This avoids corrupting case-sensitive
-// regex escape sequences like \S, \D, \W, and \B.
-// Returns nil if no valid patterns remain.
+// ParseSearchPatterns splits input into unique patterns, preserving original case.
+// Dedup is case-insensitive but keeps the first casing, so case-sensitive regex
+// escapes like \S, \D, \W, \B are not corrupted.
 func ParseSearchPatterns(input string) []string {
 	normalized := strings.ReplaceAll(input, ",", " ")
 	parts := strings.Fields(normalized)
@@ -61,8 +57,6 @@ func ParseSearchPatterns(input string) []string {
 }
 
 // CompileSearchTerms compiles search terms into case-insensitive regular expressions.
-// Each term is treated as a regex pattern, allowing operators like ^ $ . + * etc.
-// Returns an error if any term contains an invalid regex pattern.
 func CompileSearchTerms(terms []string) ([]*regexp.Regexp, error) {
 	patterns := make([]*regexp.Regexp, len(terms))
 	for i, term := range terms {
@@ -75,9 +69,7 @@ func CompileSearchTerms(terms []string) ([]*regexp.Regexp, error) {
 	return patterns, nil
 }
 
-// ValidateSearchQuery checks that a search query meets minimum length requirements.
-// When tags are provided, an empty query is allowed (tags-only search).
-// When a query is provided, the total character count must be at least 3.
+// ValidateSearchQuery checks query length: empty allowed only with tags, else >= 3 chars total.
 func ValidateSearchQuery(terms, tags []string) error {
 	totalLen := 0
 	for _, t := range terms {
@@ -92,12 +84,8 @@ func ValidateSearchQuery(terms, tags []string) error {
 	return nil
 }
 
-// SearchIndex searches all categories in the index for matching entries.
-// The query is split into terms (by whitespace and commas) and all terms
-// must match for an entry to be included (AND semantics).
-// Terms are treated as regex patterns for flexible matching.
-// When tags is non-empty, entries must also match at least one tag (OR semantics).
-// Tags alone (empty query) return all entries matching any tag.
+// SearchIndex searches all index categories. Query terms are regex patterns with AND
+// semantics; tags (if any) additionally require an OR tag match.
 func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchResult, error) {
 	if index == nil {
 		return nil, nil
@@ -119,13 +107,12 @@ func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchRe
 
 	var results []SearchResult
 
-	// Search each category
 	results = append(results, searchCategory("agents", index.Agents, patterns, tags)...)
 	results = append(results, searchCategory("roles", index.Roles, patterns, tags)...)
 	results = append(results, searchCategory("contexts", index.Contexts, patterns, tags)...)
 	results = append(results, searchCategory("tasks", index.Tasks, patterns, tags)...)
 
-	// Sort by match score (descending), then by category, then by name
+	// Sort by score desc, then category, then name.
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].MatchScore != results[j].MatchScore {
 			return results[i].MatchScore > results[j].MatchScore
@@ -140,19 +127,13 @@ func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchRe
 }
 
 // searchCategory searches a single category map for matching entries.
-// When both patterns and tags are provided, entries must match both (score > 0 AND tag match).
-// When only tags are provided (nil patterns), entries matching any tag are included with score 1.
-// When only patterns are provided (nil tags), entries are matched by score alone.
-// Note: the three branches are intentionally kept explicit rather than collapsed into
-// a single score+tagOK expression because matchScorePatterns returns 0 for nil patterns,
-// which correctly produces no results in the (nil, nil) case. A collapsed version would
-// need a special guard or would silently include all entries when both inputs are empty.
+// The three branches stay explicit rather than collapsed: matchScorePatterns returns 0
+// for nil patterns, so a merged score+tagOK expression would mishandle the (nil, nil) case.
 func searchCategory(category string, entries map[string]registry.IndexEntry, patterns []*regexp.Regexp, tags []string) []SearchResult {
 	var results []SearchResult
 
 	for name, entry := range entries {
 		if len(patterns) > 0 && len(tags) > 0 {
-			// Both: require score > 0 AND tag match
 			score := matchScorePatterns(name, entry, patterns)
 			if score > 0 && matchesAnyTag(entry.Tags, tags) {
 				results = append(results, SearchResult{
@@ -163,7 +144,6 @@ func searchCategory(category string, entries map[string]registry.IndexEntry, pat
 				})
 			}
 		} else if len(tags) > 0 {
-			// Tags only: include if tag matches
 			if matchesAnyTag(entry.Tags, tags) {
 				results = append(results, SearchResult{
 					Category:   category,
@@ -173,7 +153,6 @@ func searchCategory(category string, entries map[string]registry.IndexEntry, pat
 				})
 			}
 		} else {
-			// Patterns only (original behaviour)
 			score := matchScorePatterns(name, entry, patterns)
 			if score > 0 {
 				results = append(results, SearchResult{
@@ -189,8 +168,7 @@ func searchCategory(category string, entries map[string]registry.IndexEntry, pat
 	return results
 }
 
-// matchesAnyTag returns true if at least one entry tag matches any filter tag
-// (case-insensitive exact match, OR semantics across filter tags).
+// matchesAnyTag reports whether any entry tag case-insensitively equals any filter tag.
 func matchesAnyTag(entryTags, filterTags []string) bool {
 	for _, ft := range filterTags {
 		ftLower := strings.ToLower(ft)
@@ -203,11 +181,8 @@ func matchesAnyTag(entryTags, filterTags []string) bool {
 	return false
 }
 
-// matchScorePatterns calculates how well an entry matches ALL search patterns.
-// Returns 0 if any pattern fails to match at least one field (AND semantics).
-// Score is the sum of per-pattern field scores.
-// Field weights: name (3) > description (1) > tags (1)
-// Patterns must be compiled with (?i) for case-insensitive matching.
+// matchScorePatterns sums per-pattern field scores (name 3, description 1, tags 1),
+// returning 0 if any pattern matches no field (AND semantics).
 func matchScorePatterns(name string, entry registry.IndexEntry, patterns []*regexp.Regexp) int {
 	if len(patterns) == 0 {
 		return 0
@@ -236,11 +211,8 @@ func matchScorePatterns(name string, entry registry.IndexEntry, patterns []*rege
 	return totalScore
 }
 
-// SearchCategoryEntries searches a single category's registry entries with scoring.
-// The query is split into terms and all must match (AND semantics).
-// Terms are treated as regex patterns for flexible matching.
-// When tags is non-empty, entries must also match at least one tag.
-// Returns results sorted by score descending, then by name ascending.
+// SearchCategoryEntries searches a single category's entries, returning scored results
+// sorted by score desc then name asc. Query terms are regex patterns with AND semantics.
 func SearchCategoryEntries(category string, entries map[string]registry.IndexEntry, query string, tags []string) ([]SearchResult, error) {
 	terms := ParseSearchPatterns(query)
 	if len(terms) == 0 && len(tags) == 0 {
@@ -263,12 +235,8 @@ func SearchCategoryEntries(category string, entries map[string]registry.IndexEnt
 	return results, nil
 }
 
-// SearchInstalledConfig searches installed CUE config entries for a category.
-// It iterates entries under the given CUE key (e.g. "agents"), extracts
-// description/tags into IndexEntry structs, applies scoring, and returns
-// scored results. The query is split into terms with AND semantics.
-// Terms are treated as regex patterns for flexible matching.
-// When tags is non-empty, entries must also match at least one tag.
+// SearchInstalledConfig searches installed config entries under cueKey (e.g. "agents"),
+// scoring them like SearchCategoryEntries.
 func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags []string) ([]SearchResult, error) {
 	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {
@@ -293,7 +261,6 @@ func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags [
 		}
 	}
 
-	// Build entries map for searchCategory reuse
 	entries := make(map[string]registry.IndexEntry)
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
@@ -307,7 +274,7 @@ func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags [
 	return results, nil
 }
 
-// sortResults sorts search results by score descending, then by name ascending.
+// sortResults sorts by score descending, then name ascending.
 func sortResults(results []SearchResult) {
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].MatchScore != results[j].MatchScore {

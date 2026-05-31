@@ -67,7 +67,6 @@ func TestGenerateAgentCUE(t *testing.T) {
 
 	content := generateAgentCUE(agent)
 
-	// Check essential parts
 	if !strings.Contains(content, `"claude"`) {
 		t.Error("missing agent name")
 	}
@@ -115,7 +114,6 @@ func TestGenerateAgentCUE_MinimalAgent(t *testing.T) {
 
 	content := generateAgentCUE(agent)
 
-	// Check required fields are present
 	if !strings.Contains(content, `bin:`) {
 		t.Error("missing bin field")
 	}
@@ -123,7 +121,6 @@ func TestGenerateAgentCUE_MinimalAgent(t *testing.T) {
 		t.Error("missing command field")
 	}
 
-	// Check optional fields are not present when empty
 	if strings.Contains(content, `default_model:`) {
 		t.Error("should not have default_model when empty")
 	}
@@ -285,7 +282,6 @@ func TestNoAgentsError(t *testing.T) {
 
 	errMsg := err.Error()
 
-	// Check for helpful message components
 	if !strings.Contains(errMsg, "No AI CLI tools detected") {
 		t.Error("error should mention no tools detected")
 	}
@@ -657,10 +653,8 @@ func TestPromptSelection_TTY_InvalidName(t *testing.T) {
 }
 
 func TestWriteConfig(t *testing.T) {
-	// Create a temporary home directory
 	tmpDir := t.TempDir()
 
-	// Override HOME and XDG_CONFIG_HOME to use temp directory
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 
@@ -687,12 +681,10 @@ func TestWriteConfig(t *testing.T) {
 		t.Fatalf("writeConfig() error = %v", err)
 	}
 
-	// Verify config path is returned
 	if configPath == "" {
 		t.Error("expected non-empty config path")
 	}
 
-	// Verify agents.cue was created
 	agentsPath := filepath.Join(filepath.Dir(configPath), "agents.cue")
 	agentsContent, err := os.ReadFile(agentsPath)
 	if err != nil {
@@ -719,7 +711,6 @@ func TestWriteConfig(t *testing.T) {
 		t.Error("agents.cue should contain fast model")
 	}
 
-	// Verify settings.cue was created
 	configContent, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("reading settings.cue: %v", err)
@@ -746,7 +737,6 @@ func TestWriteConfig_MinimalAgent(t *testing.T) {
 
 	as := NewAutoSetup(stdout, stderr, stdin, false)
 
-	// Minimal agent with only required fields
 	agent := Agent{
 		Name:    "minimal",
 		Bin:     "minimal-bin",
@@ -758,7 +748,6 @@ func TestWriteConfig_MinimalAgent(t *testing.T) {
 		t.Fatalf("writeConfig() error = %v", err)
 	}
 
-	// Verify agents.cue was created
 	agentsPath := filepath.Join(filepath.Dir(configPath), "agents.cue")
 	agentsContent, err := os.ReadFile(agentsPath)
 	if err != nil {
@@ -767,7 +756,6 @@ func TestWriteConfig_MinimalAgent(t *testing.T) {
 
 	agentsStr := string(agentsContent)
 
-	// Should have required fields
 	if !strings.Contains(agentsStr, `bin:`) {
 		t.Error("agents.cue should contain bin field")
 	}
@@ -775,7 +763,6 @@ func TestWriteConfig_MinimalAgent(t *testing.T) {
 		t.Error("agents.cue should contain command field")
 	}
 
-	// Should NOT have optional fields when empty
 	if strings.Contains(agentsStr, `default_model:`) {
 		t.Error("agents.cue should not have default_model when empty")
 	}
@@ -788,7 +775,6 @@ func TestWriteConfig_MinimalAgent(t *testing.T) {
 }
 
 func TestExtractAgentFromValue_NestedAgentsMap(t *testing.T) {
-	// Test extraction from nested agents map (user config style)
 	cueSrc := `
 agents: {
 	claude: {
@@ -818,7 +804,6 @@ agents: {
 }
 
 func TestExtractAgentFromValue_SingularAgentField(t *testing.T) {
-	// Test extraction from singular agent field (registry module style)
 	cueSrc := `
 agent: {
 	bin: "gemini"
@@ -846,7 +831,6 @@ agent: {
 }
 
 func TestExtractAgentFromValue_NestedModelID(t *testing.T) {
-	// Test extraction of models with nested id field (object format)
 	cueSrc := `
 bin: "test"
 command: "{{.bin}}"

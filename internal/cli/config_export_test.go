@@ -72,7 +72,6 @@ func TestConfigExport_SingleCategory(t *testing.T) {
 	if output != content {
 		t.Errorf("expected exact file content, got %q", output)
 	}
-	// Single category should not include a header
 	if strings.Contains(output, "// agents.cue") {
 		t.Error("single category export should not include file header")
 	}
@@ -186,8 +185,6 @@ func TestConfigExport_MissingConfigDir(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
 
-	// Do not create the global config directory
-
 	cmd := NewRootCmd()
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
@@ -206,8 +203,6 @@ func TestConfigExport_MissingLocalConfigDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
-
-	// Do not create the .start/ directory
 
 	cmd := NewRootCmd()
 	cmd.SetOut(&bytes.Buffer{})
@@ -231,7 +226,6 @@ func TestConfigExport_MissingFile(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
 
-	// Create global dir but no agents.cue
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)

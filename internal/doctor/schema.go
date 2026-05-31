@@ -18,11 +18,11 @@ import (
 
 // SchemaSet holds parsed CUE schema definitions for validation.
 type SchemaSet struct {
-	Agent    cue.Value // #Agent definition
-	Role     cue.Value // #Role definition
-	Context  cue.Value // #Context definition
-	Task     cue.Value // #Task definition
-	Settings cue.Value // #Settings definition
+	Agent    cue.Value
+	Role     cue.Value
+	Context  cue.Value
+	Task     cue.Value
+	Settings cue.Value
 }
 
 // LoadSchemas loads CUE schema definitions from a fetched module directory.
@@ -63,7 +63,7 @@ func LoadSchemas(dir string, reg modconfig.Registry) (SchemaSet, error) {
 type categorySchema struct {
 	key    string
 	schema cue.Value
-	isMap  bool // true for collection types (agents, roles, etc.), false for settings
+	isMap  bool // collection (agents, roles, ...) vs single struct (settings)
 }
 
 // CheckSchemaValidation validates config files against CUE schemas.
@@ -97,7 +97,6 @@ func CheckSchemaValidation(paths config.Paths, schemas SchemaSet) SectionResult 
 	return section
 }
 
-// validateConfigDir validates all CUE files in a config directory.
 func validateConfigDir(dir string, categories []categorySchema) []CheckResult {
 	files, err := config.CUEFilesInDir(dir)
 	if err != nil || len(files) == 0 {
@@ -115,7 +114,6 @@ func validateConfigDir(dir string, categories []categorySchema) []CheckResult {
 	return results
 }
 
-// validateSingleFile validates a single CUE config file against schemas.
 func validateSingleFile(cctx *cue.Context, filePath string, categories []categorySchema) []CheckResult {
 	var results []CheckResult
 	fileName := filepath.Base(filePath)
@@ -152,7 +150,6 @@ func validateSingleFile(cctx *cue.Context, filePath string, categories []categor
 		hasKeys = true
 
 		if !cat.isMap {
-			// Settings: validate as a single struct.
 			unified := cat.schema.Unify(topLevel)
 			if err := filterAllowedFieldErrors(unified.Validate()); err != nil {
 				hasErrors = true
@@ -166,7 +163,6 @@ func validateSingleFile(cctx *cue.Context, filePath string, categories []categor
 			continue
 		}
 
-		// Collection: iterate entries and validate each.
 		iter, iterErr := topLevel.Fields()
 		if iterErr != nil {
 			continue
@@ -199,9 +195,8 @@ func validateSingleFile(cctx *cue.Context, filePath string, categories []categor
 	return results
 }
 
-// filterAllowedFieldErrors removes "field not allowed" errors from CUE validation
-// results. This allows extra fields in configs (open schema behaviour) while still
-// catching constraint violations like empty required strings or out-of-range values.
+// filterAllowedFieldErrors drops "field not allowed" errors so configs may carry
+// extra fields (open schema), while still surfacing constraint violations.
 func filterAllowedFieldErrors(err error) error {
 	if err == nil {
 		return nil
@@ -210,7 +205,6 @@ func filterAllowedFieldErrors(err error) error {
 	var filtered []error
 	for _, e := range cueerrors.Errors(err) {
 		// CUE lacks structured error codes; string match is the only option.
-		// Verify this message still matches after CUE library upgrades.
 		if !strings.Contains(e.Error(), "field not allowed") {
 			filtered = append(filtered, e)
 		}

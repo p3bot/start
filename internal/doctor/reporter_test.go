@@ -8,12 +8,8 @@ import (
 	"github.com/fatih/color"
 )
 
-// TestPrintResult_FixRendersForStatusNotFound asserts that the human-readable
-// reporter surfaces the Fix line for StatusNotFound results. Previously the
-// guard only covered StatusFail and StatusWarn, which silently swallowed
-// install hints attached to missing-extract reports.
 func TestPrintResult_FixRendersForStatusNotFound(t *testing.T) {
-	// Disable colour so the captured output is plain text we can match against.
+	// Disable colour so output is plain text we can match against.
 	prev := color.NoColor
 	color.NoColor = true
 	t.Cleanup(func() { color.NoColor = prev })
@@ -36,8 +32,6 @@ func TestPrintResult_FixRendersForStatusNotFound(t *testing.T) {
 	}
 }
 
-// TestPrintResult_NoFixForStatusPass confirms the guard still suppresses
-// Fix lines for passing results (where a Fix would be nonsensical).
 func TestPrintResult_NoFixForStatusPass(t *testing.T) {
 	prev := color.NoColor
 	color.NoColor = true

@@ -1,7 +1,6 @@
 package cue
 
-// CUE configuration keys used throughout the codebase.
-// Centralised here to prevent typos and ease refactoring.
+// CUE configuration keys, centralised to prevent typos.
 const (
 	KeyAgents   = "agents"
 	KeyRoles    = "roles"

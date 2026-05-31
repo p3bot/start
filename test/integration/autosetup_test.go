@@ -16,7 +16,6 @@ import (
 )
 
 func TestAutoSetup_DetectionFlow(t *testing.T) {
-	// Create a mock index with real binaries that exist on the system
 	index := &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			"shell/bash": {
@@ -34,7 +33,6 @@ func TestAutoSetup_DetectionFlow(t *testing.T) {
 
 	detected := detection.DetectAgents(index)
 
-	// bash should be detected on most Unix systems
 	if len(detected) == 0 {
 		t.Skip("no agents detected - bash may not be available")
 	}
@@ -58,20 +56,16 @@ func TestAutoSetup_DetectionFlow(t *testing.T) {
 }
 
 func TestAutoSetup_ConfigWriting(t *testing.T) {
-	// Create a temporary directory for config
 	tmpDir := t.TempDir()
 
-	// Override HOME to use temp directory
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
 
-	// Also set XDG_CONFIG_HOME to ensure we use temp dir
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
 
-	// Test agent
 	agent := orchestration.Agent{
 		Name:         "test-agent",
 		Bin:          "test-bin",
@@ -83,18 +77,13 @@ func TestAutoSetup_ConfigWriting(t *testing.T) {
 		},
 	}
 
-	// Create auto-setup with mock I/O
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	stdin := strings.NewReader("")
 
+	// Run() needs a real registry, so exercise the config-writing path directly instead.
 	as := orchestration.NewAutoSetup(stdout, stderr, stdin, false)
 
-	// We can't call Run() directly as it requires real registry
-	// Instead, test the config writing logic via the exported function
-	// This tests the integration of config + orchestration packages
-
-	// Verify config directory doesn't exist yet
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		t.Fatalf("resolving paths: %v", err)
@@ -104,20 +93,17 @@ func TestAutoSetup_ConfigWriting(t *testing.T) {
 		t.Error("global config should not exist yet")
 	}
 
-	// Create config directory and write agent config
 	configDir := paths.Global
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
 
-	// Generate and write config
 	content := generateTestAgentCUE(agent)
 	configPath := filepath.Join(configDir, "agents.cue")
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Verify paths now show global exists
 	paths, err = config.ResolvePaths("")
 	if err != nil {
 		t.Fatalf("resolving paths after write: %v", err)
@@ -127,7 +113,6 @@ func TestAutoSetup_ConfigWriting(t *testing.T) {
 		t.Error("global config should exist after write")
 	}
 
-	// Verify file contents
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("reading config: %v", err)
@@ -144,7 +129,6 @@ func TestAutoSetup_ConfigWriting(t *testing.T) {
 	_ = as
 }
 
-// generateTestAgentCUE generates CUE content for testing
 func generateTestAgentCUE(agent orchestration.Agent) string {
 	var sb strings.Builder
 
@@ -172,14 +156,12 @@ func generateTestAgentCUE(agent orchestration.Agent) string {
 }
 
 func TestNeedsSetup_Integration(t *testing.T) {
-	// Test with real config resolution
 	tmpDir := t.TempDir()
 
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
 
-	// Initially no config should exist
 	paths, err := config.ResolvePaths(tmpDir)
 	if err != nil {
 		t.Fatalf("resolving paths: %v", err)
@@ -189,7 +171,6 @@ func TestNeedsSetup_Integration(t *testing.T) {
 		t.Error("expected NeedsSetup=true when no config exists")
 	}
 
-	// Create local config
 	localDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		t.Fatalf("creating local dir: %v", err)
@@ -198,7 +179,6 @@ func TestNeedsSetup_Integration(t *testing.T) {
 		t.Fatalf("writing local config: %v", err)
 	}
 
-	// Re-resolve paths
 	paths, err = config.ResolvePaths(tmpDir)
 	if err != nil {
 		t.Fatalf("resolving paths after local: %v", err)

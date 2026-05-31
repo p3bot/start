@@ -11,11 +11,10 @@ import (
 )
 
 // IndexModulePath is the CUE module path for the start library index.
-// Uses major version; resolved to latest canonical version at runtime.
+// Major version; resolved to latest canonical version at runtime.
 const IndexModulePath = "github.com/start-cli/library/index@v1"
 
 // SchemaModulePath is the CUE module path for the start library schemas.
-// Used by doctor to validate configs against schema constraints.
 const SchemaModulePath = "github.com/start-cli/library/schemas@v1"
 
 // IndexEntry represents an entry in the library index.
@@ -43,11 +42,9 @@ func EffectiveIndexPath(configured string) string {
 	return IndexModulePath
 }
 
-// FetchIndex fetches and parses the index from the registry.
-// indexPath is the CUE module path to use; pass empty string to use IndexModulePath.
-// Returns the parsed index, the resolved canonical version string, and any error.
+// FetchIndex fetches and parses the index from the registry. Pass empty
+// indexPath to use IndexModulePath; returns the resolved canonical version.
 func (c *client) FetchIndex(ctx context.Context, indexPath string) (*Index, string, error) {
-	// Resolve to latest version
 	resolvedPath, err := c.ResolveLatestVersion(ctx, EffectiveIndexPath(indexPath))
 	if err != nil {
 		return nil, "", fmt.Errorf("resolving index version: %w", err)
@@ -94,7 +91,6 @@ func LoadIndex(dir string, reg modconfig.Registry) (*Index, error) {
 	return decodeIndex(v)
 }
 
-// decodeIndex decodes a CUE value into an Index struct.
 func decodeIndex(v cue.Value) (*Index, error) {
 	idx := &Index{
 		Agents:   make(map[string]IndexEntry),
@@ -103,7 +99,6 @@ func decodeIndex(v cue.Value) (*Index, error) {
 		Tasks:    make(map[string]IndexEntry),
 	}
 
-	// Decode each category
 	if err := decodeCategory(v, "agents", idx.Agents); err != nil {
 		return nil, err
 	}
@@ -120,11 +115,10 @@ func decodeIndex(v cue.Value) (*Index, error) {
 	return idx, nil
 }
 
-// decodeCategory decodes a category map from the CUE value.
 func decodeCategory(v cue.Value, name string, target map[string]IndexEntry) error {
 	catVal := v.LookupPath(cue.ParsePath(name))
 	if !catVal.Exists() {
-		return nil // Category is optional
+		return nil // category is optional
 	}
 
 	iter, err := catVal.Fields()

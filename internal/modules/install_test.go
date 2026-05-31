@@ -15,7 +15,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// formatAST formats an AST node to a string for test assertions.
 func formatAST(t *testing.T, node ast.Node) string {
 	t.Helper()
 	b, err := format.Node(node, format.Simplify())
@@ -25,7 +24,6 @@ func formatAST(t *testing.T, node ast.Node) string {
 	return string(b)
 }
 
-// parseCUEStruct parses a CUE struct literal string into an ast.Expr for test input.
 func parseCUEStruct(t *testing.T, src string) ast.Expr {
 	t.Helper()
 	f, err := parser.ParseFile("test", "a: "+src)
@@ -35,14 +33,11 @@ func parseCUEStruct(t *testing.T, src string) ast.Expr {
 	return f.Decls[0].(*ast.Field).Value
 }
 
-// TestModuleExists tests the ModuleExists function.
 func TestModuleExists(t *testing.T) {
 	t.Parallel()
 
-	// Create a temporary config directory
 	configDir := t.TempDir()
 
-	// Write a contexts.cue file with an existing module
 	contextsFile := filepath.Join(configDir, "contexts.cue")
 	existingContent := `// start configuration
 contexts: {
@@ -59,7 +54,6 @@ contexts: {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	// Load config via CUE
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {
@@ -102,8 +96,6 @@ contexts: {
 	}
 }
 
-// TestWriteModuleToConfig_NewCategory tests adding a module with a category
-// that doesn't exist yet in an existing file.
 func TestWriteModuleToConfig_NewCategory(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
@@ -141,14 +133,12 @@ contexts: {
 	}
 
 	result := string(data)
-	// Should preserve the existing contexts block
 	if !strings.Contains(result, "contexts:") {
 		t.Error("result missing existing contexts block")
 	}
 	if !strings.Contains(result, "existing:") {
 		t.Error("result missing existing module")
 	}
-	// Should have the new tasks block
 	if !strings.Contains(result, "tasks:") {
 		t.Error("result missing new tasks category")
 	}
@@ -157,15 +147,12 @@ contexts: {
 	}
 }
 
-// TestUpdateModuleInConfig tests the UpdateModuleInConfig function.
 func TestUpdateModuleInConfig(t *testing.T) {
 	t.Parallel()
 
-	// Create a temporary directory
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "contexts.cue")
 
-	// Write initial config
 	initialContent := `// start configuration
 contexts: {
 	"cwd/agents-md": {
@@ -186,13 +173,11 @@ contexts: {
 	required: true
 }`)
 
-	// Update the module
 	err := UpdateModuleInConfig(configPath, "contexts", "cwd/agents-md", newContent)
 	if err != nil {
 		t.Fatalf("UpdateModuleInConfig() error: %v", err)
 	}
 
-	// Read back and verify
 	updatedData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("Failed to read updated config: %v", err)
@@ -200,7 +185,6 @@ contexts: {
 
 	updatedContent := string(updatedData)
 
-	// Verify new content is present
 	if !strings.Contains(updatedContent, "v0.2.0") {
 		t.Error("Updated config missing new version")
 	}
@@ -211,7 +195,6 @@ contexts: {
 		t.Error("Updated config missing new field")
 	}
 
-	// Verify old content is gone
 	if strings.Contains(updatedContent, "v0.1.0") {
 		t.Error("Updated config still contains old version")
 	}
@@ -220,8 +203,6 @@ contexts: {
 	}
 }
 
-// TestUpdateModuleInConfig_CategoryNotFound tests that updating a module
-// in a non-existent category returns an error.
 func TestUpdateModuleInConfig_CategoryNotFound(t *testing.T) {
 	t.Parallel()
 
@@ -246,15 +227,12 @@ func TestUpdateModuleInConfig_CategoryNotFound(t *testing.T) {
 	}
 }
 
-// TestWriteModuleToConfig_RoundTrip verifies that written config files have
-// correct CUE structure by parsing the output back and checking paths.
 func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 	t.Parallel()
 
 	ctx := cuecontext.New()
 	configPath := filepath.Join(t.TempDir(), "contexts.cue")
 
-	// Write first module to new file
 	first := SearchResult{
 		Category: "contexts",
 		Name:     "cwd/agents-md",
@@ -270,7 +248,6 @@ func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("first write: %v", err)
 	}
 
-	// Write second module to same file
 	second := SearchResult{
 		Category: "contexts",
 		Name:     "cwd/project",
@@ -285,7 +262,6 @@ func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("second write: %v", err)
 	}
 
-	// Parse back with CUE and verify structure
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("reading result: %v", err)
@@ -295,7 +271,6 @@ func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("output is not valid CUE: %v", v.Err())
 	}
 
-	// Verify first module at correct path
 	origin1, err := v.LookupPath(cue.ParsePath(`contexts."cwd/agents-md".origin`)).String()
 	if err != nil {
 		t.Fatalf("looking up first module origin: %v", err)
@@ -314,7 +289,6 @@ func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 		t.Error("first module default should be true")
 	}
 
-	// Verify second module at correct path
 	origin2, err := v.LookupPath(cue.ParsePath(`contexts."cwd/project".origin`)).String()
 	if err != nil {
 		t.Fatalf("looking up second module origin: %v", err)
@@ -328,7 +302,6 @@ func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 		t.Error("second module required should be false")
 	}
 
-	// Verify tags list round-trips correctly
 	tagsVal := v.LookupPath(cue.ParsePath(`contexts."cwd/agents-md".tags`))
 	iter, err := tagsVal.List()
 	if err != nil {
@@ -344,7 +317,6 @@ func TestWriteModuleToConfig_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestWriteModuleToConfig tests the writeModuleToConfig function.
 func TestWriteModuleToConfig(t *testing.T) {
 	t.Parallel()
 
@@ -510,7 +482,6 @@ contexts: {
 				return
 			}
 
-			// Read back and verify
 			data, err := os.ReadFile(configPath)
 			if err != nil {
 				t.Fatalf("Failed to read config file: %v", err)
@@ -531,8 +502,6 @@ contexts: {
 	}
 }
 
-// TestWriteModuleToConfig_BracesInStringValues verifies that modules are inserted
-// into the correct category block when multiple top-level categories exist.
 func TestWriteModuleToConfig_BracesInStringValues(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
@@ -577,7 +546,6 @@ settings: {
 
 	result := string(data)
 
-	// The result should contain both the existing and new modules
 	if !strings.Contains(result, "existing:") {
 		t.Error("result missing existing module")
 	}
@@ -585,7 +553,7 @@ settings: {
 		t.Error("result missing new module")
 	}
 
-	// Verify the new module appears inside contexts: {} block, not settings: {} block.
+	// New module must land in the contexts block, not the settings block.
 	settingsPos := strings.Index(result, "settings:")
 	newModulePos := strings.Index(result, `"new-module":`)
 	if settingsPos == -1 || newModulePos == -1 {
@@ -598,7 +566,6 @@ settings: {
 	}
 }
 
-// TestFindRoleDependency tests the findRoleDependency function.
 func TestFindRoleDependency(t *testing.T) {
 	t.Parallel()
 
@@ -700,14 +667,12 @@ deps: {
 	}
 
 	gotPath := findRoleDependency(moduleDir)
-	// With sorted iteration, the alphabetically first role dep is returned.
 	wantPath := "github.com/test/roles/golang/agent@v0"
 	if gotPath != wantPath {
 		t.Errorf("findRoleDependency() depPath = %q, want %q", gotPath, wantPath)
 	}
 }
 
-// TestResolveRoleName tests the ResolveRoleName function.
 func TestResolveRoleName(t *testing.T) {
 	t.Parallel()
 
@@ -767,12 +732,9 @@ func TestResolveRoleName(t *testing.T) {
 	}
 }
 
-// TestFormatModuleStruct_RoleNameOverride tests that formatModuleStruct replaces
-// an inline role struct with a string reference when roleName is provided.
 func TestFormatModuleStruct_RoleNameOverride(t *testing.T) {
 	t.Parallel()
 
-	// Build a CUE value with a struct role field
 	ctx := cuecontext.New()
 	v := ctx.CompileString(`{
 		description: "Test task"
@@ -841,13 +803,11 @@ func TestFormatModuleStruct_RoleNameOverride(t *testing.T) {
 	}
 }
 
-// createTestModule creates a minimal CUE module in a temp directory for testing.
-// The module has no external dependencies, making it self-contained.
+// createTestModule creates a self-contained CUE module (no external deps) in a temp dir.
 func createTestModule(t *testing.T, pkgName, cueContent string) string {
 	t.Helper()
 	moduleDir := t.TempDir()
 
-	// Create cue.mod/module.cue
 	modDir := filepath.Join(moduleDir, "cue.mod")
 	if err := os.MkdirAll(modDir, 0755); err != nil {
 		t.Fatalf("creating cue.mod dir: %v", err)
@@ -859,7 +819,6 @@ language: version: "v0.15.1"
 		t.Fatalf("writing module.cue: %v", err)
 	}
 
-	// Create the module definition file
 	cueFile := filepath.Join(moduleDir, pkgName+".cue")
 	if err := os.WriteFile(cueFile, []byte(cueContent), 0644); err != nil {
 		t.Fatalf("writing %s.cue: %v", pkgName, err)
@@ -891,19 +850,15 @@ task: {
 	}
 	result := formatAST(t, astResult)
 
-	// Should contain origin from originPath
 	if !strings.Contains(result, "origin:") || !strings.Contains(result, `"test.example/module@v0.1.0"`) {
 		t.Errorf("missing origin field\nGot:\n%s", result)
 	}
-	// Should contain description
 	if !strings.Contains(result, "description:") || !strings.Contains(result, `"Debug Go code"`) {
 		t.Errorf("missing description\nGot:\n%s", result)
 	}
-	// Should contain tags
 	if !strings.Contains(result, `"golang"`) || !strings.Contains(result, `"debug"`) {
 		t.Errorf("missing tags\nGot:\n%s", result)
 	}
-	// Should contain prompt
 	if !strings.Contains(result, "Help me debug this Go code") {
 		t.Errorf("missing prompt\nGot:\n%s", result)
 	}
@@ -1008,11 +963,9 @@ task: {
 	}
 	result := formatAST(t, astResult)
 
-	// Role should be replaced with string reference
 	if !strings.Contains(result, "role:") || !strings.Contains(result, `"golang/reviewer"`) {
 		t.Errorf("expected role name override\nGot:\n%s", result)
 	}
-	// Inline role content should not appear
 	if strings.Contains(result, "Inline reviewer role") {
 		t.Errorf("inline role should be replaced\nGot:\n%s", result)
 	}
@@ -1104,13 +1057,11 @@ role: {
 	}
 }
 
-// TestGetInstalledOrigin tests the GetInstalledOrigin function.
 func TestGetInstalledOrigin(t *testing.T) {
 	t.Parallel()
 
 	configDir := t.TempDir()
 
-	// Write a contexts.cue file with a module that has an origin
 	contextsFile := filepath.Join(configDir, "contexts.cue")
 	content := `// start configuration
 contexts: {
@@ -1129,7 +1080,6 @@ contexts: {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	// Load config via CUE
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {
@@ -1178,8 +1128,6 @@ contexts: {
 	}
 }
 
-// TestVersionFromOrigin tests the VersionFromOrigin function.
-// TestFormatFieldExpr tests each branch of the formatFieldExpr value-to-AST converter.
 func TestFormatFieldExpr(t *testing.T) {
 	t.Parallel()
 
@@ -1262,8 +1210,6 @@ func TestFormatFieldExpr(t *testing.T) {
 	}
 }
 
-// TestFormatFieldExpr_StructMixedTypes verifies the recursive struct branch
-// produces a complete struct with all value types preserved.
 func TestFormatFieldExpr_StructMixedTypes(t *testing.T) {
 	t.Parallel()
 

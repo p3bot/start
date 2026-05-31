@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// TestListCategoryValidation tests that invalid category args are rejected early.
 func TestListCategoryValidation(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -50,8 +49,8 @@ func TestListCategoryValidation(t *testing.T) {
 					t.Errorf("expected error containing %q, got %v", tt.wantErr, err)
 				}
 			} else {
-				// Valid categories must not fail category validation regardless of
-				// what happens downstream (e.g. missing config is acceptable here).
+				// Only category validation is under test; downstream failures
+				// (e.g. missing config) are acceptable.
 				if err != nil && strings.Contains(err.Error(), "unknown category") {
 					t.Errorf("valid category should not fail validation, got: %v", err)
 				}
@@ -60,7 +59,6 @@ func TestListCategoryValidation(t *testing.T) {
 	}
 }
 
-// TestPrintInstalledModulesJSON tests that installed modules marshal to valid JSON.
 func TestPrintInstalledModulesJSON(t *testing.T) {
 	t.Parallel()
 	installed := []InstalledModule{

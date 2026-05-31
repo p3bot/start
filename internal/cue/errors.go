@@ -11,31 +11,25 @@ import (
 )
 
 // FormatError converts a CUE error into a user-friendly error.
-// It extracts position information and formats messages for clarity.
 func FormatError(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	// Try to extract CUE errors with position information
 	cueErrs := errors.Errors(err)
 	if len(cueErrs) == 0 {
 		return err
 	}
 
-	// Format the first error with position info
 	first := cueErrs[0]
 	pos := first.Position()
 
-	// Use Msg() to get the unformatted message without position prefix.
-	// Msg() returns the format string and args separately, allowing us to
-	// reconstruct the message without file:line prefixes.
+	// Msg() yields format+args without the file:line prefix that Error() adds.
 	format, args := first.Msg()
 	var message string
 	if format != "" && len(args) > 0 {
 		message = fmt.Sprintf(format, args...)
 	}
-	// Fallback to Error() if Msg() returns empty or unusable format
 	if message == "" {
 		message = first.Error()
 	}
@@ -86,19 +80,17 @@ func ErrorSummary(err error) string {
 		return FormatError(cueErrs[0]).Error()
 	}
 
-	// Multiple errors: show first and count
 	first := FormatError(cueErrs[0]).Error()
 	return first + " (and " + strconv.Itoa(len(cueErrs)-1) + " more errors)"
 }
 
-// FormatErrorWithContext converts a CUE error into a ValidationError with source context.
-// It reads the source file to provide a snippet around the error location.
+// FormatErrorWithContext converts a CUE error into a ValidationError with a
+// source snippet read from the error's file.
 func FormatErrorWithContext(err error) *ValidationError {
 	if err == nil {
 		return nil
 	}
 
-	// Get basic formatted error first
 	baseErr := FormatError(err)
 	if baseErr == nil {
 		return nil
@@ -109,7 +101,6 @@ func FormatErrorWithContext(err error) *ValidationError {
 		return &ValidationError{Message: err.Error()}
 	}
 
-	// Add source context if we have file and line info
 	if ve.Filename != "" && ve.Line > 0 {
 		ve.Context = generateSourceContext(ve.Filename, ve.Line, ve.Column)
 	}
@@ -117,8 +108,8 @@ func FormatErrorWithContext(err error) *ValidationError {
 	return ve
 }
 
-// generateSourceContext reads a file and generates a context snippet around the given line.
-// It shows 2 lines before and after the error line, with line numbers and a pointer to the column.
+// generateSourceContext shows 2 lines either side of the error line, with line
+// numbers and a caret under the error column.
 func generateSourceContext(filename string, line, column int) string {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -126,7 +117,6 @@ func generateSourceContext(filename string, line, column int) string {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Read relevant lines
 	const contextLines = 2
 	startLine := max(line-contextLines, 1)
 	endLine := line + contextLines
@@ -155,20 +145,16 @@ func generateSourceContext(filename string, line, column int) string {
 		return ""
 	}
 
-	// Find max line number width for alignment
 	maxLineNum := lines[len(lines)-1].num
 	lineNumWidth := len(strconv.Itoa(maxLineNum))
 
 	var sb strings.Builder
 	for _, l := range lines {
-		// Format: "  12 | code here"
 		numStr := strconv.Itoa(l.num)
 		padding := strings.Repeat(" ", lineNumWidth-len(numStr))
 		sb.WriteString("    " + padding + numStr + " | " + l.text + "\n")
 
-		// Add column pointer on the error line
 		if l.num == line && column > 0 {
-			// Create pointer line: "       ^"
 			pointerPadding := strings.Repeat(" ", lineNumWidth+7+column-1) // 7 = "    " + " | "
 			sb.WriteString(pointerPadding + "^\n")
 		}

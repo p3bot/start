@@ -15,7 +15,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// TestValidateDeriveRepoURL verifies URL derivation from index module paths.
 func TestValidateDeriveRepoURL(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -65,7 +64,6 @@ func TestValidateDeriveRepoURL(t *testing.T) {
 	}
 }
 
-// TestValidateCacheDirName verifies cache directory name derivation from repo URLs.
 func TestValidateCacheDirName(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -87,7 +85,6 @@ func TestValidateCacheDirName(t *testing.T) {
 	}
 }
 
-// TestValidateGitTagPrefix verifies tag prefix construction.
 func TestValidateGitTagPrefix(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -111,7 +108,6 @@ func TestValidateGitTagPrefix(t *testing.T) {
 	}
 }
 
-// TestValidateTagVersions verifies filtering and sorting of tags.
 func TestValidateTagVersions(t *testing.T) {
 	t.Parallel()
 	tags := []string{
@@ -161,7 +157,6 @@ func TestValidateTagVersions(t *testing.T) {
 	}
 }
 
-// TestValidateLatestTagVersion verifies latest version selection.
 func TestValidateLatestTagVersion(t *testing.T) {
 	t.Parallel()
 	tags := []string{
@@ -190,7 +185,6 @@ func TestValidateLatestTagVersion(t *testing.T) {
 	}
 }
 
-// TestIndexVersionFromPath verifies version extraction from a resolved module path.
 func TestIndexVersionFromPath(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -213,7 +207,6 @@ func TestIndexVersionFromPath(t *testing.T) {
 	}
 }
 
-// TestIndexEntryCount verifies entry counting across categories.
 func TestIndexEntryCount(t *testing.T) {
 	t.Parallel()
 	idx := makeTestRegistryIndex(3, 2, 4, 1)
@@ -224,16 +217,10 @@ func TestIndexEntryCount(t *testing.T) {
 	}
 }
 
-// TestValidateFindFSModules verifies that module discovery via cue.mod/ works.
 func TestValidateFindFSModules(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	// Create a module structure:
-	//   agents/claude/cue.mod/   → module
-	//   agents/gemini/cue.mod/   → module
-	//   agents/docs/             → NOT a module (no cue.mod)
-	//   tasks/review/arch/cue.mod/ → nested module
 	for _, p := range []string{
 		"agents/claude/cue.mod",
 		"agents/gemini/cue.mod",
@@ -269,7 +256,6 @@ func TestValidateFindFSModules(t *testing.T) {
 	})
 }
 
-// TestValidateIsStale verifies staleness detection using a real git repo.
 func TestValidateIsStale(t *testing.T) {
 	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -281,7 +267,6 @@ func TestValidateIsStale(t *testing.T) {
 	mustGit(t, dir, "config", "user.email", "test@test.com")
 	mustGit(t, dir, "config", "user.name", "Test")
 
-	// Create module file and commit
 	modDir := filepath.Join(dir, "agents", "claude")
 	if err := os.MkdirAll(modDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -303,7 +288,6 @@ func TestValidateIsStale(t *testing.T) {
 		}
 	})
 
-	// Modify the file
 	if err := os.WriteFile(filepath.Join(modDir, "agent.cue"), []byte("package agent\n// updated\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +315,6 @@ func TestValidateIsStale(t *testing.T) {
 	})
 }
 
-// TestPrintValidateStats verifies the statistics output format.
 func TestPrintValidateStats(t *testing.T) {
 	t.Parallel()
 
@@ -370,7 +353,6 @@ func TestPrintValidateStats(t *testing.T) {
 	})
 }
 
-// TestPrintValidateModulesDefault verifies default (non-verbose) output format.
 func TestPrintValidateModulesDefault(t *testing.T) {
 	t.Parallel()
 	cats := []validateCatResult{
@@ -408,7 +390,6 @@ func TestPrintValidateModulesDefault(t *testing.T) {
 	}
 }
 
-// TestPrintValidateModulesVerbose verifies verbose output lists all modules.
 func TestPrintValidateModulesVerbose(t *testing.T) {
 	t.Parallel()
 	cats := []validateCatResult{
@@ -436,7 +417,6 @@ func TestPrintValidateModulesVerbose(t *testing.T) {
 	}
 }
 
-// TestValidateError verifies the validateError satisfies the SilentError interface.
 func TestValidateError(t *testing.T) {
 	t.Parallel()
 	err := &validateError{}
@@ -448,11 +428,8 @@ func TestValidateError(t *testing.T) {
 	}
 }
 
-// TestDoctorValidateGate verifies the --force gate that shields public
-// infrastructure from casual traffic. Without --force the command prints
-// guidance and returns without constructing a registry client or doing any
-// network work; with --force it skips the guidance and proceeds to the
-// prerequisite checks.
+// The --force gate shields public infrastructure: without it the command prints
+// guidance and does no registry work; with it the command reaches prerequisites.
 func TestDoctorValidateGate(t *testing.T) {
 	t.Run("without --force shows guidance and does no registry work", func(t *testing.T) {
 		_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
@@ -464,8 +441,7 @@ func TestDoctorValidateGate(t *testing.T) {
 		if !strings.Contains(out, "Run with --force to proceed.") {
 			t.Errorf("expected gate guidance in output, got: %q", out)
 		}
-		// The gate returns before getProvider(cmd)(), so no client is built —
-		// proving the gate prevents all registry traffic, not just the fetch.
+		// The gate returns before getProvider(cmd)(), so no client is built.
 		if stub.providerCalls != 0 {
 			t.Errorf("gate must not construct a registry client; providerCalls = %d, want 0", stub.providerCalls)
 		}
@@ -473,9 +449,8 @@ func TestDoctorValidateGate(t *testing.T) {
 
 	t.Run("with --force passes the gate and reaches prerequisites", func(t *testing.T) {
 		_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
-		// An empty PATH makes the first post-gate prerequisite (git in PATH)
-		// fail deterministically and offline, proving the gate was passed
-		// without triggering real network or clone work.
+		// Empty PATH makes the first post-gate prerequisite (git) fail offline,
+		// proving the gate was passed without network or clone work.
 		t.Setenv("PATH", "")
 
 		out, err := captureText(t, stub, "doctor", "validate", "--force")
@@ -490,8 +465,6 @@ func TestDoctorValidateGate(t *testing.T) {
 		}
 	})
 }
-
-// --- helpers ---
 
 // makeTestRegistryIndex creates a *registry.Index with n stub entries per category.
 func makeTestRegistryIndex(agents, roles, contexts, tasks int) *registry.Index {
@@ -516,7 +489,6 @@ func makeTestRegistryIndex(agents, roles, contexts, tasks int) *registry.Index {
 	return idx
 }
 
-// mustGit runs a git command in dir, failing the test on error.
 func mustGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
@@ -526,7 +498,6 @@ func mustGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// stringSlicesEqual compares two string slices for equality.
 func stringSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -539,15 +510,10 @@ func stringSlicesEqual(a, b []string) bool {
 	return true
 }
 
-// TestValidateWalkModules verifies the recursive module walk logic.
 func TestValidateWalkModules(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	// Structure:
-	//   top-level module: claude/cue.mod/
-	//   nested: review/arch/cue.mod/  review/perf/cue.mod/
-	//   not a module: docs/
 	for _, p := range []string{
 		"claude/cue.mod",
 		"review/arch/cue.mod",
@@ -581,8 +547,7 @@ func TestValidateWalkModules(t *testing.T) {
 	}
 }
 
-// TestValidateCheckIndexVersionExistsNoop verifies that paths with a major-only
-// version component (e.g. @v0) return nil without touching the registry client.
+// Major-only version paths (e.g. @v0) return nil without touching the client.
 func TestValidateCheckIndexVersionExistsNoop(t *testing.T) {
 	t.Parallel()
 	client, err := registry.NewClient()
@@ -593,7 +558,7 @@ func TestValidateCheckIndexVersionExistsNoop(t *testing.T) {
 	paths := []string{
 		"github.com/start-cli/library/index@v1",
 		"github.com/start-cli/library/index@v2",
-		"github.com/start-cli/library/index", // no @ at all
+		"github.com/start-cli/library/index",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -605,7 +570,6 @@ func TestValidateCheckIndexVersionExistsNoop(t *testing.T) {
 	}
 }
 
-// TestPrintValidateStatsOutput verifies exact stat field presence.
 func TestPrintValidateStatsOutput(t *testing.T) {
 	t.Parallel()
 	cats := []validateCatResult{
@@ -623,7 +587,6 @@ func TestPrintValidateStatsOutput(t *testing.T) {
 	printValidateStats(&buf, cats)
 	out := buf.String()
 
-	// The stats line should contain the key fields
 	for _, want := range []string{"Checked:", "Pass:", "Fail:"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("stats output missing %q: %q", want, out)
@@ -631,7 +594,6 @@ func TestPrintValidateStatsOutput(t *testing.T) {
 	}
 }
 
-// TestOutputValidateJSON verifies that validate results marshal correctly.
 func TestOutputValidateJSON(t *testing.T) {
 	t.Parallel()
 
@@ -663,7 +625,6 @@ func TestOutputValidateJSON(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	// Index checks
 	if len(result.Index.Checks) != 1 {
 		t.Fatalf("expected 1 index check, got %d", len(result.Index.Checks))
 	}
@@ -674,7 +635,6 @@ func TestOutputValidateJSON(t *testing.T) {
 		t.Errorf("expected index check message 'v0.1.8', got %q", result.Index.Checks[0].Message)
 	}
 
-	// Categories
 	if len(result.Categories) != 2 {
 		t.Fatalf("expected 2 categories, got %d", len(result.Categories))
 	}
@@ -691,7 +651,6 @@ func TestOutputValidateJSON(t *testing.T) {
 		t.Errorf("expected 1 issue for gemini, got %d", len(result.Categories[0].Modules[1].Issues))
 	}
 
-	// Stats
 	if result.Stats.Checked != 3 {
 		t.Errorf("expected 3 checked, got %d", result.Stats.Checked)
 	}
@@ -703,7 +662,6 @@ func TestOutputValidateJSON(t *testing.T) {
 	}
 }
 
-// TestOutputValidateJSONNilCategories verifies JSON output when categories are nil.
 func TestOutputValidateJSONNilCategories(t *testing.T) {
 	t.Parallel()
 
@@ -739,7 +697,6 @@ func TestOutputValidateJSONNilCategories(t *testing.T) {
 	}
 }
 
-// TestValidateHasFailure tests the validateHasFailure helper.
 func TestValidateHasFailure(t *testing.T) {
 	t.Parallel()
 

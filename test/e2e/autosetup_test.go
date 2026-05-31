@@ -11,13 +11,10 @@ import (
 	"testing"
 )
 
-// binaryPath returns the path to the start binary.
-// The binary must be built before running E2E tests.
+// binaryPath returns the path to the pre-built start binary.
 func binaryPath(t *testing.T) string {
 	t.Helper()
 
-	// Look for binary relative to project root
-	// Tests run from test/e2e/, so go up two levels
 	paths := []string{
 		"../../bin/start",
 		"./bin/start",
@@ -68,12 +65,11 @@ func setupTestEnv(t *testing.T, pathDirs []string) (tmpDir string, env []string,
 		"PATH=" + path,
 	}
 
-	// Cleanup function that handles CUE's read-only cache files
+	// Chmod everything writable first: CUE leaves read-only cache files behind.
 	cleanup = func() {
-		// Make all files writable before removal
 		filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return nil // Ignore errors during walk
+				return nil
 			}
 			if !info.IsDir() {
 				os.Chmod(path, 0644)
@@ -132,8 +128,6 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
 
-	// Auto-setup should succeed (agent launch may fail due to no prompt)
-	// Check that auto-setup messages are present
 	if !strings.Contains(outputStr, "Fetching agent index") {
 		t.Errorf("expected 'Fetching agent index' in output:\n%s", outputStr)
 	}
@@ -153,7 +147,6 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 		t.Errorf("expected 'Configuration saved' in output:\n%s", outputStr)
 	}
 
-	// Verify config files were created
 	agentsFile := filepath.Join(tmpDir, ".config", "start", "agents.cue")
 	if _, err := os.Stat(agentsFile); os.IsNotExist(err) {
 		t.Error("agents.cue was not created")
@@ -195,7 +188,6 @@ func TestE2E_AutoSetup_NoAgents(t *testing.T) {
 
 	binary := binaryPath(t)
 
-	// Use PATH with no AI tools
 	tmpDir, env, cleanup := setupTestEnv(t, []string{})
 	defer cleanup()
 
@@ -206,12 +198,10 @@ func TestE2E_AutoSetup_NoAgents(t *testing.T) {
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
 
-	// Should exit with error
 	if err == nil {
 		t.Error("expected error when no agents detected")
 	}
 
-	// Check for helpful error message
 	if !strings.Contains(outputStr, "No AI CLI tools detected") {
 		t.Errorf("expected 'No AI CLI tools detected' in output:\n%s", outputStr)
 	}
@@ -220,7 +210,6 @@ func TestE2E_AutoSetup_NoAgents(t *testing.T) {
 		t.Errorf("expected 'Install one of' suggestion in output:\n%s", outputStr)
 	}
 
-	// Should list available agents
 	if !strings.Contains(outputStr, "claude") {
 		t.Errorf("expected 'claude' in available agents list:\n%s", outputStr)
 	}
@@ -229,7 +218,6 @@ func TestE2E_AutoSetup_NoAgents(t *testing.T) {
 		t.Errorf("expected 'run start again' suggestion:\n%s", outputStr)
 	}
 
-	// Config should NOT be created
 	agentsFile := filepath.Join(tmpDir, ".config", "start", "agents.cue")
 	if _, err := os.Stat(agentsFile); err == nil {
 		t.Error("agents.cue should not be created when no agents detected")
@@ -264,7 +252,6 @@ func TestE2E_AutoSetup_MultipleAgents_NonTTY(t *testing.T) {
 	cmd := exec.Command(binary)
 	cmd.Env = env
 	cmd.Dir = tmpDir
-	// Ensure non-TTY by not attaching stdin to terminal
 
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
@@ -328,13 +315,11 @@ func TestE2E_AutoSetup_ExistingConfig_SkipsSetup(t *testing.T) {
 	tmpDir, env, cleanup := setupTestEnv(t, []string{binDir})
 	defer cleanup()
 
-	// Create existing config
 	configDir := filepath.Join(tmpDir, ".config", "start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 
-	// Write minimal valid config
 	agentsContent := `agents: {
 	"test": {
 		bin: "echo"
@@ -361,12 +346,10 @@ func TestE2E_AutoSetup_ExistingConfig_SkipsSetup(t *testing.T) {
 	output, _ := cmd.CombinedOutput()
 	outputStr := string(output)
 
-	// Should NOT show auto-setup messages
 	if strings.Contains(outputStr, "Fetching agent index") {
 		t.Errorf("should skip auto-setup when config exists:\n%s", outputStr)
 	}
 
-	// Should try to use the existing config
 	if strings.Contains(outputStr, "auto-setup") {
 		t.Errorf("should not mention auto-setup when config exists:\n%s", outputStr)
 	}

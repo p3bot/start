@@ -9,7 +9,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// TestParseSearchTerms tests splitting input into search terms.
 func TestParseSearchTerms(t *testing.T) {
 	t.Parallel()
 
@@ -43,7 +42,6 @@ func TestParseSearchTerms(t *testing.T) {
 	}
 }
 
-// TestParseSearchPatterns tests splitting input into search patterns with case preserved.
 func TestParseSearchPatterns(t *testing.T) {
 	t.Parallel()
 
@@ -75,7 +73,6 @@ func TestParseSearchPatterns(t *testing.T) {
 	}
 }
 
-// TestMatchScorePatterns tests multi-pattern AND scoring.
 func TestMatchScorePatterns(t *testing.T) {
 	t.Parallel()
 
@@ -141,7 +138,6 @@ func TestMatchScorePatterns(t *testing.T) {
 	}
 }
 
-// TestSearchIndex tests the SearchIndex function.
 func TestSearchIndex(t *testing.T) {
 	t.Parallel()
 
@@ -260,7 +256,6 @@ func TestSearchIndex(t *testing.T) {
 			if tt.wantCount > 0 && tt.wantFirst != "" {
 				first := results[0].Category + "/" + results[0].Name
 				if first != tt.wantFirst {
-					// For "golang" query, either result is valid
 					if tt.query == "golang" {
 						validResults := map[string]bool{
 							"roles/golang/assistant":   true,
@@ -278,7 +273,6 @@ func TestSearchIndex(t *testing.T) {
 	}
 }
 
-// TestCompileSearchTerms tests regex compilation of search terms.
 func TestCompileSearchTerms(t *testing.T) {
 	t.Parallel()
 
@@ -318,7 +312,6 @@ func TestCompileSearchTerms(t *testing.T) {
 	}
 }
 
-// TestSearchIndex_Regex tests regex pattern matching in SearchIndex.
 func TestSearchIndex_Regex(t *testing.T) {
 	t.Parallel()
 
@@ -450,7 +443,6 @@ func TestSearchIndex_Regex(t *testing.T) {
 	}
 }
 
-// TestCategoryOrder tests the categoryOrder function.
 func TestCategoryOrder(t *testing.T) {
 	t.Parallel()
 
@@ -475,7 +467,6 @@ func TestCategoryOrder(t *testing.T) {
 	}
 }
 
-// TestSearchCategory tests the searchCategory function.
 func TestSearchCategory(t *testing.T) {
 	t.Parallel()
 
@@ -536,7 +527,6 @@ func TestSearchCategory(t *testing.T) {
 				t.Errorf("searchCategory() returned %d results, want %d", len(results), tt.wantCount)
 			}
 
-			// Verify all results are from the correct category
 			for _, r := range results {
 				if r.Category != "roles" {
 					t.Errorf("searchCategory() returned result with category %q, want %q", r.Category, "roles")
@@ -546,7 +536,6 @@ func TestSearchCategory(t *testing.T) {
 	}
 }
 
-// TestSearchIndex_NilIndex verifies SearchIndex returns nil for a nil index.
 func TestSearchIndex_NilIndex(t *testing.T) {
 	t.Parallel()
 
@@ -559,7 +548,6 @@ func TestSearchIndex_NilIndex(t *testing.T) {
 	}
 }
 
-// TestSearchIndex_EmptyIndex tests SearchIndex with an empty (non-nil) index.
 func TestSearchIndex_EmptyIndex(t *testing.T) {
 	t.Parallel()
 
@@ -594,7 +582,6 @@ func TestSearchIndex_NilMaps(t *testing.T) {
 	}
 }
 
-// TestSearchResultOrdering tests that results are ordered correctly.
 func TestSearchResultOrdering(t *testing.T) {
 	t.Parallel()
 
@@ -625,20 +612,15 @@ func TestSearchResultOrdering(t *testing.T) {
 		t.Fatalf("SearchIndex() error: %v", err)
 	}
 
-	// Should have 3 results
 	if len(results) != 3 {
 		t.Fatalf("SearchIndex() returned %d results, want 3", len(results))
 	}
 
-	// Results should be ordered by score (descending), then category, then name
-	// All have "golang" in name, so scores should be similar
-	// Check that categories are in order (roles before tasks)
 	categoryOrder := make([]string, len(results))
 	for i, r := range results {
 		categoryOrder[i] = r.Category
 	}
 
-	// At least verify that results are grouped by category
 	var seenTasks bool
 	for _, cat := range categoryOrder {
 		if cat == "tasks" {
@@ -650,7 +632,6 @@ func TestSearchResultOrdering(t *testing.T) {
 	}
 }
 
-// TestSearchCategoryEntries tests the exported SearchCategoryEntries function.
 func TestSearchCategoryEntries(t *testing.T) {
 	t.Parallel()
 
@@ -730,7 +711,6 @@ func TestSearchCategoryEntries(t *testing.T) {
 				}
 			}
 
-			// Verify all results have correct category
 			for _, r := range results {
 				if r.Category != "roles" {
 					t.Errorf("result %q has category %q, want %q", r.Name, r.Category, "roles")
@@ -740,7 +720,6 @@ func TestSearchCategoryEntries(t *testing.T) {
 	}
 }
 
-// TestSearchInstalledConfig tests searching installed CUE config values.
 func TestSearchInstalledConfig(t *testing.T) {
 	t.Parallel()
 
@@ -852,7 +831,6 @@ func TestSearchInstalledConfig(t *testing.T) {
 				}
 			}
 
-			// Verify all results have correct category
 			for _, r := range results {
 				if r.Category != tt.category {
 					t.Errorf("result %q has category %q, want %q", r.Name, r.Category, tt.category)
@@ -862,7 +840,6 @@ func TestSearchInstalledConfig(t *testing.T) {
 	}
 }
 
-// TestExtractIndexEntryFromCUE tests field extraction from CUE values.
 func TestExtractIndexEntryFromCUE(t *testing.T) {
 	t.Parallel()
 
@@ -932,7 +909,6 @@ func TestExtractIndexEntryFromCUE(t *testing.T) {
 	}
 }
 
-// TestValidateSearchQuery tests minimum length and tag bypass logic.
 func TestValidateSearchQuery(t *testing.T) {
 	t.Parallel()
 
@@ -962,7 +938,6 @@ func TestValidateSearchQuery(t *testing.T) {
 	}
 }
 
-// TestMatchesAnyTag tests the case-insensitive tag matching helper.
 func TestMatchesAnyTag(t *testing.T) {
 	t.Parallel()
 
@@ -991,7 +966,6 @@ func TestMatchesAnyTag(t *testing.T) {
 	}
 }
 
-// TestSearchIndex_TagFiltering tests tag-based filtering in SearchIndex.
 func TestSearchIndex_TagFiltering(t *testing.T) {
 	t.Parallel()
 
@@ -1098,7 +1072,6 @@ func TestSearchIndex_TagFiltering(t *testing.T) {
 	})
 }
 
-// TestSearchInstalledConfig_TagFiltering tests tag filtering in SearchInstalledConfig.
 func TestSearchInstalledConfig_TagFiltering(t *testing.T) {
 	t.Parallel()
 
@@ -1140,7 +1113,6 @@ func TestSearchInstalledConfig_TagFiltering(t *testing.T) {
 	})
 }
 
-// TestSearchCategoryEntries_TagFiltering tests tag filtering in SearchCategoryEntries.
 func TestSearchCategoryEntries_TagFiltering(t *testing.T) {
 	t.Parallel()
 

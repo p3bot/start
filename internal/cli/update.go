@@ -17,14 +17,10 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// NOTE(design): The post-fetch logic in this file overlaps with
-// install.go (config resolution, scope handling, command-specific
-// empty-state output). The repetition is kept inline because each call site
-// has command-specific UX baked into the same shape — extracting a helper
-// would either hide the per-command messages from the call site or require
-// parameterising them through callbacks, both of which reduce readability
-// more than they save lines. The shared registry-client + fetch +
-// cache-write sequence is centralised in fetchIndex (modules_shared.go).
+// The post-fetch logic here overlaps with install.go, but the repetition is
+// kept inline because each call site bakes command-specific UX into the same
+// shape; extracting a helper would hide the per-command messages or require
+// callbacks. The shared client + fetch + cache-write sequence lives in fetchIndex.
 
 // UpdateResult tracks the result of an update operation.
 type UpdateResult struct {
@@ -73,7 +69,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 	ctx := context.Background()
 
-	// Load configuration
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -88,7 +83,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Load merged config
 	dirs := paths.ForScope(config.ScopeMerged)
 	loader := internalcue.NewLoader()
 	cfg, err := loader.Load(dirs)
@@ -96,7 +90,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Load local config separately for scope detection
+	// Local config is loaded separately for scope detection.
 	var localCfg cue.Value
 	if paths.LocalExists {
 		if v, loadErr := loader.LoadSingle(paths.Local); loadErr == nil {
@@ -104,7 +98,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Collect installed modules
 	installed := collectInstalledModules(cfg.Value, paths, localCfg)
 
 	if len(installed) == 0 {
@@ -116,7 +109,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Filter by query if provided
 	if query != "" {
 		var filtered []InstalledModule
 		queryLower := strings.ToLower(query)
@@ -148,7 +140,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	prog.Done()
 
-	// Check each module for updates
 	dryRun := getFlags(cmd).DryRun
 	force, _ := cmd.Flags().GetBool("force")
 	total := len(installed)
@@ -161,7 +152,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	prog.Done()
 
 	if jsonFlag {
-		// Populate ErrorMessage for JSON serialisation
+		// Populate ErrorMessage for JSON serialisation.
 		for i := range results {
 			if results[i].Error != nil {
 				results[i].ErrorMessage = results[i].Error.Error()
@@ -173,7 +164,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Print results
 	printUpdateResults(cmd.OutOrStdout(), results, dryRun)
 
 	return nil

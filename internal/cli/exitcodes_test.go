@@ -14,8 +14,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// TestExitCodeFromError covers the mapper's classification of each fault domain
-// by error type, including the chain-overlap orderings the contract pins.
 func TestExitCodeFromError(t *testing.T) {
 	t.Parallel()
 
@@ -58,9 +56,6 @@ func transientFetchErr() error {
 	return &registry.FetchError{Kind: registry.FetchTransient, Op: "fetch", Path: "x", Err: errors.New("network down")}
 }
 
-// TestExitCodes_CommandPaths drives representative command error paths end to
-// end and asserts the process exit code the mapper would derive, covering the
-// acceptance matrix: usage (2), not-found (3), transient (75), config (78).
 func TestExitCodes_CommandPaths(t *testing.T) {
 	t.Run("missing required arg is usage (2)", func(t *testing.T) {
 		_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())

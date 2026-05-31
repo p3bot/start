@@ -42,8 +42,7 @@ func ValidSettingsKeysString() string {
 	return strings.Join(keys, ", ")
 }
 
-// SettingDefault returns the default value for a setting key.
-// Returns empty string if the key has no default.
+// SettingDefault returns the default value for a setting key, or "" if none.
 func SettingDefault(key string) string {
 	switch key {
 	case "library_index":
@@ -61,15 +60,12 @@ func SettingDefault(key string) string {
 }
 
 // ResolveAllSettings resolves all valid settings with their values and sources.
-// Built-in defaults are seeded for every registered key first; scope-selected
-// overrides then apply on top. Scope selects which config directory's
-// settings override the built-in defaults: ScopeLocal applies local only,
-// ScopeGlobal applies global only, ScopeMerged applies global then local
+// Defaults are seeded first, then scope-selected overrides apply on top:
+// ScopeLocal local-only, ScopeGlobal global-only, ScopeMerged global then local
 // (local wins).
 func ResolveAllSettings(paths Paths, scope Scope) (map[string]SettingEntry, error) {
 	entries := make(map[string]SettingEntry, len(SettingsRegistry))
 
-	// Start with defaults
 	for key := range SettingsRegistry {
 		if def := SettingDefault(key); def != "" {
 			entries[key] = SettingEntry{Value: def, Source: "default"}
@@ -136,13 +132,11 @@ func LoadSettingsFromDir(dir string) (map[string]string, error) {
 		return nil, err
 	}
 
-	// Extract settings
 	settingsVal := result.Value.LookupPath(cue.ParsePath(internalcue.KeySettings))
 	if !settingsVal.Exists() {
 		return settings, nil
 	}
 
-	// Iterate over settings fields
 	iter, err := settingsVal.Fields(cue.Concrete(true))
 	if err != nil {
 		return nil, fmt.Errorf("iterating settings: %w", err)

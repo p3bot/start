@@ -65,11 +65,8 @@ func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 	}
 }
 
-// TestDecodeAgentValue_ObjectFormModels exercises the both-forms walk: an
-// agent declared with `models: { sonnet: { id: "..." } }` must populate
-// Models with the resolved ids. The schema does not permit this shape but
-// two runtime sites accept it, and this decoder is the single place the
-// display + edit + list + resolve sites pick it up.
+// Object-form models (`{ id: "..." }`) are rejected by the schema but accepted
+// by two runtime sites; this decoder is the single place they're picked up.
 func TestDecodeAgentValue_ObjectFormModels(t *testing.T) {
 	ctx := cuecontext.New()
 	val := ctx.CompileString(`{
@@ -94,8 +91,6 @@ func TestDecodeAgentValue_ObjectFormModels(t *testing.T) {
 	}
 }
 
-// TestDecodeAgentValue_MixedFormModels confirms simple- and object-form
-// entries can coexist inside a single `models:` map.
 func TestDecodeAgentValue_MixedFormModels(t *testing.T) {
 	ctx := cuecontext.New()
 	val := ctx.CompileString(`{
@@ -289,14 +284,8 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 	}
 }
 
-// TestConfigList_ObjectFormAgent_JSON_EmitsAliases verifies the
-// `config list agent --json` surface emits every object-form alias declared
-// in `models`. Pre-refactor `loadAgentsFromDir` dropped object-form entries;
-// the step-3 loader refactor (decodeAgentValue) makes both aliases land in
-// the JSON output via the chain loadAgentsForScope -> ConfigListItem.Models.
-//
-// Tests in this function use os.Chdir (via the chdir helper) and modify
-// color.NoColor; they cannot run in parallel.
+// Object-form aliases must reach the `config list agent --json` output.
+// Uses os.Chdir and mutates color.NoColor, so it cannot run in parallel.
 func TestConfigList_ObjectFormAgent_JSON_EmitsAliases(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
@@ -325,14 +314,8 @@ func TestConfigList_ObjectFormAgent_JSON_EmitsAliases(t *testing.T) {
 	}
 }
 
-// TestPromptModels_ObjectFormAgent_ListsAllAliases verifies the
-// `config edit` model-prompt surface lists every alias declared in an
-// object-form agent. Pre-refactor `loadAgentsFromDir` dropped object-form
-// entries, so `agent.Models` was empty and the prompt printed "(none)"; the
-// step-3 loader refactor (decodeAgentValue) makes both aliases appear.
-//
-// Tests in this function use os.Chdir (via the chdir helper) and modify
-// color.NoColor; they cannot run in parallel.
+// Object-form aliases must appear in the `config edit` model prompt.
+// Uses os.Chdir and mutates color.NoColor, so it cannot run in parallel.
 func TestPromptModels_ObjectFormAgent_ListsAllAliases(t *testing.T) {
 	setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
@@ -368,16 +351,8 @@ func TestPromptModels_ObjectFormAgent_ListsAllAliases(t *testing.T) {
 	}
 }
 
-// TestLoadAgentsForScope_ScopeMatrix exercises loadForScope[T]'s path-based
-// source labelling across all three scopes. The fixture stages "alpha" and
-// "beta" globally and "beta" (override) plus "gamma" locally. ScopeMerged
-// must report alpha=global, beta=local (override), gamma=local with order
-// [alpha, beta, gamma]; ScopeGlobal must yield only the global pair;
-// ScopeLocal must yield only the local pair. Locking ScopeGlobal here
-// prevents drift before --global is rolled out to any CLI surface.
-//
-// Tests in this function use os.Chdir (via the chdir helper) and modify
-// $HOME / $XDG_CONFIG_HOME; they cannot run in parallel.
+// Exercises path-based source labelling across all three scopes.
+// Uses os.Chdir and mutates $HOME / $XDG_CONFIG_HOME, so it cannot run in parallel.
 func TestLoadAgentsForScope_ScopeMatrix(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)

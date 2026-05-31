@@ -1,10 +1,9 @@
 package cli
 
-// End-to-end snapshot tests for the describe and config get rendering
-// surfaces. All eight baselines act as byte-identical regression guards.
+// End-to-end snapshot tests for the describe and config get rendering surfaces;
+// the baselines are byte-identical regression guards.
 //
-// Tests in this file use os.Chdir (via the chdir helper) and modify
-// color.NoColor; they cannot run in parallel.
+// These tests use os.Chdir and modify color.NoColor, so they cannot run in parallel.
 
 import (
 	"bytes"
@@ -69,12 +68,9 @@ const snapshotTaskCue = `tasks: {
 }
 `
 
-// snapshotDescriptionlessContextCue exercises a context with no
-// `description:` and no `required:` / `default:` set. The shared writer
-// always emits Required and Default unconditionally, and after the M2
-// refactor it also owns its own leading blank line — so this fixture pins
-// the "blank line between header and metadata block" layout for items
-// without Description.
+// snapshotDescriptionlessContextCue exercises a context with no `description:`
+// and no `required:` / `default:` set, pinning the blank-line-between-header-
+// and-metadata-block layout for items without a Description.
 const snapshotDescriptionlessContextCue = `contexts: {
 	"barebones": {
 		prompt: "No description here."
@@ -83,9 +79,7 @@ const snapshotDescriptionlessContextCue = `contexts: {
 `
 
 // snapshotObjectFormAgentCue exercises the object-form models shape that the
-// schema does not permit but two runtime sites accept defensively. The
-// refactor widens the loader and describe paths to accept it too; pre-
-// refactor the Models block renders empty for both surfaces.
+// schema does not permit but the loader and describe paths accept defensively.
 const snapshotObjectFormAgentCue = `agents: {
 	"objform": {
 		bin:           "objform"
@@ -126,8 +120,8 @@ func setupSnapshotFixture(t *testing.T, filename, content string) (cuePath strin
 		t.Fatalf("writing %s: %v", filename, err)
 	}
 
-	// chdir into the temp dir so local config resolution sees no .start
-	// directory and ScopeMerged collapses to global-only.
+	// chdir into the temp dir so local config resolution sees no .start and
+	// ScopeMerged collapses to global-only.
 	chdir(t, dir)
 	return cuePath
 }
@@ -140,9 +134,7 @@ func assertSnapshot(t *testing.T, want, got string) {
 	t.Errorf("snapshot mismatch\n--- want ---\n%s--- got ---\n%s--- end ---\n", want, got)
 }
 
-// TestSnapshot_DescribeAgent pins the pre-refactor `start describe <agent>`
-// output. The literal is updated in step 5 of the refactor when the shared
-// writer inserts a blank line before the Models: section.
+// TestSnapshot_DescribeAgent pins `start describe <agent>` output.
 func TestSnapshot_DescribeAgent(t *testing.T) {
 	cuePath := setupSnapshotFixture(t, "agents.cue", snapshotAgentCue)
 
@@ -186,8 +178,7 @@ Command: claude --model claude-sonnet-4-20250514 "{{.prompt}}"
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_DescribeRole pins `start describe <role>`. Byte-identical
-// across the refactor.
+// TestSnapshot_DescribeRole pins `start describe <role>`.
 func TestSnapshot_DescribeRole(t *testing.T) {
 	cuePath := setupSnapshotFixture(t, "roles.cue", snapshotRoleCue)
 
@@ -218,8 +209,7 @@ Tags: review, quality
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_DescribeContext pins `start describe <context>`. Byte-identical
-// across the refactor.
+// TestSnapshot_DescribeContext pins `start describe <context>`.
 func TestSnapshot_DescribeContext(t *testing.T) {
 	cuePath := setupSnapshotFixture(t, "contexts.cue", snapshotContextCue)
 
@@ -254,8 +244,7 @@ Tags: system, environment
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_DescribeTask pins `start describe <task>`. Byte-identical
-// across the refactor.
+// TestSnapshot_DescribeTask pins `start describe <task>`.
 func TestSnapshot_DescribeTask(t *testing.T) {
 	cuePath := setupSnapshotFixture(t, "tasks.cue", snapshotTaskCue)
 
@@ -318,8 +307,7 @@ Models:
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigGetRole pins `start config get <role>`. Byte-identical
-// across the refactor.
+// TestSnapshot_ConfigGetRole pins `start config get <role>`.
 func TestSnapshot_ConfigGetRole(t *testing.T) {
 	setupSnapshotFixture(t, "roles.cue", snapshotRoleCue)
 
@@ -343,7 +331,6 @@ Tags: review, quality
 }
 
 // TestSnapshot_ConfigGetContext pins `start config get <context>`.
-// Byte-identical across the refactor.
 func TestSnapshot_ConfigGetContext(t *testing.T) {
 	setupSnapshotFixture(t, "contexts.cue", snapshotContextCue)
 
@@ -369,11 +356,8 @@ Tags: system, environment
 }
 
 // TestSnapshot_DescribeAgentObjectForm pins `start describe <agent>` for an
-// agent declared with object-form `models: { sonnet: { id: "..." } }`. The
-// schema does not permit this shape, but `executor.go` and
-// `partialFillAgentCommand` accept it defensively; the refactor aligns the
-// describe display path through `decodeAgentValue` so it picks up both
-// forms.
+// agent declared with object-form `models: { sonnet: { id: "..." } }` — a shape
+// the schema forbids but the describe path accepts defensively.
 func TestSnapshot_DescribeAgentObjectForm(t *testing.T) {
 	cuePath := setupSnapshotFixture(t, "agents.cue", snapshotObjectFormAgentCue)
 
@@ -451,8 +435,7 @@ Models:
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigGetTask pins `start config get <task>`. Byte-identical
-// across the refactor.
+// TestSnapshot_ConfigGetTask pins `start config get <task>`.
 func TestSnapshot_ConfigGetTask(t *testing.T) {
 	setupSnapshotFixture(t, "tasks.cue", snapshotTaskCue)
 
@@ -476,14 +459,9 @@ Tags: review, git
 	assertSnapshot(t, want, buf.String())
 }
 
-// TestSnapshot_ConfigGetContextWithoutDescription pins the layout for a
-// context that has no `description:` set. Pre-Phase-2 (when callers gated
-// the blank line on `Description != ""`), the writer's first line stuck
-// against the header — `Required: false` rendered immediately under
-// `Source: global`. After M2, the writer owns its own leading blank line,
-// so the metadata block always sits visually separated from the header
-// regardless of which fields are populated. This is a deliberate behaviour
-// change and this test locks it in.
+// TestSnapshot_ConfigGetContextWithoutDescription pins the layout for a context
+// with no `description:` set: the writer owns its own leading blank line, so the
+// metadata block stays separated from the header regardless of populated fields.
 func TestSnapshot_ConfigGetContextWithoutDescription(t *testing.T) {
 	setupSnapshotFixture(t, "contexts.cue", snapshotDescriptionlessContextCue)
 

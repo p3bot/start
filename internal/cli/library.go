@@ -16,7 +16,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addLibraryCommand adds the library command to the root command.
 func addLibraryCommand(parent *cobra.Command) {
 	libraryCmd := &cobra.Command{
 		Use:     "library [category]",
@@ -43,13 +42,12 @@ raw CUE source files from the library module.`,
 	parent.AddCommand(libraryCmd)
 }
 
-// runLibrary fetches and displays the full module library from the registry.
 func runLibrary(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
 
-	// Validate category arg before any network I/O
+	// Validate category arg before any network I/O.
 	var category string
 	if len(args) > 0 {
 		singular := normalizeCategoryArg(args[0])
@@ -64,7 +62,6 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 	exportFlag, _ := cmd.Flags().GetBool("export")
 
-	// Create registry client
 	client, err := getProvider(cmd)()
 	if err != nil {
 		return fmt.Errorf("creating registry client: %w", err)
@@ -73,7 +70,6 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done()
 
-	// Resolve latest version
 	prog.Update("Fetching index...")
 	indexPath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
 	resolvedPath, err := client.ResolveLatestVersion(ctx, indexPath)
@@ -81,13 +77,11 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolving index version: %w", err)
 	}
 
-	// Extract version string (after @)
 	version := modules.VersionFromOrigin(resolvedPath)
 	if version == "" {
 		version = resolvedPath
 	}
 
-	// Fetch module
 	result, err := client.Fetch(ctx, resolvedPath)
 	if err != nil {
 		return fmt.Errorf("fetching index module: %w", err)
@@ -118,13 +112,12 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// printExportIndex reads and prints all .cue files from the index source directory.
 func printExportIndex(w io.Writer, sourceDir string) error {
 	return printCueFiles(w, sourceDir)
 }
 
-// printJSONIndex loads the index and outputs it as formatted JSON.
-// If category is non-empty, only that category is included in the output.
+// printJSONIndex loads the index and outputs it as formatted JSON, restricted
+// to category when non-empty.
 func printJSONIndex(w io.Writer, sourceDir string, reg modconfig.Registry, category string) error {
 	index, err := registry.LoadIndex(sourceDir, reg)
 	if err != nil {
@@ -144,7 +137,6 @@ func printJSONIndex(w io.Writer, sourceDir string, reg modconfig.Registry, categ
 	return nil
 }
 
-// filterIndexByCategory returns a new Index containing only the named category.
 func filterIndexByCategory(index *registry.Index, category string) *registry.Index {
 	switch category {
 	case "agents":
@@ -160,9 +152,8 @@ func filterIndexByCategory(index *registry.Index, category string) *registry.Ind
 	}
 }
 
-// printIndex prints the index in a formatted table grouped by category.
-// If category is non-empty, only that category is shown; the total count in the
-// header always reflects the full index.
+// printIndex prints the index grouped by category (filtered to category when
+// non-empty), but the header total always reflects the full index.
 func printIndex(w io.Writer, index *registry.Index, version string, verbose bool, installed map[string]bool, category string) {
 	total := len(index.Agents) + len(index.Roles) + len(index.Contexts) + len(index.Tasks)
 	fmt.Fprintf(w, "\nIndex: %s (%d modules)\n\n", version, total)
@@ -185,7 +176,6 @@ func printIndex(w io.Writer, index *registry.Index, version string, verbose bool
 			continue
 		}
 
-		// Sort names alphabetically
 		names := make([]string, 0, len(cat.entries))
 		for name := range cat.entries {
 			names = append(names, name)

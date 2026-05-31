@@ -89,7 +89,6 @@ type validateError struct{}
 func (e *validateError) Error() string { return "validation issues found" }
 func (e *validateError) Silent() bool  { return true }
 
-// addDoctorValidateCommand registers the validate subcommand under doctor.
 func addDoctorValidateCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "validate",
@@ -115,7 +114,6 @@ Exit codes:
 	parent.AddCommand(cmd)
 }
 
-// runDoctorValidate executes the validate command.
 func runDoctorValidate(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -126,7 +124,7 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 	prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 	defer prog.Done() // safety net: clears any active progress line on early return
 
-	// Gate: --force is required to prevent casual traffic against public infrastructure.
+	// --force gates casual traffic against public infrastructure.
 	force, _ := cmd.Flags().GetBool("force")
 	if !force {
 		fmt.Fprintln(w)
@@ -145,27 +143,22 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Prerequisite 1: git in PATH
 	if _, err := exec.LookPath("git"); err != nil {
 		return fmt.Errorf("git not found in PATH: install git and retry")
 	}
 
-	// Prerequisite 2: read library_index setting
 	indexPath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
 
-	// Prerequisite 3: derive git repo URL
 	cloneURL, err := validateDeriveRepoURL(indexPath)
 	if err != nil {
 		return err
 	}
 
-	// Prerequisite 4: check network reachability
 	prog.Update("Checking network...")
 	if err := validateCheckNetwork(cloneURL); err != nil {
 		return err
 	}
 
-	// Prerequisite 5: clone or pull
 	cacheDir, err := validateCacheDir(cloneURL)
 	if err != nil {
 		return fmt.Errorf("resolving cache directory: %w", err)
@@ -175,24 +168,20 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Prerequisite 6: verify repo state
 	if err := validateVerifyRepo(cacheDir); err != nil {
 		return err
 	}
 
-	// Prerequisite 7: fetch tags
 	prog.Update("Fetching tags...")
 	if err := validateFetchTags(cacheDir); err != nil {
 		return err
 	}
 
-	// Collect all git tags for later checks
 	tags, err := validateListTags(cacheDir)
 	if err != nil {
 		return fmt.Errorf("listing git tags: %w", err)
 	}
 
-	// Create registry client
 	client, err := getProvider(cmd)()
 	if err != nil {
 		return fmt.Errorf("creating registry client: %w", err)
@@ -200,7 +189,6 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 
 	jsonFlag, _ := cmd.Flags().GetBool("json")
 
-	// Section 1: Index validation
 	prog.Update("Fetching index...")
 	indexSection, idx, fatal := validateIndex(ctx, client, indexPath, tags)
 	prog.Done() // clear before printing section output
@@ -225,10 +213,9 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Section 2: Mismatch checks with progress
-	// Note: total counts only indexed modules. Filesystem orphans discovered during
-	// validateModules are appended after the progress counter reaches 100%, so the
-	// final displayed module count may exceed total if orphans exist.
+	// total counts only indexed modules; filesystem orphans found in
+	// validateModules are appended after the counter hits 100%, so the final
+	// displayed count may exceed total.
 	total := indexEntryCount(idx)
 	done := 0
 	onModule := func() {
@@ -254,7 +241,6 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 
 	printValidateModules(w, cats, flags.Verbose)
 
-	// Section 3: Statistics
 	hasFailure := printValidateStats(w, cats)
 	if hasFailure {
 		cmd.SilenceErrors = true
@@ -264,16 +250,14 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// validateDeriveRepoURL converts an index module path to a GitHub HTTPS repo URL.
-// e.g. "github.com/start-cli/library/index@v1" → "https://github.com/start-cli/library"
-// Returns an error if the path does not end with the "/index" subpath convention.
+// validateDeriveRepoURL converts an index module path to a GitHub HTTPS repo URL
+// (e.g. ".../library/index@v1" → "https://github.com/start-cli/library"),
+// erroring unless the path uses the "/index" subpath convention.
 func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	path := indexModulePath
-	// Strip version suffix
 	if idx := strings.LastIndex(path, "@"); idx != -1 {
 		path = path[:idx]
 	}
-	// Require and strip /index suffix
 	if !strings.HasSuffix(path, "/index") {
 		return "", usageError(fmt.Errorf("doctor validate requires an index path ending with /index (got %q); custom subpaths are not supported", path))
 	}
@@ -281,7 +265,6 @@ func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	return "https://" + path, nil
 }
 
-// validateCheckNetwork confirms the git repo host is reachable and the repo exists.
 func validateCheckNetwork(repoURL string) error {
 	client := &http.Client{Timeout: 8 * time.Second}
 
@@ -297,9 +280,8 @@ func validateCheckNetwork(repoURL string) error {
 	return nil
 }
 
-// validateCacheDir returns the path for the modules git clone cache.
-// The directory name is derived from the repo URL so different index sources
-// get separate cache directories.
+// validateCacheDir returns the modules git-clone cache path. The name is derived
+// from the repo URL so different index sources get separate cache directories.
 func validateCacheDir(repoURL string) (string, error) {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -308,13 +290,12 @@ func validateCacheDir(repoURL string) (string, error) {
 	return filepath.Join(paths.Global, "cache", validateCacheDirName(repoURL)), nil
 }
 
-// validateCacheDirName derives a filesystem-safe cache directory name from a repo URL.
-// e.g. "https://github.com/start-cli/library" → "start-cli-library"
+// validateCacheDirName derives a filesystem-safe cache directory name from a repo
+// URL, e.g. "https://github.com/start-cli/library" → "start-cli-library".
 func validateCacheDirName(repoURL string) string {
-	// Strip scheme
 	path := strings.TrimPrefix(repoURL, "https://")
 	path = strings.TrimPrefix(path, "http://")
-	// Split on "/" and take the last two segments (owner + repo)
+	// Last two segments are owner + repo.
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) >= 2 {
 		return parts[len(parts)-2] + "-" + parts[len(parts)-1]
@@ -329,23 +310,19 @@ func validateCacheDirName(repoURL string) string {
 // Custom modules repositories on a different default branch are not supported.
 const defaultLibraryBranch = "main"
 
-// validateEnsureRepo clones the repo if absent, otherwise fetches and resets to
-// origin/main. Using fetch+reset instead of pull avoids divergent branch errors
-// since the cache is not a working repository.
-// If the cache directory exists but has no .git (e.g. a stale failed clone),
-// it is removed and re-cloned, provided it is safely scoped under cacheParent.
+// validateEnsureRepo clones the repo if absent, else fetches and resets to
+// origin/main. fetch+reset (not pull) avoids divergent-branch errors since the
+// cache is not a working repo. A directory without .git (stale failed clone) is
+// removed and re-cloned, provided it is safely scoped under its parent.
 func validateEnsureRepo(repoURL, cacheDir string) error {
 	if _, err := os.Stat(filepath.Join(cacheDir, ".git")); os.IsNotExist(err) {
-		// Guard: only remove if cacheDir is under its expected parent.
-		// This prevents path traversal from a malformed cache directory path.
-		// filepath.Rel(parent, cacheDir) always yields the final path component
-		// (never a multi-segment result) because parent == filepath.Dir(cacheDir),
-		// so exact matches on ".." and "." are sufficient here.
+		// Guard against path traversal: only remove when cacheDir is the final
+		// component under its parent. Since parent == filepath.Dir(cacheDir),
+		// filepath.Rel yields a single component, so ".." / "." checks suffice.
 		parent := filepath.Dir(cacheDir)
 		if rel, err := filepath.Rel(parent, cacheDir); err != nil || rel == ".." || rel == "." {
 			return fmt.Errorf("refusing to remove unsafe cache path: %s", cacheDir)
 		}
-		// Remove any stale directory before cloning (no-op if it doesn't exist).
 		if err := os.RemoveAll(cacheDir); err != nil {
 			return fmt.Errorf("clearing stale cache directory: %w", err)
 		}
@@ -358,9 +335,6 @@ func validateEnsureRepo(repoURL, cacheDir string) error {
 		}
 		return nil
 	}
-	// Already cloned — reset to match remote default branch.
-	// Using fetch + reset avoids merge strategy issues (divergent branches)
-	// that occur with "git pull" on a validation cache.
 	if out, err := exec.Command("git", "-C", cacheDir, "checkout", defaultLibraryBranch).CombinedOutput(); err != nil {
 		return fmt.Errorf("checking out %s in %s: %s", defaultLibraryBranch, cacheDir, strings.TrimSpace(string(out)))
 	}
@@ -373,9 +347,8 @@ func validateEnsureRepo(repoURL, cacheDir string) error {
 	return nil
 }
 
-// validateVerifyRepo checks that the clone is on main, clean, and up to date.
+// validateVerifyRepo checks that the clone is on main and clean.
 func validateVerifyRepo(cacheDir string) error {
-	// Must be on main
 	out, err := exec.Command("git", "-C", cacheDir, "branch", "--show-current").Output()
 	if err != nil {
 		return fmt.Errorf("checking current branch: %w", err)
@@ -384,7 +357,6 @@ func validateVerifyRepo(cacheDir string) error {
 		return fmt.Errorf("expected branch %s, got %q", defaultLibraryBranch, branch)
 	}
 
-	// Must have no uncommitted changes
 	out, err = exec.Command("git", "-C", cacheDir, "status", "--porcelain").Output()
 	if err != nil {
 		return fmt.Errorf("checking repo status: %w", err)
@@ -407,7 +379,6 @@ func validateFetchTags(cacheDir string) error {
 	return nil
 }
 
-// validateListTags returns all git tags from the local clone.
 func validateListTags(cacheDir string) ([]string, error) {
 	out, err := exec.Command("git", "-C", cacheDir, "tag", "--list").Output()
 	if err != nil {
@@ -422,8 +393,8 @@ func validateListTags(cacheDir string) ([]string, error) {
 	return tags, nil
 }
 
-// validateTagVersions returns all semver versions from tags with the given prefix,
-// sorted ascending. e.g. prefix "agents/claude/" → ["v0.0.1", "v0.0.2", "v0.1.0"]
+// validateTagVersions returns the semver versions from tags with the given
+// prefix, sorted ascending.
 func validateTagVersions(tags []string, prefix string) []string {
 	var versions []string
 	for _, tag := range tags {
@@ -438,7 +409,6 @@ func validateTagVersions(tags []string, prefix string) []string {
 	return versions
 }
 
-// validateLatestTagVersion returns the highest semver from tags with the given prefix.
 func validateLatestTagVersion(tags []string, prefix string) string {
 	versions := validateTagVersions(tags, prefix)
 	if len(versions) == 0 {
@@ -447,9 +417,8 @@ func validateLatestTagVersion(tags []string, prefix string) string {
 	return versions[len(versions)-1]
 }
 
-// validateGitTagPrefix returns the git tag prefix for a module.
-// e.g. ("agents", "claude") → "agents/claude/"
-// e.g. ("tasks", "review/architecture") → "tasks/review/architecture/"
+// validateGitTagPrefix returns the git tag prefix for a module, e.g.
+// ("tasks", "review/architecture") → "tasks/review/architecture/".
 func validateGitTagPrefix(category, name string) string {
 	return category + "/" + name + "/"
 }
@@ -459,8 +428,6 @@ func validateGitTagPrefix(category, name string) string {
 func validateIndex(ctx context.Context, client registry.Client, indexPath string, tags []string) (doctor.SectionResult, *registry.Index, bool) {
 	section := doctor.SectionResult{Name: "Index"}
 
-	// Check for version mismatch: if the configured path has a specific pinned version,
-	// verify it exists by listing available versions.
 	if err := validateCheckIndexVersionExists(ctx, client, indexPath); err != nil {
 		section.Results = append(section.Results, doctor.CheckResult{
 			Status:  doctor.StatusFail,
@@ -470,7 +437,6 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 		return section, nil, true
 	}
 
-	// Resolve to latest canonical version
 	resolvedPath, err := client.ResolveLatestVersion(ctx, indexPath)
 	if err != nil {
 		section.Results = append(section.Results, doctor.CheckResult{
@@ -481,7 +447,6 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 		return section, nil, true
 	}
 
-	// Fetch the module
 	result, err := client.Fetch(ctx, resolvedPath)
 	if err != nil {
 		section.Results = append(section.Results, doctor.CheckResult{
@@ -492,7 +457,6 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 		return section, nil, true
 	}
 
-	// Load and decode the index
 	idx, err := registry.LoadIndex(result.SourceDir, client.Registry())
 	if err != nil {
 		section.Results = append(section.Results, doctor.CheckResult{
@@ -503,10 +467,9 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 		return section, nil, true
 	}
 
-	// Extract resolved version string (e.g. "v0.1.8")
 	resolvedVersion := indexVersionFromPath(resolvedPath)
 
-	// Check staleness: compare published version vs latest git tag
+	// Staleness: published version vs latest git tag.
 	latestTag := validateLatestTagVersion(tags, "index/")
 	if latestTag != "" && resolvedVersion != "" {
 		if semver.Compare(resolvedVersion, latestTag) < 0 {
@@ -515,7 +478,7 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 				Label:   "Stale",
 				Message: fmt.Sprintf("registry has %s but latest git tag is %s", resolvedVersion, latestTag),
 			})
-			// Not fatal — continue to mismatch checks
+			// Stale is not fatal — continue to mismatch checks.
 			if total := indexEntryCount(idx); total == 0 {
 				section.Results = append(section.Results, doctor.CheckResult{
 					Status:  doctor.StatusWarn,
@@ -528,7 +491,6 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 		}
 	}
 
-	// Check empty
 	if total := indexEntryCount(idx); total == 0 {
 		section.Results = append(section.Results, doctor.CheckResult{
 			Status:  doctor.StatusWarn,
@@ -546,24 +508,22 @@ func validateIndex(ctx context.Context, client registry.Client, indexPath string
 	return section, idx, false
 }
 
-// validateCheckIndexVersionExists returns an error if the configured index path pins
-// a specific version that does not exist in the registry.
+// validateCheckIndexVersionExists errors if the index path pins a version that
+// does not exist in the registry.
 func validateCheckIndexVersionExists(ctx context.Context, client registry.Client, indexPath string) error {
-	// Only check if the path includes a canonical version (not just @v0)
 	atIdx := strings.LastIndex(indexPath, "@")
 	if atIdx == -1 {
 		return nil
 	}
 	ver := indexPath[atIdx+1:]
 	if semver.Canonical(ver) != ver {
-		// Major version only (e.g. "v0") or non-canonical — no specific version to validate
+		// Major-only or non-canonical — no specific version to validate.
 		return nil
 	}
 
-	// List available versions and confirm the pinned one exists
 	versions, err := client.ModuleVersions(ctx, indexPath)
 	if err != nil {
-		// Can't determine — let the subsequent resolve/fetch handle it
+		// Can't determine — let the later resolve/fetch handle it.
 		return nil
 	}
 	if slices.Contains(versions, ver) {
@@ -572,9 +532,8 @@ func validateCheckIndexVersionExists(ctx context.Context, client registry.Client
 	return fmt.Errorf("version %s not found in registry (available: %s)", ver, strings.Join(versions, ", "))
 }
 
-// indexVersionFromPath extracts the canonical version string from a resolved module path.
-// Returns "" for major-only versions (e.g. "@v1") or invalid inputs.
-// e.g. "github.com/start-cli/library/index@v1.0.1" → "v1.0.1"
+// indexVersionFromPath extracts the canonical version from a resolved module
+// path, returning "" for major-only versions (e.g. "@v1") or invalid inputs.
 func indexVersionFromPath(resolvedPath string) string {
 	if idx := strings.LastIndex(resolvedPath, "@"); idx != -1 {
 		v := resolvedPath[idx+1:]
@@ -585,7 +544,6 @@ func indexVersionFromPath(resolvedPath string) string {
 	return ""
 }
 
-// indexEntryCount returns the total number of entries across all index categories.
 func indexEntryCount(idx *registry.Index) int {
 	return len(idx.Agents) + len(idx.Roles) + len(idx.Contexts) + len(idx.Tasks)
 }
@@ -607,14 +565,12 @@ func validateModules(ctx context.Context, client registry.Client, idx *registry.
 	for _, cat := range categories {
 		catResult := validateCatResult{name: cat.name}
 
-		// Collect names from the index for sorted output
 		names := make([]string, 0, len(cat.entries))
 		for n := range cat.entries {
 			names = append(names, n)
 		}
 		sort.Strings(names)
 
-		// Check each indexed module
 		for _, name := range names {
 			entry := cat.entries[name]
 			m := validateOneModule(ctx, client, cat.name, name, entry, tags, cacheDir)
@@ -657,7 +613,6 @@ func validateOneModule(ctx context.Context, client registry.Client, category, na
 		tagVersionSet[v] = true
 	}
 
-	// Get published versions from registry
 	publishedVersions, err := client.ModuleVersions(ctx, entry.Module)
 	if err != nil {
 		m.issues = append(m.issues, fmt.Sprintf("cannot query registry: %v", err))
@@ -676,10 +631,8 @@ func validateOneModule(ctx context.Context, client registry.Client, category, na
 		latestPublished = publishedVersions[len(publishedVersions)-1]
 	}
 
-	// Extract the module's major version from its path (e.g. "...@v1" → "v1").
-	// The registry only returns versions for this major version, so git tags
-	// from prior major versions (e.g. v0.x.x tags after upgrading to @v1) are
-	// not relevant to checks against the registry.
+	// The registry only returns versions for the module's current major, so git
+	// tags from prior majors are not relevant to registry checks.
 	moduleMajor := ""
 	if idx := strings.LastIndex(entry.Module, "@"); idx >= 0 {
 		moduleMajor = entry.Module[idx+1:]
@@ -695,10 +648,8 @@ func validateOneModule(ctx context.Context, client registry.Client, category, na
 		m.issues = append(m.issues, fmt.Sprintf("published version %s has no git tag %s", latestPublished, tagPrefix+latestPublished))
 	}
 
-	// Check 3: git tags exist with no corresponding published version.
-	// Only check tags whose major version matches the module's current major
-	// version. Old tags from prior major versions are expected to be absent
-	// from the registry for the current module path.
+	// Check 3: git tags with no published version. Only tags matching the
+	// current major count; prior-major tags are expected to be absent.
 	for _, tv := range tagVersions {
 		if moduleMajor != "" && semver.Major(tv) != moduleMajor {
 			continue
@@ -708,7 +659,7 @@ func validateOneModule(ctx context.Context, client registry.Client, category, na
 		}
 	}
 
-	// Staleness check: content changed since the latest tagged and published version
+	// Staleness: content changed since the latest tagged-and-published version.
 	latestTag := ""
 	if len(tagVersions) > 0 {
 		latestTag = tagVersions[len(tagVersions)-1]
@@ -728,8 +679,8 @@ func validateOneModule(ctx context.Context, client registry.Client, category, na
 	return m
 }
 
-// validateFindFSModules returns the names of modules found in the filesystem
-// for the given category directory. A module is identified by the presence of cue.mod/.
+// validateFindFSModules returns the names of modules under the category
+// directory, identifying a module by the presence of cue.mod/.
 func validateFindFSModules(category, cacheDir string) []string {
 	catDir := filepath.Join(cacheDir, category)
 	var modules []string
@@ -740,8 +691,8 @@ func validateFindFSModules(category, cacheDir string) []string {
 	return modules
 }
 
-// validateWalkModules recursively walks dir, calling fn with the path of each
-// directory that contains a cue.mod/ subdirectory. relBase is prepended to paths.
+// validateWalkModules walks dir, calling fn with the relative path (relBase
+// prepended) of each directory containing a cue.mod/ subdirectory.
 func validateWalkModules(dir, relBase string, fn func(string)) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -757,19 +708,16 @@ func validateWalkModules(dir, relBase string, fn func(string)) error {
 		if relBase != "" {
 			relPath = relBase + "/" + name
 		}
-		// A directory with cue.mod/ is a CUE module
 		if _, err := os.Stat(filepath.Join(fullPath, "cue.mod")); err == nil {
 			fn(relPath)
 			continue // don't recurse into module directories
 		}
-		// Recurse into non-module directories (e.g. tasks/review/ containing many tasks)
 		_ = validateWalkModules(fullPath, relPath, fn)
 	}
 	return nil
 }
 
-// validateIsStale returns true if the module content has changed since the given git tag.
-// Returns an error if the git command fails (e.g. missing tag, corrupt repo).
+// validateIsStale reports whether module content changed since the given git tag.
 func validateIsStale(cacheDir, tag, relPath string) (bool, error) {
 	out, err := exec.Command("git", "-C", cacheDir, "diff", "--name-only", tag+"..HEAD", "--", relPath).Output()
 	if err != nil {
@@ -778,7 +726,6 @@ func validateIsStale(cacheDir, tag, relPath string) (bool, error) {
 	return strings.TrimSpace(string(out)) != "", nil
 }
 
-// outputValidateJSON marshals the full validate result as JSON.
 func outputValidateJSON(w io.Writer, indexSection doctor.SectionResult, cats []validateCatResult) error {
 	result := ValidateResult{
 		Index: ValidateIndexResult{
@@ -827,7 +774,6 @@ func outputValidateJSON(w io.Writer, indexSection doctor.SectionResult, cats []v
 	return nil
 }
 
-// validateHasFailure returns true if any module has a failure status.
 func validateHasFailure(cats []validateCatResult) bool {
 	for _, cat := range cats {
 		for _, m := range cat.modules {
@@ -839,10 +785,8 @@ func validateHasFailure(cats []validateCatResult) bool {
 	return false
 }
 
-// printValidateIndexSection prints the index validation result (Section 1).
-// Uses the doctor CheckResult types for status icons but without the full doctor
-// reporter header or summary — this is the focused doctor validate output,
-// not the full doctor report.
+// printValidateIndexSection prints the index validation result, reusing doctor
+// status icons but not the full reporter header/summary.
 func printValidateIndexSection(w io.Writer, section doctor.SectionResult) {
 	tui.ColorHeader.Fprintln(w, section.Name)
 	for _, result := range section.Results {
@@ -868,7 +812,6 @@ func printValidateIndexSection(w io.Writer, section doctor.SectionResult) {
 	fmt.Fprintln(w)
 }
 
-// printValidateModules prints Section 2 output.
 func printValidateModules(w io.Writer, cats []validateCatResult, verbose bool) {
 	for _, cat := range cats {
 		total := len(cat.modules)
@@ -882,7 +825,6 @@ func printValidateModules(w io.Writer, cats []validateCatResult, verbose bool) {
 		catColor := tui.CategoryColor(cat.name)
 
 		if verbose {
-			// Verbose: list every module with its status
 			catColor.Fprintf(w, "%s", cat.name)
 			fmt.Fprintf(w, " %s\n", tui.Annotate("%d", total))
 			for _, m := range cat.modules {
@@ -901,14 +843,12 @@ func printValidateModules(w io.Writer, cats []validateCatResult, verbose bool) {
 				}
 			}
 		} else {
-			// Default: one summary line per category
 			pass := total - fail
 			catColor.Fprintf(w, "%-10s", cat.name)
 			if fail == 0 {
 				tui.ColorSuccess.Fprintf(w, " %d/%d OK\n", pass, total)
 			} else {
 				tui.ColorError.Fprintf(w, " %d/%d FAIL\n", pass, total)
-				// List failing modules below
 				for _, m := range cat.modules {
 					if m.status != validateModuleFail {
 						continue
@@ -929,7 +869,7 @@ func printValidateModules(w io.Writer, cats []validateCatResult, verbose bool) {
 	}
 }
 
-// printValidateStats prints Section 3 (always shown). Returns true if there are failures.
+// printValidateStats prints the summary line and reports whether any failed.
 func printValidateStats(w io.Writer, cats []validateCatResult) bool {
 	var checked, pass, fail int
 	for _, cat := range cats {

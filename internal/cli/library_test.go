@@ -9,7 +9,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// TestPrintIndex tests the printIndex function.
 func TestPrintIndex(t *testing.T) {
 	t.Parallel()
 	index := &registry.Index{
@@ -59,7 +58,6 @@ func TestPrintIndex(t *testing.T) {
 		if !strings.Contains(output, "golang/assistant") {
 			t.Errorf("output missing golang/assistant, got: %s", output)
 		}
-		// Verify alphabetical ordering: ai/claude before ai/gemini
 		claudeIdx := strings.Index(output, "ai/claude")
 		geminiIdx := strings.Index(output, "ai/gemini")
 		if claudeIdx > geminiIdx {
@@ -127,15 +125,14 @@ func TestPrintIndex(t *testing.T) {
 		printIndex(&buf, index, "v0.2.3", false, nil, "agents")
 		output := buf.String()
 
-		// Header should show all 3 modules, not just agents
 		if !strings.Contains(output, "(3 modules)") {
 			t.Errorf("header should show full total even when filtered, got: %s", output)
 		}
 	})
 }
 
-// TestLibraryCommandExists tests that the library command is registered at the
-// top level with the lib alias and its flags, and that the old idx alias is gone.
+// TestLibraryCommandExists checks the library command is registered with the
+// lib alias and its flags, and that the old idx alias is gone.
 func TestLibraryCommandExists(t *testing.T) {
 	t.Parallel()
 	cmd := NewRootCmd()
@@ -145,7 +142,6 @@ func TestLibraryCommandExists(t *testing.T) {
 			continue
 		}
 
-		// Check alias
 		hasLib := false
 		for _, a := range c.Aliases {
 			if a == "lib" {
@@ -159,7 +155,6 @@ func TestLibraryCommandExists(t *testing.T) {
 			t.Errorf("expected alias 'lib', got %v", c.Aliases)
 		}
 
-		// Check flags
 		if c.Flags().Lookup("json") == nil {
 			t.Error("--json flag not found")
 		}
@@ -171,8 +166,8 @@ func TestLibraryCommandExists(t *testing.T) {
 	t.Fatal("library command not found")
 }
 
-// TestLibraryCategoryValidation tests that invalid category args are rejected before network I/O,
-// and that --export rejects a category arg since the library is a single file.
+// TestLibraryCategoryValidation checks invalid category args are rejected
+// before network I/O, and that --export rejects a category arg.
 func TestLibraryCategoryValidation(t *testing.T) {
 	t.Parallel()
 
@@ -201,7 +196,6 @@ func TestLibraryCategoryValidation(t *testing.T) {
 	})
 }
 
-// TestFilterIndexByCategory tests that filterIndexByCategory isolates a single category.
 func TestFilterIndexByCategory(t *testing.T) {
 	t.Parallel()
 	index := &registry.Index{

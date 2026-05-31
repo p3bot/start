@@ -10,9 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TestIsSilentError verifies silence detection walks the error chain, so it
-// stays consistent with the chain-aware ExitCodeFromError that main.go pairs it
-// with: a silenced error keeps its silence even when wrapped further up.
+// TestIsSilentError verifies silence detection walks the error chain, so a
+// silenced error keeps its silence even when wrapped further up.
 func TestIsSilentError(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -72,25 +71,21 @@ func TestExecute_Version(t *testing.T) {
 
 	output := buf.String()
 
-	// Should contain version line
 	if !strings.Contains(output, "start version") {
 		t.Errorf("Expected 'start version' in output, got: %s", output)
 	}
 
-	// Should contain repository URL
 	if !strings.Contains(output, "https://github.com/start-cli/start") {
 		t.Errorf("Expected repository URL in output, got: %s", output)
 	}
 
-	// Should contain issues URL
 	if !strings.Contains(output, "/issues/new") {
 		t.Errorf("Expected issues URL in output, got: %s", output)
 	}
 }
 
-// TestHelpArgLeafCommands verifies that "help" as a positional argument works
-// on leaf commands (those with no subcommands) the same as --help.
-// This covers the commands using noArgsOrHelp in place of cobra.NoArgs.
+// TestHelpArgLeafCommands verifies "help" as a positional arg works like --help
+// on leaf commands using noArgsOrHelp.
 func TestHelpArgLeafCommands(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -98,7 +93,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 		args []string
 		want string // expected substring in help output
 	}{
-		// module commands (now top-level)
 		{
 			name: "library help",
 			args: []string{"library", "help"},
@@ -114,7 +108,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"doctor", "validate", "help"},
 			want: "git tags",
 		},
-		// completion subcommands
 		{
 			name: "completion bash help",
 			args: []string{"completion", "bash", "help"},
@@ -130,7 +123,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"completion", "fish", "help"},
 			want: "fish",
 		},
-		// config verb commands
 		{
 			name: "config add help",
 			args: []string{"config", "add", "help"},
@@ -156,7 +148,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"config", "get", "help"},
 			want: "raw stored",
 		},
-		// config order commands
 		{
 			name: "config order help",
 			args: []string{"config", "order", "help"},
@@ -177,7 +168,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"config", "settings", "help"},
 			want: "settings",
 		},
-		// top-level commands
 		{
 			name: "search help",
 			args: []string{"search", "help"},
@@ -193,7 +183,6 @@ func TestHelpArgLeafCommands(t *testing.T) {
 			args: []string{"doctor", "help"},
 			want: "Check start installation",
 		},
-		// module commands (now top-level)
 		{
 			name: "install help",
 			args: []string{"install", "help"},
@@ -226,8 +215,8 @@ func TestHelpArgLeafCommands(t *testing.T) {
 	}
 }
 
-// TestNoArgsOrHelpRejectsInvalidArgs verifies that noArgsOrHelp still rejects
-// positional arguments other than a lone "help", preserving cobra.NoArgs behaviour.
+// TestNoArgsOrHelpRejectsInvalidArgs verifies noArgsOrHelp rejects positional
+// args other than a lone "help".
 func TestNoArgsOrHelpRejectsInvalidArgs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

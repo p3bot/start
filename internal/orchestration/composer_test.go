@@ -273,7 +273,6 @@ func TestComposer_Compose(t *testing.T) {
 				t.Errorf("Prompt = %q, want %q", result.Prompt, tt.wantPrompt)
 			}
 
-			// Check contexts
 			var gotCtxs []string
 			for _, ctx := range result.Contexts {
 				gotCtxs = append(gotCtxs, ctx.Name)
@@ -288,7 +287,6 @@ func TestComposer_Compose(t *testing.T) {
 				}
 			}
 
-			// Check statuses
 			if tt.wantStatuses != nil {
 				for _, ctx := range result.Contexts {
 					if want, ok := tt.wantStatuses[ctx.Name]; ok {
@@ -299,7 +297,6 @@ func TestComposer_Compose(t *testing.T) {
 				}
 			}
 
-			// Check warnings
 			hasWarning := len(result.Warnings) > 0
 			if hasWarning != tt.wantWarning {
 				t.Errorf("Warnings present = %v, want %v (warnings: %v)", hasWarning, tt.wantWarning, result.Warnings)
@@ -1116,7 +1113,6 @@ func TestComposeWithRole_OptionalBehavior(t *testing.T) {
 	ctx := cuecontext.New()
 	tmpDir := t.TempDir()
 
-	// Create a real role file
 	roleFile := filepath.Join(tmpDir, "role.md")
 	if err := os.WriteFile(roleFile, []byte("Real role content"), 0644); err != nil {
 		t.Fatalf("writing role file: %v", err)
@@ -1288,13 +1284,10 @@ func TestComposer_ResolveTask_TempFile(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
 
-	// Create two separate temp directories:
-	// - workingDir: the project working directory
-	// - externalDir: simulates CUE cache (outside working directory)
+	// externalDir simulates the CUE cache: a source location outside workingDir.
 	workingDir := t.TempDir()
 	externalDir := t.TempDir()
 
-	// Create a source file in the external directory (simulating CUE cache)
 	sourceFile := filepath.Join(externalDir, "task.md")
 	if err := os.WriteFile(sourceFile, []byte("Task content here"), 0644); err != nil {
 		t.Fatalf("writing source file: %v", err)
@@ -1322,13 +1315,11 @@ func TestComposer_ResolveTask_TempFile(t *testing.T) {
 		t.Fatalf("ResolveTask() error = %v", err)
 	}
 
-	// Verify temp file was created (because source is outside working directory)
 	expectedTempPath := filepath.Join(workingDir, ".start", "temp", "task-test-task.md")
 	if result.TempFile != expectedTempPath {
 		t.Errorf("TempFile = %q, want %q", result.TempFile, expectedTempPath)
 	}
 
-	// Verify temp file exists and has correct content
 	content, err := os.ReadFile(result.TempFile)
 	if err != nil {
 		t.Fatalf("reading temp file: %v", err)
@@ -1349,9 +1340,7 @@ func TestComposer_ResolveTask_TempFile_WithSlashInName(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
 
-	// Create two separate temp directories:
-	// - workingDir: the project working directory
-	// - externalDir: simulates CUE cache (outside working directory)
+	// externalDir simulates the CUE cache: a source location outside workingDir.
 	workingDir := t.TempDir()
 	externalDir := t.TempDir()
 
@@ -1425,9 +1414,7 @@ func TestComposer_ResolveContext_TempFile(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
 
-	// Create two separate temp directories:
-	// - workingDir: the project working directory
-	// - externalDir: simulates CUE cache (outside working directory)
+	// externalDir simulates the CUE cache: a source location outside workingDir.
 	workingDir := t.TempDir()
 	externalDir := t.TempDir()
 
@@ -1458,13 +1445,11 @@ func TestComposer_ResolveContext_TempFile(t *testing.T) {
 		t.Fatalf("resolveContext() error = %v", err)
 	}
 
-	// Verify temp file was created (because source is outside working directory)
 	expectedTempPath := filepath.Join(workingDir, ".start", "temp", "context-project-info.md")
 	if result.TempFile != expectedTempPath {
 		t.Errorf("TempFile = %q, want %q", result.TempFile, expectedTempPath)
 	}
 
-	// Verify content
 	if result.Content != "Context content" {
 		t.Errorf("Content = %q, want %q", result.Content, "Context content")
 	}
@@ -1475,7 +1460,6 @@ func TestComposer_CwdFile_NoTempFile(t *testing.T) {
 	ctx := cuecontext.New()
 	workingDir := t.TempDir()
 
-	// Create a file within the working directory (cwd)
 	sourceFile := filepath.Join(workingDir, "AGENTS.md")
 	if err := os.WriteFile(sourceFile, []byte("Cwd file content"), 0644); err != nil {
 		t.Fatalf("writing source file: %v", err)
@@ -1503,18 +1487,16 @@ func TestComposer_CwdFile_NoTempFile(t *testing.T) {
 		t.Fatalf("resolveContext() error = %v", err)
 	}
 
-	// Verify NO temp file was created (files within cwd don't need temp copies)
+	// Cwd files need no temp copy.
 	if result.TempFile != "" {
 		t.Errorf("TempFile should be empty for cwd file, got %q", result.TempFile)
 	}
 
-	// Verify temp directory was not created
 	tempDir := filepath.Join(workingDir, ".start", "temp")
 	if _, err := os.Stat(tempDir); !os.IsNotExist(err) {
 		t.Errorf("temp directory should not exist for cwd files, but found: %s", tempDir)
 	}
 
-	// Verify content was still read correctly
 	if result.Content != "Cwd file content" {
 		t.Errorf("Content = %q, want %q", result.Content, "Cwd file content")
 	}
@@ -1524,7 +1506,6 @@ func TestComposer_resolveFileToTemp(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create source file
 	sourceFile := filepath.Join(tmpDir, "source.md")
 	if err := os.WriteFile(sourceFile, []byte("Source content"), 0644); err != nil {
 		t.Fatalf("writing source file: %v", err)
@@ -1651,7 +1632,6 @@ func TestComposer_TildeExpansion_Context(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	// Create a temp file in fake home directory
 	testFile := filepath.Join(home, ".start-test-context.md")
 	if err := os.WriteFile(testFile, []byte("Tilde context content"), 0644); err != nil {
 		t.Fatalf("writing test file: %v", err)
@@ -1659,7 +1639,6 @@ func TestComposer_TildeExpansion_Context(t *testing.T) {
 
 	workingDir := t.TempDir()
 
-	// Config uses tilde path
 	config := `
 		contexts: {
 			"tilde-test": {
@@ -1694,7 +1673,6 @@ func TestComposer_TildeExpansion_Role(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	// Create a temp file in fake home directory
 	testFile := filepath.Join(home, ".start-test-role.md")
 	if err := os.WriteFile(testFile, []byte("Tilde role content"), 0644); err != nil {
 		t.Fatalf("writing test file: %v", err)
@@ -1702,7 +1680,6 @@ func TestComposer_TildeExpansion_Role(t *testing.T) {
 
 	workingDir := t.TempDir()
 
-	// Config uses tilde path
 	config := `
 		roles: {
 			"tilde-test": {
@@ -1737,7 +1714,6 @@ func TestComposer_TildeExpansion_Task(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	// Create a temp file in fake home directory
 	testFile := filepath.Join(home, ".start-test-task.md")
 	if err := os.WriteFile(testFile, []byte("Tilde task content"), 0644); err != nil {
 		t.Fatalf("writing test file: %v", err)
@@ -1745,7 +1721,6 @@ func TestComposer_TildeExpansion_Task(t *testing.T) {
 
 	workingDir := t.TempDir()
 
-	// Config uses tilde path
 	config := `
 		tasks: {
 			"tilde-test": {
@@ -1778,7 +1753,6 @@ func TestComposer_TildeExpansion_FileNotFound(t *testing.T) {
 	ctx := cuecontext.New()
 	workingDir := t.TempDir()
 
-	// Config uses tilde path to nonexistent file
 	config := `
 		contexts: {
 			"missing": {

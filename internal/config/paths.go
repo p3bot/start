@@ -30,9 +30,8 @@ func (s Scope) String() string {
 	}
 }
 
-// ScopeFromLocal maps a local-only boolean to a Scope. Used by call sites
-// that accept --local but not --global, where the binary choice is always
-// between local-only and merged.
+// ScopeFromLocal maps a local-only boolean to a Scope, for call sites that
+// accept --local but not --global (choice is always local-only or merged).
 func ScopeFromLocal(local bool) Scope {
 	if local {
 		return ScopeLocal
@@ -66,7 +65,6 @@ func (p Paths) Dir(local bool) string {
 func ResolvePaths(workingDir string) (Paths, error) {
 	var p Paths
 
-	// Resolve global config path
 	globalPath, err := globalConfigDir()
 	if err != nil {
 		return p, err
@@ -74,7 +72,6 @@ func ResolvePaths(workingDir string) (Paths, error) {
 	p.Global = globalPath
 	p.GlobalExists = dirExists(globalPath)
 
-	// Resolve local config path
 	if workingDir == "" {
 		workingDir, err = os.Getwd()
 		if err != nil {
@@ -87,8 +84,7 @@ func ResolvePaths(workingDir string) (Paths, error) {
 	return p, nil
 }
 
-// globalConfigDir returns the global config directory path.
-// Uses XDG_CONFIG_HOME if set, otherwise ~/.config/start/.
+// globalConfigDir uses XDG_CONFIG_HOME if set, otherwise ~/.config/start/.
 func globalConfigDir() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "start"), nil
@@ -101,7 +97,6 @@ func globalConfigDir() (string, error) {
 	return filepath.Join(home, ".config", "start"), nil
 }
 
-// dirExists checks if a directory exists.
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -125,7 +120,7 @@ func (p Paths) ForScope(scope Scope) []string {
 		}
 		return nil
 	default:
-		// Merged: global first (lower priority), then local (higher priority)
+		// global first (lower priority), then local (higher priority)
 		var paths []string
 		if p.GlobalExists {
 			paths = append(paths, p.Global)

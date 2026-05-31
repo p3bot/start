@@ -48,7 +48,7 @@ type ExecuteConfig struct {
 }
 
 // CommandData holds data for command template substitution.
-// Uses lowercase keys to match CUE field naming conventions.
+// Keys are lowercase to match CUE field naming conventions.
 type CommandData map[string]string
 
 // Executor handles agent command execution.
@@ -66,7 +66,6 @@ func NewExecutor(workingDir string) *Executor {
 // since escapeForShell already wraps values in single quotes.
 // Also detects {placeholder} syntax which should be {{.placeholder}}.
 func ValidateCommandTemplate(tmpl string) error {
-	// Check for single-brace placeholders like {prompt} instead of {{.prompt}}
 	if match := singleBracePlaceholderPattern.FindStringSubmatch(tmpl); match != nil {
 		placeholder := match[1]
 		return fmt.Errorf(`template uses {%s} but Go templates require {{.%s}}
@@ -77,9 +76,7 @@ Update your command template:
   After:  %s`, placeholder, placeholder, tmpl, singleBracePlaceholderPattern.ReplaceAllString(tmpl, "{{.$1}}"))
 	}
 
-	// Check for quoted placeholders
 	if match := quotedPlaceholderPattern.FindString(tmpl); match != "" {
-		// Extract the placeholder name from the match
 		placeholder := strings.TrimPrefix(match, "'{{.")
 		placeholder = strings.TrimPrefix(placeholder, "\"{{.")
 		placeholder = strings.TrimSuffix(placeholder, "}}'")
@@ -98,12 +95,10 @@ Remove the surrounding quotes from your command template:
 
 // BuildCommand builds the agent command from template and config.
 func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
-	// Validate template for common errors
 	if err := ValidateCommandTemplate(cfg.Agent.Command); err != nil {
 		return "", err
 	}
 
-	// Resolve model name to actual model string
 	model := cfg.Model
 	if model == "" {
 		model = cfg.Agent.DefaultModel
@@ -146,8 +141,7 @@ Check your agent's 'bin' field or ensure the executable is in PATH`, cfg.Agent.B
 		return "", fmt.Errorf("expanding role file path %q: %w", cfg.RoleFile, err)
 	}
 
-	// Build template data with lowercase keys to match CUE conventions.
-	// All values are shell-escaped and wrapped in single quotes for safety.
+	// All values are shell-escaped and single-quoted to prevent injection.
 	data := CommandData{
 		"bin":       escapeForShell(bin),
 		"model":     escapeForShell(model),
@@ -157,7 +151,6 @@ Check your agent's 'bin' field or ensure the executable is in PATH`, cfg.Agent.B
 		"datetime":  escapeForShell(time.Now().Format(time.RFC3339)),
 	}
 
-	// Parse and execute command template
 	tmpl, err := template.New("command").Parse(cfg.Agent.Command)
 	if err != nil {
 		return "", fmt.Errorf("parsing command template: %w", err)
@@ -170,7 +163,6 @@ Check your agent's 'bin' field or ensure the executable is in PATH`, cfg.Agent.B
 
 	cmdStr := buf.String()
 
-	// Validate that the command starts with an executable
 	if err := validateCommandExecutable(cmdStr, cfg.Agent.Command); err != nil {
 		return "", err
 	}
@@ -191,8 +183,7 @@ func validateCommandExecutable(cmdStr, template string) error {
 Check your agent's 'command' field`, template)
 	}
 
-	// Skip leading environment variable assignments (VAR=value patterns).
-	// These are valid shell syntax: VAR1=x VAR2=y command args...
+	// Valid shell syntax: VAR1=x VAR2=y command args...
 	cmdIndex := 0
 	for cmdIndex < len(fields) && isEnvVarAssignment(fields[cmdIndex]) {
 		cmdIndex++
@@ -213,19 +204,14 @@ Check your agent's 'command' field - it must include an executable`, template)
 // Valid patterns: VAR=value, VAR='value', VAR="value", VAR=
 // The variable name must be a valid shell identifier.
 func isEnvVarAssignment(token string) bool {
-	// Strip surrounding quotes (the token might be quoted)
 	stripped := strings.Trim(token, "'\"")
 
-	// Look for = sign
 	eqIdx := strings.Index(stripped, "=")
 	if eqIdx <= 0 {
 		return false
 	}
 
-	// Get the variable name (part before =)
 	varName := stripped[:eqIdx]
-
-	// Validate it's a proper env var name
 	return isValidEnvVarName(varName)
 }
 
@@ -262,7 +248,6 @@ func (e *Executor) Execute(cfg ExecuteConfig) error {
 // ExecuteCommand runs a pre-built command string, replacing the current process.
 // Use this when the command has already been built and validated.
 func (e *Executor) ExecuteCommand(cmdStr string, cfg ExecuteConfig) error {
-	// Find shell
 	shell, err := exec.LookPath("bash")
 	if err != nil {
 		shell, err = exec.LookPath("sh")
@@ -271,11 +256,8 @@ func (e *Executor) ExecuteCommand(cmdStr string, cfg ExecuteConfig) error {
 		}
 	}
 
-	// Set working directory.
-	// Note: os.Chdir mutates process-global state. This is safe here because
-	// syscall.Exec below replaces the process. If Exec fails, the working
-	// directory remains changed with no rollback. This function must only be
-	// called as the final action before process replacement.
+	// os.Chdir mutates process-global state with no rollback if Exec fails, so this
+	// must only run as the final action before syscall.Exec replaces the process.
 	if cfg.WorkingDir != "" {
 		if err := os.Chdir(cfg.WorkingDir); err != nil {
 			return fmt.Errorf("changing directory: %w", err)
@@ -298,7 +280,6 @@ func (e *Executor) ExecuteWithoutReplace(cfg ExecuteConfig) (string, error) {
 		return "", err
 	}
 
-	// Find shell
 	shell, err := exec.LookPath("bash")
 	if err != nil {
 		shell, err = exec.LookPath("sh")
@@ -333,9 +314,7 @@ func (e *Executor) ExecuteWithoutReplace(cfg ExecuteConfig) (string, error) {
 // Note: Environment variables (e.g., $HOME) are NOT expanded. Use literal values
 // in prompts or the command field for dynamic content.
 func escapeForShell(s string) string {
-	// Escape single quotes: replace ' with '"'"'
-	// This ends the single-quoted string, adds a double-quoted literal quote,
-	// then restarts the single-quoted string.
+	// ' -> '"'"': close the single quote, add a double-quoted literal quote, reopen.
 	escaped := strings.ReplaceAll(s, "'", "'\"'\"'")
 	return "'" + escaped + "'"
 }

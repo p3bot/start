@@ -12,7 +12,6 @@ func TestIsFilePath(t *testing.T) {
 		input string
 		want  bool
 	}{
-		// File paths (should return true)
 		{name: "relative dot slash", input: "./file.md", want: true},
 		{name: "relative nested", input: "./path/to/file.md", want: true},
 		{name: "absolute path", input: "/usr/local/file.md", want: true},
@@ -25,7 +24,6 @@ func TestIsFilePath(t *testing.T) {
 		{name: "tilde user syntax", input: "~user/bin", want: false},
 		{name: "tilde without slash", input: "~foo", want: false},
 
-		// Config names (should return false)
 		{name: "simple name", input: "go-expert", want: false},
 		{name: "namespaced", input: "golang/code-review", want: false},
 		{name: "with hyphen", input: "pre-commit-review", want: false},
@@ -106,10 +104,8 @@ func TestExpandFilePath(t *testing.T) {
 }
 
 func TestReadFilePath(t *testing.T) {
-	// Create temp directory with test files
 	tmpDir := t.TempDir()
 
-	// Create a test file
 	testContent := "This is test content.\nLine 2."
 	testFile := filepath.Join(tmpDir, "test.md")
 	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {

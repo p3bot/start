@@ -19,8 +19,8 @@ var configHelp string
 //go:embed help/schemas.md
 var schemasHelp string
 
-// addHelpCommand replaces Cobra's default help command with a custom one that
-// adds agent-focused topic subcommands (agents, templates, config).
+// addHelpCommand replaces Cobra's default help command with one carrying
+// agent-focused topic subcommands (agents, templates, config, schemas).
 func addHelpCommand(root *cobra.Command) {
 	helpCmd := &cobra.Command{
 		Use:     "help [command]",

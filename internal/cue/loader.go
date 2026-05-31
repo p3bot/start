@@ -31,12 +31,9 @@ func NewLoader() *Loader {
 
 // LoadResult contains the result of loading CUE configuration.
 type LoadResult struct {
-	// Value is the merged CUE value.
-	Value cue.Value
-	// GlobalLoaded indicates whether global config was loaded.
+	Value        cue.Value
 	GlobalLoaded bool
-	// LocalLoaded indicates whether local config was loaded.
-	LocalLoaded bool
+	LocalLoaded  bool
 }
 
 // Load loads CUE configuration from the specified directories.
@@ -53,7 +50,6 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 		return result, fmt.Errorf("no configuration directories provided")
 	}
 
-	// Track which directories were loaded by their original index
 	loaded := make([]bool, len(dirs))
 
 	var values []cue.Value
@@ -62,7 +58,6 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 			continue
 		}
 
-		// Check if directory exists
 		info, err := os.Stat(dir)
 		if os.IsNotExist(err) {
 			continue
@@ -74,7 +69,6 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 			return result, fault.UserConfig(fmt.Errorf("%s is not a directory", dir))
 		}
 
-		// Check if directory contains any CUE files
 		hasCUE, err := HasCUEFiles(dir)
 		if err != nil {
 			return result, fmt.Errorf("checking for CUE files in %s: %w", dir, err)
@@ -83,7 +77,6 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 			continue
 		}
 
-		// Load CUE instance from directory
 		v, err := l.loadDir(dir)
 		if err != nil {
 			return result, fmt.Errorf("loading %s: %w", dir, err)
@@ -93,7 +86,6 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 		loaded[i] = true
 	}
 
-	// Set loaded flags based on original directory positions
 	if len(dirs) > 0 && loaded[0] {
 		result.GlobalLoaded = true
 	}
@@ -105,9 +97,6 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 		return result, fmt.Errorf("%w", ErrNoCUEFiles)
 	}
 
-	// Merge values with replacement semantics:
-	// - Different keys: additive (union)
-	// - Same keys: later value completely replaces earlier
 	merged, err := l.mergeWithReplacement(values)
 	if err != nil {
 		return result, fmt.Errorf("merging configurations: %w", err)
@@ -117,9 +106,8 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 	return result, nil
 }
 
-// collectionKeys are the top-level keys that use second-level merge semantics.
-// Items within these collections are merged additively by name, with later
-// values replacing earlier values for the same item name.
+// collectionKeys use second-level merge: items are merged additively by name,
+// with later values replacing earlier ones for the same item name.
 var collectionKeys = map[string]bool{
 	KeyAgents:   true,
 	KeyRoles:    true,
@@ -127,17 +115,10 @@ var collectionKeys = map[string]bool{
 	KeyTasks:    true,
 }
 
-// mergeWithReplacement merges multiple CUE values with two-level merge semantics:
-//
-// For collection keys (agents, roles, contexts, tasks):
-//   - Items are merged additively by name (global.claude + local.gemini = both exist)
-//   - Same-named items: later completely replaces earlier (no field-level merge)
-//
-// For all other keys (settings, etc.):
-//   - Fields are merged additively
-//   - Same field: later value replaces earlier value
-//
-// This differs from CUE's native unification which requires compatible values.
+// mergeWithReplacement merges CUE values with two-level replacement semantics:
+// collection items and other fields merge additively by name, but same-named
+// entries are fully replaced rather than field-merged. This deliberately differs
+// from CUE's native unification, which requires compatible values.
 func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 	if len(values) == 0 {
 		return cue.Value{}, fmt.Errorf("no values to merge")
@@ -146,12 +127,9 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 		return values[0], nil
 	}
 
-	// Build merged structs for each top-level key.
-	// For collections: map[itemName]cue.Value
-	// For others: map[fieldName]cue.Value (field-level merge)
 	topLevel := make(map[string]map[string]cue.Value)
 	var topLevelOrder []string
-	itemOrder := make(map[string][]string) // Track order within each top-level key
+	itemOrder := make(map[string][]string)
 
 	for _, v := range values {
 		iter, err := v.Fields(cue.All())
@@ -163,7 +141,6 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 			key := iter.Selector().String()
 			fieldValue := iter.Value()
 
-			// Initialise top-level key if first time seeing it
 			if _, exists := topLevel[key]; !exists {
 				topLevel[key] = make(map[string]cue.Value)
 				topLevelOrder = append(topLevelOrder, key)
@@ -171,7 +148,6 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 			}
 
 			if collectionKeys[key] {
-				// Collection key: merge at item level (second-level)
 				itemIter, err := fieldValue.Fields(cue.All())
 				if err != nil {
 					return cue.Value{}, fmt.Errorf("iterating collection %s: %w", key, err)
@@ -181,14 +157,10 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 					if _, exists := topLevel[key][itemName]; !exists {
 						itemOrder[key] = append(itemOrder[key], itemName)
 					}
-					// Later item replaces earlier item entirely
 					topLevel[key][itemName] = itemIter.Value()
 				}
 			} else {
-				// Non-collection key: check if it's a struct for field-level merge
-				// or a scalar value for direct replacement
 				if fieldValue.Kind() == cue.StructKind {
-					// Struct value: merge at field level (like settings)
 					fieldIter, err := fieldValue.Fields(cue.All())
 					if err != nil {
 						return cue.Value{}, fmt.Errorf("iterating struct %s: %w", key, err)
@@ -198,11 +170,9 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 						if _, exists := topLevel[key][fieldName]; !exists {
 							itemOrder[key] = append(itemOrder[key], fieldName)
 						}
-						// Later field replaces earlier field
 						topLevel[key][fieldName] = fieldIter.Value()
 					}
 				} else {
-					// Scalar value: later completely replaces earlier
 					topLevel[key][""] = fieldValue
 					itemOrder[key] = []string{""}
 				}
@@ -210,7 +180,6 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 		}
 	}
 
-	// Build CUE source from merged structure
 	var sb strings.Builder
 	sb.WriteString("{\n")
 
@@ -218,7 +187,7 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 		items := topLevel[key]
 		order := itemOrder[key]
 
-		// Check if this is a non-struct value (stored under empty key)
+		// Non-struct values are stored under the empty key.
 		if len(order) == 1 && order[0] == "" {
 			formatted, err := formatValue(items[""])
 			if err != nil {
@@ -232,7 +201,6 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 			continue
 		}
 
-		// Struct value: output nested structure
 		sb.WriteString("\t")
 		sb.WriteString(key)
 		sb.WriteString(": {\n")
@@ -255,7 +223,6 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 
 	sb.WriteString("}")
 
-	// Compile the merged source
 	merged := l.ctx.CompileString(sb.String())
 	if err := merged.Err(); err != nil {
 		return cue.Value{}, fmt.Errorf("compiling merged config: %w", err)
@@ -266,7 +233,6 @@ func (l *Loader) mergeWithReplacement(values []cue.Value) (cue.Value, error) {
 
 // formatValue formats a CUE value as CUE syntax string.
 func formatValue(v cue.Value) (string, error) {
-	// Use CUE's native formatting
 	syn := v.Syntax(
 		cue.Final(),
 		cue.Concrete(false),
@@ -314,9 +280,7 @@ func (l *Loader) LoadSingle(dir string) (cue.Value, error) {
 func (l *Loader) loadDir(dir string) (cue.Value, error) {
 	cfg := &load.Config{
 		Dir: dir,
-		// Package "*" loads all packages. Files without packages are loaded
-		// in the _ package. This allows loading both packaged modules and
-		// simple configuration files.
+		// "*" loads both packaged modules and package-less config files.
 		Package: "*",
 	}
 
@@ -327,9 +291,8 @@ func (l *Loader) loadDir(dir string) (cue.Value, error) {
 
 	inst := insts[0]
 	if inst.Err != nil {
-		// User-fault: their CUE files failed to load. Tagged so the mapper
-		// returns 78, distinct from the internal merged-source compile error
-		// in mergeWithReplacement which is our bug and stays general (1).
+		// User-fault: tagged so the mapper returns 78, unlike the internal
+		// merged-source compile error in mergeWithReplacement (our bug, stays 1).
 		return cue.Value{}, fault.UserConfig(fmt.Errorf("loading instance: %w", inst.Err))
 	}
 
@@ -362,9 +325,8 @@ func (l *Loader) Context() *cue.Context {
 	return l.ctx
 }
 
-// IdentifyBrokenFiles compiles each CUE file individually and returns a
-// summary of which files have errors. This is used to provide actionable
-// diagnostics when a directory fails to load.
+// IdentifyBrokenFiles compiles each CUE file individually and summarises which
+// have errors, for diagnostics when a directory fails to load as a whole.
 func IdentifyBrokenFiles(paths []string) string {
 	ctx := cuecontext.New()
 	var lines []string

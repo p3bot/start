@@ -14,7 +14,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// parseCUEStruct parses a CUE struct literal string into an ast.Expr for test input.
 func parseCUEStruct(t *testing.T, src string) ast.Expr {
 	t.Helper()
 	f, err := parser.ParseFile("test", "a: "+src)
@@ -24,7 +23,6 @@ func parseCUEStruct(t *testing.T, src string) ast.Expr {
 	return f.Decls[0].(*ast.Field).Value
 }
 
-// TestSearchIndex tests the modules.SearchIndex function.
 func TestSearchIndex(t *testing.T) {
 	t.Parallel()
 	index := &registry.Index{
@@ -120,7 +118,6 @@ func TestSearchIndex(t *testing.T) {
 	}
 }
 
-// TestUpdateModuleInConfig tests the modules.UpdateModuleInConfig function.
 func TestUpdateModuleInConfig(t *testing.T) {
 	t.Parallel()
 
@@ -384,7 +381,6 @@ func TestUpdateModuleInConfig(t *testing.T) {
 	}
 }
 
-// TestSearchResultJSON tests that SearchResult marshals to valid JSON with correct field names.
 func TestSearchResultJSON(t *testing.T) {
 	t.Parallel()
 	results := []modules.SearchResult{
@@ -421,8 +417,8 @@ func TestSearchResultJSON(t *testing.T) {
 	}
 }
 
-// TestFlatModuleCommandsExist verifies the promoted module commands are
-// registered at the top level after the modules parent was removed.
+// TestFlatModuleCommandsExist verifies module commands are registered at the
+// top level after the modules parent was removed.
 func TestFlatModuleCommandsExist(t *testing.T) {
 	t.Parallel()
 	cmd := NewRootCmd()
@@ -440,9 +436,8 @@ func TestFlatModuleCommandsExist(t *testing.T) {
 	}
 }
 
-// TestModulesParentRemoved verifies that the old modules parent, its singular
-// alias, and the removed browse command no longer resolve and return Cobra's
-// unknown-command error.
+// TestModulesParentRemoved verifies the old modules parent, its singular alias,
+// and the removed browse command return Cobra's unknown-command error.
 func TestModulesParentRemoved(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{

@@ -12,7 +12,6 @@ import (
 	"github.com/start-cli/start/internal/shell"
 )
 
-// addGetCommand registers the `start get` subcommand.
 func addGetCommand(parent *cobra.Command, flags *Flags) {
 	getCmd := &cobra.Command{
 		Use:     "get [name]",
@@ -58,7 +57,6 @@ To inspect strictly within --local, ensure the module is already installed.`,
 	parent.AddCommand(getCmd)
 }
 
-// runGet resolves a module and writes its content to stdout.
 func runGet(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -87,27 +85,19 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Construct the resolver with stderr in the stdout slot so registry fetch
-	// progress, auto-install notices, and selection menus do not corrupt the
-	// piped content on stdout. See cross_resolve.go's doc comment.
+	// stderr in the stdout slot so fetch progress, auto-install notices, and
+	// selection menus do not corrupt the piped content on stdout.
 	r := newResolver(cfg, flags, stderr, stderr, stdin)
 	match, err := resolveCrossCategory(query, r)
 	if err != nil {
 		return err
 	}
 
-	// Refresh the in-memory config after an auto-install so the freshly
-	// installed module's CUE value is visible. Same pattern as start and task.
-	//
-	// reloadConfig always reloads in merged scope regardless of the user's
-	// original --local/--global flag. This is deliberate: autoInstall always
-	// writes to global config (resolve.go's autoInstall), so merged is the
-	// smallest scope guaranteed to see the new module for any original scope.
-	// Under --global the result is identical (module only exists in global,
-	// merged is a superset); under --local the widening is required for the
-	// lookup to succeed and is signalled to the user via
-	// notifyScopeWidenedIfLocal. A scope-aware reload would be a no-op
-	// distinction for --global today.
+	// Refresh config after an auto-install so the new module's CUE value is
+	// visible. reloadConfig always uses merged scope: autoInstall writes to
+	// global, so merged is the smallest scope guaranteed to see the module for
+	// any original --local/--global; --local widening is signalled via
+	// notifyScopeWidenedIfLocal.
 	if r.didInstall {
 		workingDir, wdErr := os.Getwd()
 		if wdErr != nil {
@@ -138,8 +128,8 @@ func runGet(cmd *cobra.Command, args []string) error {
 }
 
 // getResolveQuery returns the module query, prompting interactively when no
-// argument was supplied. All prompts and warnings go to stderr to keep stdout
-// reserved for module content (Requirement 5).
+// argument was supplied. Prompts and warnings go to stderr to keep stdout
+// reserved for module content.
 func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, error) {
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
@@ -160,11 +150,8 @@ func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, 
 }
 
 // getAgent writes the agent's command template (with {{.bin}} and {{.model}}
-// resolved) to stdout. Runtime placeholders are left intact.
-//
-// When --model is set, it is resolved via resolver.resolveModelName (exact,
-// then multi-term substring, then passthrough) to keep `get` consistent with
-// `start`'s rendering of the same flag.
+// resolved) to stdout, leaving runtime placeholders intact. --model is
+// resolved via resolveModelName to match `start`'s rendering of the flag.
 func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, item cue.Value) error {
 	cmdField := item.LookupPath(cue.ParsePath("command"))
 	command := ""
@@ -194,11 +181,9 @@ func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, 
 }
 
 // getUTD resolves a UTD module and writes its content to stdout. Source
-// priority is file > prompt > command. The TemplateProcessor's intrinsic
-// priority is the inverse (prompt > file > command, see template.go); the
-// trim block below flips it by clearing higher-priority sources before Process
-// runs. Shell and Timeout are execution config and pass through untouched so a
-// command-source module still honours its declared shell and timeout.
+// priority is file > prompt > command; the trim block below flips
+// TemplateProcessor's inverse intrinsic priority by clearing higher-priority
+// sources before Process runs. Shell and Timeout pass through untouched.
 func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item cue.Value) error {
 	fields := orchestration.ExtractUTDFields(item)
 	if !orchestration.IsUTDValid(fields) {
@@ -220,11 +205,9 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 			}
 			fields.File = resolved
 		}
-		// Expand ~/ and relative paths so verbose `Path:`/`Cache:` reports the
-		// same location DefaultFileReader will read from. @module/ is already
-		// absolute by this point. On expansion failure (rare), keep the
-		// literal config string and log the cause under --debug so the
-		// misleading verbose Path: line is diagnosable.
+		// Expand ~/ and relative paths so verbose Path:/Cache: reports the same
+		// location DefaultFileReader will read from. On expansion failure, keep
+		// the literal config string and log the cause under --debug.
 		resolvedFile = fields.File
 		if expanded, expandErr := orchestration.ExpandFilePath(fields.File); expandErr == nil {
 			resolvedFile = expanded
@@ -233,15 +216,11 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 		}
 	}
 
-	// Source-priority dependency: see TemplateProcessor.Process in
-	// internal/orchestration/template.go. Process picks Prompt before File, so
-	// clearing Prompt when File is set is what makes get's file > prompt
-	// priority hold. Clearing Command in the file and prompt branches is
-	// deliberate side-effect suppression: it disables Process's lazy
-	// {{.command_output}} expansion (template.go: needsCommandOutput &&
-	// fields.Command != "") so `get` never shells out unless command is the
-	// primary source. Do not extend this trim to Shell or Timeout — they
-	// configure command execution and apply regardless of which source wins.
+	// Process picks Prompt before File, so clearing Prompt when File is set is
+	// what makes get's file > prompt priority hold. Clearing Command also
+	// suppresses Process's lazy {{.command_output}} expansion so get never
+	// shells out unless command is the primary source. Do not extend this trim
+	// to Shell or Timeout — they apply regardless of which source wins.
 	if fields.File != "" {
 		fields.Prompt = ""
 		fields.Command = ""
@@ -254,10 +233,8 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 		return fmt.Errorf("getting working directory: %w", err)
 	}
 
-	// Verbose runs after the trim block so fields.Command reflects the
-	// chosen source (only set when command is the active source). No I/O
-	// happens between the trim and here, so the verbose lines are still
-	// emitted before any read or shell-out.
+	// Runs after the trim block so fields.Command reflects the chosen source
+	// (non-empty only when command is active), before any read or shell-out.
 	if flags.Verbose {
 		printGetVerbose(stderr, itemType, name, item, resolvedFile, fields.Command, fromModuleCache)
 	}
@@ -275,13 +252,9 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 	return nil
 }
 
-// printGetVerbose writes module metadata to stderr ahead of the content. Used
-// when --verbose is set; stdout remains reserved for the module content itself.
-// command is set only when command is the active source — getUTD passes the
-// post-trim fields.Command, which is non-empty exactly when command was chosen.
-// fromModuleCache labels the file location as `Cache:` (matching `start describe`)
-// so users aren't misled into editing the CUE module cache; local-file modules
-// keep the `Path:` label so the user knows where the editable source lives.
+// printGetVerbose writes module metadata to stderr ahead of the content.
+// fromModuleCache labels the location Cache: (vs Path:) so users aren't misled
+// into editing the read-only CUE module cache instead of an editable source.
 func printGetVerbose(stderr io.Writer, itemType, name string, item cue.Value, resolvedFile, command string, fromModuleCache bool) {
 	fmt.Fprintf(stderr, "Type: %s\n", itemType)
 	fmt.Fprintf(stderr, "Name: %s\n", name)
@@ -300,9 +273,8 @@ func printGetVerbose(stderr io.Writer, itemType, name string, item cue.Value, re
 	}
 }
 
-// ensureTrailingNewline returns s with exactly one trailing newline. Empty
-// strings pass through. Used at every get write site so stdout is line-aligned
-// regardless of which module source produced the content.
+// ensureTrailingNewline returns s with exactly one trailing newline; empty
+// strings pass through.
 func ensureTrailingNewline(s string) string {
 	if s == "" || strings.HasSuffix(s, "\n") {
 		return s

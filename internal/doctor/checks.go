@@ -66,15 +66,12 @@ func CheckVersion(info BuildInfo) SectionResult {
 func CheckConfiguration(paths config.Paths) SectionResult {
 	section := SectionResult{Name: "Configuration"}
 
-	// Check global config
 	globalResults := checkConfigDir(paths.Global, "Global", paths.GlobalExists)
 	section.Results = append(section.Results, globalResults...)
 
-	// Check local config
 	localResults := checkConfigDir(paths.Local, "Local", paths.LocalExists)
 	section.Results = append(section.Results, localResults...)
 
-	// If both exist, try to load and merge
 	if paths.GlobalExists || paths.LocalExists {
 		loader := internalcue.NewLoader()
 		dirs := paths.ForScope(config.ScopeMerged)
@@ -98,14 +95,11 @@ func CheckConfiguration(paths config.Paths) SectionResult {
 	return section
 }
 
-// checkConfigDir checks a single configuration directory.
 func checkConfigDir(dir, scope string, exists bool) []CheckResult {
 	var results []CheckResult
 
-	// Build display path like "~/.config/start" for check output
 	shortDir := shortenPath(dir)
 
-	// Directory header (always present, no icon)
 	header := CheckResult{
 		Status: StatusInfo,
 		Label:  fmt.Sprintf("%s (%s)", scope, shortDir),
@@ -122,7 +116,6 @@ func checkConfigDir(dir, scope string, exists bool) []CheckResult {
 		return results
 	}
 
-	// List CUE files in directory
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		results = append(results, header)
@@ -153,7 +146,6 @@ func checkConfigDir(dir, scope string, exists bool) []CheckResult {
 		return results
 	}
 
-	// Try to load the directory to validate CUE syntax
 	loader := internalcue.NewLoader()
 	_, err = loader.LoadSingle(dir)
 	if err != nil {
@@ -386,7 +378,6 @@ func CheckTasks(cfgValue cue.Value) SectionResult {
 	return section
 }
 
-// checkTaskRole checks if a task's role field references an existing role.
 func checkTaskRole(taskVal cue.Value, taskName string, cfgValue cue.Value) *CheckResult {
 	roleVal := taskVal.LookupPath(cue.ParsePath("role"))
 	if !roleVal.Exists() {
@@ -395,7 +386,7 @@ func checkTaskRole(taskVal cue.Value, taskName string, cfgValue cue.Value) *Chec
 
 	roleName, err := roleVal.String()
 	if err != nil {
-		// Role is a struct (inline definition), skip validation
+		// Inline struct role definition, not a reference to validate.
 		return nil
 	}
 
@@ -416,11 +407,9 @@ func checkTaskRole(taskVal cue.Value, taskName string, cfgValue cue.Value) *Chec
 	}
 }
 
-// checkFileField checks if a config item has a valid file field.
 func checkFileField(v cue.Value, name string) *CheckResult {
 	fileVal := v.LookupPath(cue.ParsePath("file"))
 	if !fileVal.Exists() {
-		// No file field - check for prompt or command instead
 		if prompt := v.LookupPath(cue.ParsePath("prompt")); prompt.Exists() {
 			return &CheckResult{
 				Status:  StatusPass,
@@ -451,8 +440,7 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 		}
 	}
 
-	// @module/ paths resolve via the role/context/task's origin field against
-	// the CUE module cache. Honestly report whether the extract is present.
+	// @module/ paths resolve via the origin field against the CUE module cache.
 	if strings.HasPrefix(filePath, "@module/") {
 		origin := orchestration.ExtractOrigin(v)
 		if origin == "" {
@@ -465,7 +453,6 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 		}
 		resolved, err := orchestration.ResolveModulePath(filePath, origin)
 		if err != nil {
-			// Extract dir is genuinely missing from the cache.
 			return &CheckResult{
 				Status:  StatusNotFound,
 				Label:   name,
@@ -474,9 +461,7 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 			}
 		}
 		if _, err := os.Stat(resolved); os.IsNotExist(err) {
-			// Extract dir is present but the declared file is missing
-			// from it — config path is wrong, or the module shipped
-			// without the file. Reinstall will not help.
+			// Extract present but declared file missing: reinstall will not help.
 			return &CheckResult{
 				Status:  StatusNotFound,
 				Label:   name,
@@ -490,9 +475,8 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 				Message: fmt.Sprintf("%s (%v)", filePath, err),
 			}
 		}
-		// Source the version from the resolved path: ResolveModulePath
-		// can fall back to a different cached version than declared, and
-		// the user needs to see what they will actually get.
+		// Report the resolved version, not the declared one: ResolveModulePath
+		// can fall back to a different cached version than declared.
 		relativePath := strings.TrimPrefix(filePath, "@module/")
 		versionedDir := filepath.Base(strings.TrimSuffix(resolved, string(filepath.Separator)+relativePath))
 		return &CheckResult{
@@ -502,7 +486,6 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 		}
 	}
 
-	// Expand ~ to home directory
 	expandedPath := expandPath(filePath)
 
 	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
@@ -527,7 +510,7 @@ func checkFileField(v cue.Value, name string) *CheckResult {
 }
 
 // CheckSettings resolves and displays all settings with their sources,
-// and validates specific settings (default_agent, shell).
+// validating default_agent and shell specifically.
 func CheckSettings(paths config.Paths, cfgValue cue.Value) SectionResult {
 	section := SectionResult{Name: "Settings"}
 
@@ -559,7 +542,6 @@ func CheckSettings(paths config.Paths, cfgValue cue.Value) SectionResult {
 	return section
 }
 
-// settingResult creates a CheckResult for a setting with its value and source.
 func settingResult(key string, entry config.SettingEntry) CheckResult {
 	if entry.Source == "not set" {
 		return CheckResult{
@@ -575,7 +557,6 @@ func settingResult(key string, entry config.SettingEntry) CheckResult {
 	}
 }
 
-// checkDefaultAgent validates the default_agent setting.
 func checkDefaultAgent(entry config.SettingEntry, cfgValue cue.Value) CheckResult {
 	if entry.Source == "not set" {
 		return settingResult("default_agent", entry)
@@ -619,7 +600,6 @@ func checkDefaultAgent(entry config.SettingEntry, cfgValue cue.Value) CheckResul
 	}
 }
 
-// checkShell validates the shell setting.
 func checkShell(entry config.SettingEntry) CheckResult {
 	if entry.Source == "not set" {
 		return settingResult("shell", entry)
@@ -644,7 +624,6 @@ func checkShell(entry config.SettingEntry) CheckResult {
 	}
 }
 
-// sortedKeys returns the keys of a map in sorted order.
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -658,7 +637,6 @@ func sortedKeys[V any](m map[string]V) []string {
 func CheckEnvironment(paths config.Paths) SectionResult {
 	section := SectionResult{Name: "Environment"}
 
-	// Check config directory is writable (if it exists)
 	if paths.GlobalExists {
 		if isWritable(paths.Global) {
 			section.Results = append(section.Results, CheckResult{
@@ -676,7 +654,6 @@ func CheckEnvironment(paths config.Paths) SectionResult {
 		}
 	}
 
-	// Check working directory is accessible
 	wd, err := os.Getwd()
 	if err != nil {
 		section.Results = append(section.Results, CheckResult{
@@ -731,7 +708,6 @@ func CheckCache() SectionResult {
 	return section
 }
 
-// formatDuration returns a human-readable duration string.
 func formatDuration(d time.Duration) string {
 	if d < time.Second {
 		return "just now"
@@ -764,8 +740,6 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%d days", days)
 }
 
-// originVersion returns the version suffix from an origin string, or the
-// origin itself if no version is present.
 func originVersion(origin string) string {
 	if idx := strings.LastIndex(origin, "@"); idx != -1 {
 		return origin[idx+1:]
@@ -773,7 +747,6 @@ func originVersion(origin string) string {
 	return origin
 }
 
-// expandPath expands ~ to the user's home directory.
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -785,7 +758,6 @@ func expandPath(path string) string {
 	return path
 }
 
-// shortenPath replaces home directory with ~.
 func shortenPath(path string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -797,7 +769,6 @@ func shortenPath(path string) string {
 	return path
 }
 
-// isWritable checks if a directory is writable.
 func isWritable(dir string) bool {
 	testFile := filepath.Join(dir, ".write-test")
 	f, err := os.Create(testFile)

@@ -16,15 +16,9 @@ type DetectedAgent struct {
 	BinaryPath string // Full path to the binary
 }
 
-// DetectAgents checks which agents from the index are installed.
-// It checks each agent's bin field against PATH in parallel and returns
-// every index entry whose Bin is non-empty and resolvable on PATH, sorted
-// lexicographically by key. Entries with an empty Bin are skipped.
-//
-// When several index entries share a bin (e.g. all "claude/*" variants point
-// at "claude"), every variant is returned and the caller is responsible for
-// picking one — auto-setup prompts the user in TTY mode and applies a
-// deterministic heuristic in non-TTY mode.
+// DetectAgents returns every index entry whose Bin is non-empty and resolvable
+// on PATH, sorted by key. Entries sharing a bin are all returned; choosing among
+// variants is the caller's job (auto-setup prompts in TTY, heuristic otherwise).
 func DetectAgents(index *registry.Index) []DetectedAgent {
 	if index == nil || len(index.Agents) == 0 {
 		return nil
@@ -38,7 +32,7 @@ func DetectAgents(index *registry.Index) []DetectedAgent {
 
 	for key, entry := range index.Agents {
 		if entry.Bin == "" {
-			continue // No binary to check
+			continue
 		}
 
 		wg.Add(1)
@@ -47,7 +41,7 @@ func DetectAgents(index *registry.Index) []DetectedAgent {
 
 			path, err := exec.LookPath(e.Bin)
 			if err != nil {
-				return // Not found in PATH
+				return
 			}
 
 			mu.Lock()

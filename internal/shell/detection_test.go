@@ -14,12 +14,10 @@ func TestDetectShell(t *testing.T) {
 		t.Fatalf("DetectShell() error = %v", err)
 	}
 
-	// Should return a path ending with shell name and -c flag
 	if !strings.HasSuffix(shell, " -c") {
 		t.Errorf("DetectShell() = %q, want ending with ' -c'", shell)
 	}
 
-	// Should contain bash or sh
 	if !strings.Contains(shell, "bash") && !strings.Contains(shell, "sh") {
 		t.Errorf("DetectShell() = %q, want containing 'bash' or 'sh'", shell)
 	}
@@ -27,13 +25,14 @@ func TestDetectShell(t *testing.T) {
 
 func TestDetectShell_FallbackToSh(t *testing.T) {
 	// Create a temp dir containing only "sh" (no "bash") and override PATH.
+	// Temp dir with only "sh" (no "bash") overrides PATH to force the sh fallback.
 	dir := t.TempDir()
 	shPath := filepath.Join(dir, "sh")
 	if err := os.WriteFile(shPath, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Setenv("PATH", dir) // bash is not in this PATH
+	t.Setenv("PATH", dir)
 
 	shell, err := DetectShell()
 	if err != nil {
@@ -49,7 +48,7 @@ func TestDetectShell_FallbackToSh(t *testing.T) {
 
 func TestDetectShell_NoShell(t *testing.T) {
 	// Empty PATH so neither bash nor sh is found.
-	dir := t.TempDir() // existing but empty directory
+	dir := t.TempDir()
 	t.Setenv("PATH", dir)
 
 	_, err := DetectShell()
@@ -67,15 +66,14 @@ func TestIsShellAvailable(t *testing.T) {
 		shell string
 		want  bool
 	}{
-		{"bash", true}, // Usually available
-		{"sh", true},   // Always available on Unix
+		{"bash", true},
+		{"sh", true},
 		{"nonexistent_shell_12345", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.shell, func(t *testing.T) {
 			got := IsShellAvailable(tt.shell)
-			// bash may not be available on all systems, so we skip if it fails
 			if tt.shell == "bash" && !got {
 				t.Skip("bash not available on this system")
 			}

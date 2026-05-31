@@ -43,11 +43,9 @@ var describeCategories = []describeCategory{
 	{internalcue.KeyTasks, "tasks", "Task"},
 }
 
-// describeCategoryFor looks up a describeCategory by its category string.
-// Returns nil only if category is not in describeCategories. All callers pass
-// Category values that originate from iterating describeCategories, so nil is
-// unreachable in practice. If a new ModuleMatch source is added, ensure its
-// Category is drawn from describeCategories.
+// describeCategoryFor looks up a describeCategory by its category string,
+// returning nil when not found. Callers pass Category values drawn from
+// describeCategories, so nil is unreachable in practice.
 func describeCategoryFor(category string) *describeCategory {
 	for i := range describeCategories {
 		if describeCategories[i].category == category {
@@ -57,20 +55,18 @@ func describeCategoryFor(category string) *describeCategory {
 	return nil
 }
 
-// parsedAddress represents a user-facing module address. When the input
-// contained an explicit category:name prefix, Category is set and HasPrefix
-// is true. Otherwise Name holds the entire input and Category is empty.
+// parsedAddress represents a user-facing module address. With a category:name
+// prefix, Category is set and HasPrefix is true; otherwise Name holds the whole
+// input and Category is empty.
 type parsedAddress struct {
 	Category  string
 	Name      string
 	HasPrefix bool
 }
 
-// parseAddress splits a user-facing address on the first colon. When a colon
-// is present, the left segment must be one of the four known categories
-// (agents, roles, contexts, tasks) — an unknown prefix returns an error
-// listing the valid set. When no colon is present, the entire input is
-// returned as the bare name with HasPrefix=false.
+// parseAddress splits an address on the first colon. A left segment must be one
+// of the four known categories or an error listing the valid set is returned;
+// with no colon the whole input is the bare name.
 func parseAddress(input string) (parsedAddress, error) {
 	before, after, ok := strings.Cut(input, ":")
 	if !ok {
@@ -84,8 +80,6 @@ func parseAddress(input string) (parsedAddress, error) {
 	return parsedAddress{Category: cat, Name: name, HasPrefix: true}, nil
 }
 
-// knownCategoriesList returns the four valid categories as a comma-separated
-// string for use in error messages.
 func knownCategoriesList() string {
 	names := make([]string, len(describeCategories))
 	for i, c := range describeCategories {
@@ -94,14 +88,11 @@ func knownCategoriesList() string {
 	return strings.Join(names, ", ")
 }
 
-// formatAddress returns the canonical user-facing address for a category and
-// name pair: "category:name". Used at every display site that emits a
-// fully-qualified module address.
+// formatAddress returns the canonical "category:name" address.
 func formatAddress(category, name string) string {
 	return category + ":" + name
 }
 
-// addDescribeCommand adds the describe command and its subcommands to the parent command.
 func addDescribeCommand(parent *cobra.Command, flags *Flags) {
 	describeCmd := &cobra.Command{
 		Use:     "describe [name]",
@@ -131,7 +122,6 @@ To inspect strictly within --local, ensure the module is already installed.`,
 	parent.AddCommand(describeCmd)
 }
 
-// runDescribe displays all configuration or searches for a specific item.
 func runDescribe(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -174,14 +164,12 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runDescribeListing displays all items grouped by category with descriptions.
 func runDescribeListing(cmd *cobra.Command) error {
 	w := cmd.OutOrStdout()
 	stdin := cmd.InOrStdin()
 
 	scope := scopeFromFlags(getFlags(cmd))
 
-	// Show config paths and settings
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -199,7 +187,6 @@ func runDescribeListing(cmd *cobra.Command) error {
 	printSettingsEntries(w, entries)
 	fmt.Fprintln(w)
 
-	// Show categories
 	cfg, err := loadConfig(scope)
 	if err != nil {
 		return err
@@ -255,7 +242,6 @@ func runDescribeListing(cmd *cobra.Command) error {
 		fmt.Fprintln(w)
 	}
 
-	// In TTY mode, prompt for a search query
 	if isTerminal(stdin) {
 		query, err := promptSearchQuery(w, stdin)
 		if err != nil {
@@ -274,7 +260,6 @@ func runDescribeListing(cmd *cobra.Command) error {
 	return nil
 }
 
-// runDescribeSearch handles cross-category search for `start describe <name>`.
 func runDescribeSearch(cmd *cobra.Command, name string) error {
 	w := cmd.OutOrStdout()
 	fmt.Fprintln(w)
@@ -294,13 +279,9 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 		return err
 	}
 
-	// effectiveScope widens to merged after auto-install regardless of the
-	// user's original --local/--global flag. autoInstall always writes to
-	// global config (resolve.go's autoInstall), so merged is the smallest
-	// scope guaranteed to see the new module. Under --global the lookup
-	// result is identical (module only exists in global, merged is a
-	// superset); under --local the widening is required for the lookup to
-	// succeed and is signalled to the user via notifyScopeWidenedIfLocal.
+	// autoInstall always writes to global config, so after an install merged
+	// is the smallest scope guaranteed to see the new module. Widening is a
+	// no-op under --global and required under --local (signalled to the user).
 	effectiveScope := scope
 	if r.didInstall {
 		effectiveScope = config.ScopeMerged
@@ -314,7 +295,6 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	return describeVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType)
 }
 
-// describeVerboseItem prepares and displays a verbose dump for a single item.
 func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string) error {
 	result, err := prepareDescribe(name, scope, cueKey, itemType)
 	if err != nil {
@@ -324,9 +304,6 @@ func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, i
 	return nil
 }
 
-// prepareDescribe prepares describe output for an item type.
-// cueKey is the top-level CUE key (e.g., internalcue.KeyRoles).
-// itemType is the display name (e.g., "Role").
 func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (DescribeResult, error) {
 	if name == "" {
 		return DescribeResult{}, fmt.Errorf("name is required")
@@ -343,7 +320,6 @@ func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (
 		return DescribeResult{}, fmt.Errorf("no %s defined in configuration", typePlural)
 	}
 
-	// Collect all names in config order
 	var allNames []string
 	iter, err := items.Fields()
 	if err != nil {
@@ -359,7 +335,6 @@ func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (
 	resolvedName := name
 	item := items.LookupPath(cue.MakePath(cue.Str(name)))
 	if !item.Exists() {
-		// Try substring match
 		var matches []string
 		for _, n := range allNames {
 			if strings.Contains(n, name) {
@@ -388,23 +363,11 @@ func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (
 	}, nil
 }
 
-// notifyScopeWidenedIfLocal emits a one-line stderr notice when an
-// auto-install during resolution silently widened --local resolution to
-// merged scope. Auto-installs always land in global config (resolve.go's
-// autoInstall), so a --local invocation that triggers an install will then
-// look the module up against merged config — the user's literal --local
-// contract is bypassed. The notice gives scripted callers a grep-able
-// signal; no-op when --local was not set or when --quiet is in effect.
-// Called from runGet and runDescribeSearch after the post-install reload.
-//
-// The post-install reload also widens --global to merged scope, but no
-// notice fires for --global by design: the install lands in global config
-// (matching the user's requested scope), so the widened lookup is a no-op
-// in the common case. The corner case where it matters — a same-named
-// local module whose fields unify with the freshly installed global one —
-// is narrow enough that routine notices on every --global install would
-// trade silent surprise for routine noise. If that edge case becomes a
-// real problem, narrow r.reloadConfig to honour the original scope.
+// notifyScopeWidenedIfLocal emits a grep-able stderr notice when an auto-install
+// silently widened --local resolution to merged scope (auto-installs land in
+// global config, so the lookup then runs against merged). No-op without --local
+// or under --quiet. --global gets no notice by design: the install matches the
+// requested scope, so the widened lookup is a no-op in the common case.
 func notifyScopeWidenedIfLocal(stderr io.Writer, flags *Flags, didInstall bool) {
 	if !didInstall || !flags.Local || flags.Quiet {
 		return
@@ -412,9 +375,8 @@ func notifyScopeWidenedIfLocal(stderr io.Writer, flags *Flags, didInstall bool) 
 	printWarning(stderr, "--local widened to merged scope after registry install")
 }
 
-// scopeFromFlags derives the config scope from --local/--global. Callers reject
-// the both-set combination first via validateScopeFlags, so this helper treats
-// --global as the winner without returning an error.
+// scopeFromFlags derives the config scope from --local/--global. validateScopeFlags
+// rejects the both-set case first, so this treats --global as the winner.
 func scopeFromFlags(flags *Flags) config.Scope {
 	if flags.Global {
 		return config.ScopeGlobal
@@ -425,10 +387,9 @@ func scopeFromFlags(flags *Flags) config.Scope {
 	return config.ScopeMerged
 }
 
-// validateScopeFlags rejects the --local/--global both-set combination as a
-// usage error (exit 2). Done explicitly rather than via Cobra's
-// MarkFlagsMutuallyExclusive because Cobra's flag-group error is untyped and
-// bypasses FlagErrorFunc, so it would otherwise fall through to exit 1.
+// validateScopeFlags rejects the --local/--global both-set case as a usage error
+// (exit 2). Done explicitly because Cobra's MarkFlagsMutuallyExclusive produces
+// an untyped error that bypasses FlagErrorFunc and would exit 1.
 func validateScopeFlags(flags *Flags) error {
 	if flags.Local && flags.Global {
 		return usageError(fmt.Errorf("--local and --global are mutually exclusive"))
@@ -436,7 +397,6 @@ func validateScopeFlags(flags *Flags) error {
 	return nil
 }
 
-// loadConfig loads CUE configuration for the given scope.
 func loadConfig(scope config.Scope) (internalcue.LoadResult, error) {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -471,17 +431,14 @@ func loadConfig(scope config.Scope) (internalcue.LoadResult, error) {
 	return result, err
 }
 
-// printVerboseDump writes the full verbose dump for a DescribeResult.
 func printVerboseDump(w io.Writer, r DescribeResult) {
 	cat := r.Category
 	label := tui.ColorDim.Sprint
 
-	// Header
 	tui.CategoryColor(cat).Fprint(w, r.ItemType)
 	fmt.Fprintf(w, ": %s\n", r.Name)
 	printSeparator(w)
 
-	// Config source
 	configSource := findConfigSource(r.CueKey, r.Name)
 	if configSource != "" {
 		fmt.Fprintf(w, "%s %s %s\n",
@@ -489,7 +446,6 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 			tui.Annotate("%s", r.Name))
 	}
 
-	// Origin and cache
 	origin := orchestration.ExtractOrigin(r.Value)
 	if origin != "" {
 		fmt.Fprintf(w, "%s %s\n", label("Origin:"), origin)
@@ -499,17 +455,14 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 		}
 	}
 
-	// Formatted metadata
 	printMetadataBlock(w, r)
 
-	// CUE Definition
 	cueDef := formatCUEDefinition(r.Value)
 	if cueDef != "" {
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, cueDef)
 	}
 
-	// File contents
 	fields := orchestration.ExtractUTDFields(r.Value)
 	if fields.File != "" {
 		fmt.Fprintln(w)
@@ -531,7 +484,6 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 		}
 	}
 
-	// Command
 	if fields.Command != "" {
 		cmd := fields.Command
 		if r.ItemType == "Agent" {
@@ -544,15 +496,9 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 	printSeparator(w)
 }
 
-// printMetadataBlock writes a formatted, category-specific metadata block
-// for scannable inspection of common fields. Decodes the per-item cue.Value
-// into the corresponding typed struct and delegates to the shared writer,
-// which owns its own leading blank line and emits nothing when no
-// category-specific fields would be rendered.
-//
-// For role/context/task, File and Command are zeroed before invoking the
-// writer so they are not rendered here — printVerboseDump emits them
-// separately below via ExtractUTDFields.
+// printMetadataBlock writes a category-specific metadata block. For
+// role/context/task, File and Command are zeroed first so they are not rendered
+// here — printVerboseDump emits them separately via ExtractUTDFields.
 func printMetadataBlock(w io.Writer, r DescribeResult) {
 	switch r.ItemType {
 	case "Agent":
@@ -572,9 +518,9 @@ func printMetadataBlock(w io.Writer, r DescribeResult) {
 	}
 }
 
-// findConfigSource determines which config file defines an item.
-// This loads each config dir separately via LoadSingle rather than reusing the
-// merged config because merged CUE values lose per-file position information.
+// findConfigSource determines which config file defines an item. It loads each
+// dir separately via LoadSingle because merged CUE values lose per-file
+// position information.
 func findConfigSource(cueKey, name string) string {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -583,7 +529,7 @@ func findConfigSource(cueKey, name string) string {
 
 	loader := internalcue.NewLoader()
 
-	// Check local first (higher priority - overrides global)
+	// Local first — it overrides global.
 	if paths.LocalExists {
 		if v, err := loader.LoadSingle(paths.Local); err == nil {
 			item := v.LookupPath(cue.ParsePath(cueKey)).LookupPath(cue.MakePath(cue.Str(name)))
@@ -595,7 +541,6 @@ func findConfigSource(cueKey, name string) string {
 		}
 	}
 
-	// Check global
 	if paths.GlobalExists {
 		if v, err := loader.LoadSingle(paths.Global); err == nil {
 			item := v.LookupPath(cue.ParsePath(cueKey)).LookupPath(cue.MakePath(cue.Str(name)))
@@ -610,7 +555,6 @@ func findConfigSource(cueKey, name string) string {
 	return ""
 }
 
-// formatCUEDefinition formats a CUE value as CUE syntax.
 func formatCUEDefinition(v cue.Value) string {
 	syn := v.Syntax(
 		cue.Concrete(false),
@@ -626,14 +570,11 @@ func formatCUEDefinition(v cue.Value) string {
 	return string(b)
 }
 
-// resolveDescribeFile resolves a file reference and reads its contents.
-// Returns the resolved path, content, and any error.
 func resolveDescribeFile(filePath, origin string) (resolvedPath, content string, err error) {
 	if filePath == "" {
 		return "", "", nil
 	}
 
-	// @module/ paths
 	if strings.HasPrefix(filePath, "@module/") {
 		if origin == "" {
 			return "", "", fmt.Errorf("@module/ path requires origin field: %s", filePath)
@@ -649,7 +590,6 @@ func resolveDescribeFile(filePath, origin string) (resolvedPath, content string,
 		return resolved, string(data), nil
 	}
 
-	// ~/ and other paths
 	expanded, err := orchestration.ExpandFilePath(filePath)
 	if err != nil {
 		return "", "", err
@@ -662,17 +602,11 @@ func resolveDescribeFile(filePath, origin string) (resolvedPath, content string,
 	return expanded, string(data), nil
 }
 
-// partialFillAgentCommand substitutes the static {{.bin}} and {{.model}}
-// placeholders in an agent command template with their resolved values.
-// Runtime placeholders ({{.prompt}}, {{.role}}, {{.role_file}}, {{.datetime}})
-// are left as-is since they are only known at execution time.
-//
-// modelOverride, when non-empty, replaces the agent's default_model — the
-// caller is expected to have already resolved it (e.g. via
-// resolver.resolveModelName for `get`) so that exact and substring matches
-// against the models map have been applied. With an empty override, the
-// agent's default_model is used. Both paths look the resolved key up in the
-// models map; unknown keys pass through as the literal id.
+// partialFillAgentCommand fills the static {{.bin}} and {{.model}} placeholders,
+// leaving runtime ones ({{.prompt}}, {{.role}}, ...) for execution time.
+// modelOverride (already resolved by the caller) replaces default_model when
+// non-empty. Both paths look the key up in the models map; unknown keys pass
+// through as the literal id.
 func partialFillAgentCommand(command string, v cue.Value, modelOverride string) string {
 	bin := ""
 	if f := v.LookupPath(cue.ParsePath("bin")); f.Exists() {
@@ -689,11 +623,9 @@ func partialFillAgentCommand(command string, v cue.Value, modelOverride string) 
 		if models := v.LookupPath(cue.ParsePath("models")); models.Exists() {
 			entry := models.LookupPath(cue.MakePath(cue.Str(model)))
 			if entry.Exists() {
-				// Simple string format: models: { sonnet: "model-id" }
 				if s, err := entry.String(); err == nil {
 					model = s
 				} else if idVal := entry.LookupPath(cue.ParsePath("id")); idVal.Exists() {
-					// Object format: models: { sonnet: { id: "model-id" } }
 					if s, err := idVal.String(); err == nil {
 						model = s
 					}
@@ -712,7 +644,6 @@ func partialFillAgentCommand(command string, v cue.Value, modelOverride string) 
 	return result
 }
 
-// deriveCacheDir constructs the CUE cache directory for an origin.
 func deriveCacheDir(origin string) string {
 	cacheDir, err := orchestration.GetCUECacheDir()
 	if err != nil {
@@ -731,7 +662,6 @@ func deriveCacheDir(origin string) string {
 		filepath.Base(modulePath)+version)
 }
 
-// capitalise returns s with the first rune converted to upper case.
 func capitalise(s string) string {
 	if s == "" {
 		return s

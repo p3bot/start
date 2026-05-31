@@ -10,7 +10,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigGetCommand adds the "config get [query]" command.
 func addConfigGetCommand(parent *cobra.Command, flags *Flags) {
 	cmd := &cobra.Command{
 		Use:   "get [query]",
@@ -41,7 +40,6 @@ commands operate on different data:
 	parent.AddCommand(cmd)
 }
 
-// runConfigGet is the handler for "config get [query]".
 func runConfigGet(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -113,7 +111,6 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	return printConfigGet(stdout, scope, selected)
 }
 
-// runConfigGetInteractive prompts for category then item, then shows the entry.
 func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, scope config.Scope) error {
 	fmt.Fprintln(stdout, "Get:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
@@ -140,7 +137,6 @@ func runConfigGetInteractive(stdin io.Reader, stdout io.Writer, scope config.Sco
 	return printConfigGet(stdout, scope, configMatch{Name: selected, Category: singular})
 }
 
-// printConfigGet displays the raw config fields for a single matched item.
 func printConfigGet(w io.Writer, scope config.Scope, m configMatch) error {
 	switch m.Category {
 	case "agent":
@@ -155,10 +151,8 @@ func printConfigGet(w io.Writer, scope config.Scope, m configMatch) error {
 	return fmt.Errorf("unknown category %q", m.Category)
 }
 
-// printAgentGet displays raw fields for an agent. The header section emits
-// Source / Origin / Command (Command is agent-only and not owned by the
-// shared writer); the writer owns its own leading blank line and renders
-// the rest.
+// Command is agent-only and not emitted by the shared metadata writer, so the
+// header section prints it inline here; the writer owns its own leading blank line.
 func printAgentGet(w io.Writer, scope config.Scope, name string) error {
 	agents, _, err := loadAgentsForScope(scope)
 	if err != nil {
@@ -190,10 +184,6 @@ func printAgentGet(w io.Writer, scope config.Scope, name string) error {
 	return nil
 }
 
-// printRoleGet displays raw fields for a role. The header section emits
-// Source / Origin; everything below — including the leading blank line — is
-// owned by the shared writer (Description -> File -> Command -> Prompt ->
-// Optional -> Tags).
 func printRoleGet(w io.Writer, scope config.Scope, name string) error {
 	roles, _, err := loadRolesForScope(scope)
 	if err != nil {
@@ -223,9 +213,6 @@ func printRoleGet(w io.Writer, scope config.Scope, name string) error {
 	return nil
 }
 
-// printContextGet displays raw fields for a context. The header section
-// emits Source / Origin; everything below — including the leading blank
-// line — is owned by the shared writer.
 func printContextGet(w io.Writer, scope config.Scope, name string) error {
 	contexts, _, err := loadContextsForScope(scope)
 	if err != nil {
@@ -255,9 +242,6 @@ func printContextGet(w io.Writer, scope config.Scope, name string) error {
 	return nil
 }
 
-// printTaskGet displays raw fields for a task. The header section emits
-// Source / Origin; everything below — including the leading blank line —
-// is owned by the shared writer.
 func printTaskGet(w io.Writer, scope config.Scope, name string) error {
 	tasks, _, err := loadTasksForScope(scope)
 	if err != nil {

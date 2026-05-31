@@ -42,7 +42,6 @@ func TestWriteIndex_and_ReadIndex(t *testing.T) {
 		t.Fatalf("WriteIndex() error: %v", err)
 	}
 
-	// Verify file was created.
 	cacheFile := filepath.Join(tmp, "start", "cache.cue")
 	if _, err := os.Stat(cacheFile); err != nil {
 		t.Fatalf("Cache file not created: %v", err)
@@ -57,7 +56,6 @@ func TestWriteIndex_and_ReadIndex(t *testing.T) {
 		t.Errorf("Version = %q, want %q", cached.Version, version)
 	}
 
-	// Updated should be within the last few seconds.
 	if time.Since(cached.Updated) > 5*time.Second {
 		t.Errorf("Updated = %v, expected within last 5 seconds", cached.Updated)
 	}

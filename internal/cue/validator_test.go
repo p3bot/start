@@ -53,7 +53,6 @@ func TestValidator_Validate(t *testing.T) {
 		`)
 
 		v := NewValidator()
-		// Without Concrete(true), non-concrete values are allowed
 		err := v.Validate(value)
 		if err != nil {
 			t.Errorf("Validate() error = %v, want nil", err)
@@ -118,7 +117,6 @@ func TestValidator_ValidatePath(t *testing.T) {
 			t.Error("ValidatePath() should return error for non-existing path")
 		}
 
-		// Check error message
 		if !strings.Contains(err.Error(), "does not exist") {
 			t.Errorf("error message should contain 'does not exist', got: %v", err)
 		}

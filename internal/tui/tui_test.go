@@ -164,10 +164,9 @@ func TestProgress_TTY_Update_Padding(t *testing.T) {
 	// Start with width 20 to force padding when a shorter message is written.
 	p := &Progress{w: buf, tty: true, width: 20}
 
-	p.Update("hi") // shorter than previous width of 20
+	p.Update("hi") // shorter than previous width, so output must pad to overwrite it
 
 	out := buf.String()
-	// The output should pad to overwrite the previous 20-char line.
 	if len(out) < 20 {
 		t.Errorf("Update() should pad to overwrite previous line; output len %d, want >= 20", len(out))
 	}

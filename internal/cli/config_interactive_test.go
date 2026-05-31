@@ -20,7 +20,6 @@ func TestConfigInteractive_RequiresTerminal(t *testing.T) {
 		{[]string{"config", "edit"}, "interactive edit requires a terminal"},
 		{[]string{"config", "remove"}, "interactive remove requires a terminal"},
 		{[]string{"config", "get"}, "interactive get requires a terminal"},
-		// Explicit category arg still requires terminal for interactive prompts
 		{[]string{"config", "add", "agent"}, "interactive add requires a terminal"},
 		{[]string{"config", "add", "role"}, "interactive add requires a terminal"},
 		{[]string{"config", "add", "context"}, "interactive add requires a terminal"},
@@ -55,7 +54,6 @@ func TestLoadNamesForCategory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Seed one item in each category using stdin-driven interactive input.
 	if err := configAgentAdd(slowStdin("my-agent\nagent\n"+`agent "{{.prompt}}"`+"\n\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 		t.Fatalf("setup agent add failed: %v", err)
 	}

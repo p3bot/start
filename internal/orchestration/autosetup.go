@@ -31,8 +31,7 @@ type AutoSetupResult struct {
 	ConfigPath string
 }
 
-// AutoSetup performs first-run auto-setup.
-// It detects installed AI CLI tools, prompts if needed, and writes config.
+// AutoSetup performs first-run auto-setup: detect AI CLI tools, prompt if needed, write config.
 type AutoSetup struct {
 	stdout io.Writer
 	stderr io.Writer
@@ -57,13 +56,11 @@ func NeedsSetup(paths config.Paths) bool {
 
 // Run executes the auto-setup flow.
 func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
-	// Create registry client
 	client, err := registry.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("creating registry client: %w", err)
 	}
 
-	// Fetch index
 	fmt.Fprintln(a.stdout, "Fetching agent index...")
 	index, indexVersion, err := client.FetchIndex(ctx, "") // use built-in default; auto-setup runs before user settings exist
 	if err != nil {
@@ -71,7 +68,6 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	}
 	_ = cache.WriteIndex(indexVersion)
 
-	// Detect installed agents (every variant whose bin is in PATH).
 	detected := detection.DetectAgents(index)
 	if len(detected) == 0 {
 		return nil, a.noAgentsError(index)
@@ -82,7 +78,6 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 		return nil, err
 	}
 
-	// Resolve to canonical version and fetch agent module
 	fmt.Fprintln(a.stdout, "Fetching configuration...")
 	resolvedPath, err := client.ResolveLatestVersion(ctx, selected.Entry.Module)
 	if err != nil {
@@ -94,17 +89,14 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 		return nil, fmt.Errorf("fetching agent module: %w", err)
 	}
 
-	// loadAgentFromModule receives selected.Key as the agent name, which
-	// flows into agent.Name via extractAgentFields. The slash-form key
-	// (e.g. "claude/interactive") becomes both the agents.cue label and
-	// the settings.cue default_agent value, matching what 'start install'
-	// produces so the two writers cannot drift.
+	// selected.Key (slash-form, e.g. "claude/interactive") becomes both the agents.cue
+	// label and the settings.cue default_agent value, matching 'start install' so the
+	// two writers cannot drift.
 	agent, err := loadAgentFromModule(agentResult.SourceDir, selected.Key, client.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("loading agent: %w", err)
 	}
 
-	// Write config
 	configPath, err := a.writeConfig(agent)
 	if err != nil {
 		return nil, fmt.Errorf("writing config: %w", err)
@@ -112,7 +104,6 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 
 	fmt.Fprintf(a.stdout, "Configuration saved to %s\n", configPath)
 
-	// Install default modules (contexts that are commonly needed)
 	a.installDefaultModules(ctx, client, index)
 
 	fmt.Fprintln(a.stdout)
@@ -132,7 +123,6 @@ func (a *AutoSetup) noAgentsError(index *registry.Index) error {
 	sb.WriteString("No AI CLI tools detected in PATH.\n\n")
 	sb.WriteString("Install one of:\n")
 
-	// List available agents from index
 	var agents []struct {
 		bin  string
 		desc string
@@ -189,7 +179,6 @@ func (a *AutoSetup) selectAgent(detected []detection.DetectedAgent) (detection.D
 		return chosen, nil
 	}
 
-	// Multiple bins.
 	if a.isTTY {
 		reps := make([]detection.DetectedAgent, 0, len(binNames))
 		for _, bin := range binNames {
@@ -402,17 +391,15 @@ func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, error)
 	return extractAgentFromValue(v, key)
 }
 
-// extractAgentFromValue extracts agent config from a CUE value.
-// It tries multiple lookup paths to handle both user config and registry module formats.
+// extractAgentFromValue extracts agent config from a CUE value, trying multiple
+// lookup paths to handle both user config and registry module formats.
 func extractAgentFromValue(v cue.Value, name string) (Agent, error) {
-	// Try looking up under "agents" map first (user config style)
 	agentVal := v.LookupPath(cue.ParsePath(internalcue.KeyAgents)).LookupPath(cue.MakePath(cue.Str(name)))
 	if !agentVal.Exists() {
-		// Try singular "agent" field (registry module style)
+		// Singular "agent" field is the registry module style.
 		agentVal = v.LookupPath(cue.ParsePath("agent"))
 	}
 	if !agentVal.Exists() {
-		// Try root level as last resort
 		agentVal = v
 	}
 
@@ -435,19 +422,16 @@ func (a *AutoSetup) writeConfig(agent Agent) (string, error) {
 		return "", err
 	}
 
-	// Create config directory
 	if err := os.MkdirAll(paths.Global, 0755); err != nil {
 		return "", fmt.Errorf("creating config directory: %w", err)
 	}
 
-	// Write agents.cue
 	agentContent := generateAgentCUE(agent)
 	agentPath := filepath.Join(paths.Global, "agents.cue")
 	if err := os.WriteFile(agentPath, []byte(agentContent), 0644); err != nil {
 		return "", fmt.Errorf("writing agents file: %w", err)
 	}
 
-	// Write settings.cue with default agent with settings
 	configContent := generateSettingsCUE(agent.Name)
 	configPath := filepath.Join(paths.Global, "settings.cue")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -483,7 +467,7 @@ func generateAgentCUE(agent Agent) string {
 	if len(agent.Models) > 0 {
 		sb.WriteString("\t\tmodels: {\n")
 
-		// Sort model names for consistent output
+		// Sort for deterministic output.
 		var modelNames []string
 		for name := range agent.Models {
 			modelNames = append(modelNames, name)
@@ -491,7 +475,6 @@ func generateAgentCUE(agent Agent) string {
 		sort.Strings(modelNames)
 
 		for _, name := range modelNames {
-			// Quote model names that contain special characters
 			fmt.Fprintf(&sb, "\t\t\t%q: %q\n", name, agent.Models[name])
 		}
 		sb.WriteString("\t\t}\n")
@@ -519,7 +502,6 @@ func generateSettingsCUE(defaultAgent string) string {
 // installDefaultModules installs commonly-needed contexts during auto-setup.
 // Errors are logged to stderr but don't fail the setup process.
 func (a *AutoSetup) installDefaultModules(ctx context.Context, client registry.Client, index *registry.Index) {
-	// Get global config directory
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		fmt.Fprintf(a.stderr, "Warning: Failed to resolve config paths: %v\n", err)
@@ -527,7 +509,6 @@ func (a *AutoSetup) installDefaultModules(ctx context.Context, client registry.C
 	}
 	configDir := paths.Global
 
-	// List of default modules to install (currently just cwd/agents-md)
 	defaultModules := []struct {
 		category string
 		name     string
@@ -535,9 +516,8 @@ func (a *AutoSetup) installDefaultModules(ctx context.Context, client registry.C
 		{category: "contexts", name: "cwd/agents-md"},
 	}
 
-	// Load CUE config once for existence checks.
 	// On error with no CUE files (fresh install), cfg is a zero-value cue.Value;
-	// LookupPath on it returns non-existent, so ModuleExists correctly returns false.
+	// LookupPath then returns non-existent, so ModuleExists correctly returns false.
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(configDir)
 	if err != nil {

@@ -11,16 +11,14 @@ import (
 	internalcue "github.com/start-cli/start/internal/cue"
 )
 
-// setupTestConfig creates a temp directory with CUE config for testing.
-//
-// Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
-// to any test that calls os.Chdir — it will cause data races on the working directory.
+// setupTestConfig creates a temp directory with CUE config. Tests calling it
+// use os.Chdir, so they must not run in parallel.
 func setupTestConfig(t *testing.T) string {
 	t.Helper()
 
 	dir := t.TempDir()
 
-	// CUE extracts registry modules with read-only permissions; chmod before TempDir cleanup.
+	// CUE extracts modules read-only; chmod before TempDir cleanup.
 	t.Cleanup(func() {
 		_ = filepath.Walk(filepath.Join(dir, ".cache"), func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -96,8 +94,7 @@ tasks: {
 	return dir
 }
 
-// setupTestConfigWithFiles creates a test config that includes file-based resources
-// with actual readable files.
+// setupTestConfigWithFiles creates a config with readable file-based resources.
 func setupTestConfigWithFiles(t *testing.T) string {
 	t.Helper()
 
@@ -107,13 +104,11 @@ func setupTestConfigWithFiles(t *testing.T) string {
 		t.Fatalf("creating .start dir: %v", err)
 	}
 
-	// Create a file-based role
 	roleFile := filepath.Join(dir, "role.md")
 	if err := os.WriteFile(roleFile, []byte("You are a Go expert."), 0644); err != nil {
 		t.Fatalf("writing role file: %v", err)
 	}
 
-	// Create a file-based context
 	contextFile := filepath.Join(dir, "context.md")
 	if err := os.WriteFile(contextFile, []byte("Project context info."), 0644); err != nil {
 		t.Fatalf("writing context file: %v", err)
@@ -162,7 +157,7 @@ tasks: {
 	return dir
 }
 
-// setupTestConfigWithOrigin creates a test config with origin fields for testing
+// setupTestConfigWithOrigin creates a config with origin fields for testing the
 // verbose dump of registry-installed modules.
 func setupTestConfigWithOrigin(t *testing.T) string {
 	t.Helper()
@@ -193,7 +188,6 @@ roles: {
 	return dir
 }
 
-// TestPrepareDescribeAgent tests the prepareDescribe function for agents.
 func TestPrepareDescribeAgent(t *testing.T) {
 	setupTestConfig(t)
 
@@ -264,7 +258,6 @@ func TestPrepareDescribeAgent(t *testing.T) {
 					t.Errorf("AllNames length = %d, want %d", len(result.AllNames), len(tt.wantAllNames))
 				}
 			}
-			// Verify Value is populated
 			if !result.Value.Exists() {
 				t.Error("Value should exist")
 			}
@@ -272,7 +265,6 @@ func TestPrepareDescribeAgent(t *testing.T) {
 	}
 }
 
-// TestPrepareDescribeRole tests the prepareDescribe function for roles.
 func TestPrepareDescribeRole(t *testing.T) {
 	setupTestConfig(t)
 
@@ -333,7 +325,6 @@ func TestPrepareDescribeRole(t *testing.T) {
 	}
 }
 
-// TestPrepareDescribeContext tests the prepareDescribe function for contexts.
 func TestPrepareDescribeContext(t *testing.T) {
 	setupTestConfig(t)
 
@@ -394,7 +385,6 @@ func TestPrepareDescribeContext(t *testing.T) {
 	}
 }
 
-// TestPrepareDescribeTask tests the prepareDescribe function for tasks.
 func TestPrepareDescribeTask(t *testing.T) {
 	setupTestConfig(t)
 
@@ -455,7 +445,6 @@ func TestPrepareDescribeTask(t *testing.T) {
 	}
 }
 
-// TestPrepareDescribeLocalNoConfig verifies that ScopeLocal returns an error when no local config exists.
 func TestPrepareDescribeLocalNoConfig(t *testing.T) {
 	dir := t.TempDir()
 	// No .start directory created — local config is absent
@@ -471,7 +460,6 @@ func TestPrepareDescribeLocalNoConfig(t *testing.T) {
 	}
 }
 
-// TestPrepareDescribeGlobalNoConfig verifies that ScopeGlobal returns an error when no global config exists.
 func TestPrepareDescribeGlobalNoConfig(t *testing.T) {
 	dir := t.TempDir()
 	// No ~/.config/start directory — global config is absent
@@ -487,12 +475,10 @@ func TestPrepareDescribeGlobalNoConfig(t *testing.T) {
 	}
 }
 
-// TestDescribeGlobalFlag verifies --global flag behaviour: listing and subcommands
-// describe only global config, excluding local items.
+// --global restricts listing and subcommands to global config, excluding local items.
 func TestDescribeGlobalFlag(t *testing.T) {
 	dir := t.TempDir()
 
-	// Global config at ~/.config/start/
 	globalStartDir := filepath.Join(dir, ".config", "start")
 	if err := os.MkdirAll(globalStartDir, 0755); err != nil {
 		t.Fatalf("creating global config dir: %v", err)
@@ -510,7 +496,6 @@ agents: {
 		t.Fatalf("writing global config: %v", err)
 	}
 
-	// Local config at ./.start/ with a different agent
 	localStartDir := filepath.Join(dir, ".start")
 	if err := os.MkdirAll(localStartDir, 0755); err != nil {
 		t.Fatalf("creating local config dir: %v", err)
@@ -572,10 +557,7 @@ agents: {
 	})
 }
 
-// TestDescribeListingSettingsScope verifies the settings block inside the
-// describe listing honours --local/--global/no-flag. The same setting key
-// (default_agent) is defined with a distinct value in global and local
-// config; each scope should surface only the matching value.
+// The settings block in the describe listing must honour --local/--global/no-flag.
 func TestDescribeListingSettingsScope(t *testing.T) {
 	dir := t.TempDir()
 
@@ -648,9 +630,8 @@ settings: {
 			}
 
 			output := buf.String()
-			// Scope the assertion to the settings/ block so a future change
-			// that surfaces an agent name elsewhere in the listing cannot
-			// make the negative assertion pass for the wrong reason.
+			// Scope to the settings/ block so an agent name elsewhere in the
+			// listing can't make the negative assertion pass spuriously.
 			settingsBlock := extractDescribeSection(output, "settings")
 			if settingsBlock == "" {
 				t.Fatalf("settings block not found in output:\n%s", output)
@@ -665,11 +646,9 @@ settings: {
 	}
 }
 
-// extractDescribeSection returns the slice of describe-listing output that
-// starts at the given category header ("settings", "agents", ...) and ends
-// at the next blank line. The header must appear on its own line — anchoring
-// on "\n<header>/\n" avoids collisions with filesystem paths printed in the
-// Configuration Paths block above. Returns "" if the header is not found.
+// extractDescribeSection returns the listing slice from the given category
+// header to the next blank line, "" if absent. Anchoring on "\n<header>/\n"
+// avoids collisions with filesystem paths in the Configuration Paths block.
 func extractDescribeSection(output, header string) string {
 	anchor := "\n" + header + "/\n"
 	idx := strings.Index(output, anchor)
@@ -683,7 +662,6 @@ func extractDescribeSection(output, header string) string {
 	return rest
 }
 
-// TestVerboseDumpCUEDefinition verifies CUE definition output in verbose dump.
 func TestVerboseDumpCUEDefinition(t *testing.T) {
 	setupTestConfig(t)
 
@@ -696,7 +674,6 @@ func TestVerboseDumpCUEDefinition(t *testing.T) {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// CUE definition should contain struct markers and field names
 	wantStrings := []string{
 		"bin:",
 		"command:",
@@ -713,8 +690,6 @@ func TestVerboseDumpCUEDefinition(t *testing.T) {
 	}
 }
 
-// TestVerboseDumpAgentCommand verifies that agent command templates have
-// {{.bin}} and {{.model}} filled with resolved values in the verbose dump.
 func TestVerboseDumpAgentCommand(t *testing.T) {
 	setupTestConfig(t)
 
@@ -727,18 +702,15 @@ func TestVerboseDumpAgentCommand(t *testing.T) {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// bin and resolved model should appear in the Command line
 	if !strings.Contains(output, "Command: claude --model claude-sonnet-4-20250514") {
 		t.Errorf("Command line missing resolved bin and model\ngot:\n%s", output)
 	}
 
-	// Runtime placeholder should remain unfilled
 	if !strings.Contains(output, "{{.prompt}}") {
 		t.Errorf("Command line should retain {{.prompt}} placeholder\ngot:\n%s", output)
 	}
 }
 
-// TestVerboseDumpConfigSource verifies config source path in verbose dump.
 func TestVerboseDumpConfigSource(t *testing.T) {
 	dir := setupTestConfig(t)
 
@@ -751,19 +723,16 @@ func TestVerboseDumpConfigSource(t *testing.T) {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// Config source should show the .cue file path
 	expectedPath := filepath.Join(dir, ".start", "settings.cue")
 	if !strings.Contains(output, expectedPath) {
 		t.Errorf("output missing config source path %q\ngot:\n%s", expectedPath, output)
 	}
 
-	// Config line should contain item name in parentheses
 	if !strings.Contains(output, "claude") {
 		t.Errorf("output missing item name 'claude'\ngot:\n%s", output)
 	}
 }
 
-// TestVerboseDumpOriginCache verifies origin and cache display for registry modules.
 func TestVerboseDumpOriginCache(t *testing.T) {
 	setupTestConfigWithOrigin(t)
 
@@ -776,18 +745,15 @@ func TestVerboseDumpOriginCache(t *testing.T) {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// Origin should be displayed
 	if !strings.Contains(output, "github.com/start-cli/library/roles/golang@v1.0.0") {
 		t.Errorf("output missing origin\ngot:\n%s", output)
 	}
 
-	// Cache directory should contain mod/extract path
 	if !strings.Contains(output, "mod/extract") {
 		t.Errorf("output missing cache path\ngot:\n%s", output)
 	}
 }
 
-// TestVerboseDumpFileContent verifies file content display.
 func TestVerboseDumpFileContent(t *testing.T) {
 	setupTestConfigWithFiles(t)
 
@@ -800,13 +766,11 @@ func TestVerboseDumpFileContent(t *testing.T) {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// Should display the file content
 	if !strings.Contains(output, "You are a Go expert.") {
 		t.Errorf("output missing file content\ngot:\n%s", output)
 	}
 }
 
-// TestVerboseDumpFileError verifies inline error for unreadable files.
 func TestVerboseDumpFileError(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
@@ -839,13 +803,11 @@ roles: {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// Should show inline error, not crash
 	if !strings.Contains(output, "[error:") {
 		t.Errorf("output missing inline error\ngot:\n%s", output)
 	}
 }
 
-// TestVerboseDumpCommand verifies command display.
 func TestVerboseDumpCommand(t *testing.T) {
 	setupTestConfig(t)
 
@@ -858,13 +820,11 @@ func TestVerboseDumpCommand(t *testing.T) {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// Should display command as string
 	if !strings.Contains(output, "git diff --staged") {
 		t.Errorf("output missing command\ngot:\n%s", output)
 	}
 }
 
-// TestVerboseDumpSeparators verifies separator lines in verbose dump.
 func TestVerboseDumpSeparators(t *testing.T) {
 	setupTestConfig(t)
 
@@ -884,7 +844,6 @@ func TestVerboseDumpSeparators(t *testing.T) {
 	}
 }
 
-// TestDescribeListingDescriptions verifies enhanced listing with descriptions.
 func TestDescribeListingDescriptions(t *testing.T) {
 	setupTestConfig(t)
 
@@ -900,7 +859,6 @@ func TestDescribeListingDescriptions(t *testing.T) {
 
 	output := buf.String()
 
-	// Check category headers
 	if !strings.Contains(output, "agents/") {
 		t.Error("output missing agents/ header")
 	}
@@ -914,7 +872,6 @@ func TestDescribeListingDescriptions(t *testing.T) {
 		t.Error("output missing tasks/ header")
 	}
 
-	// Check names are present
 	if !strings.Contains(output, "claude") {
 		t.Error("output missing agent name 'claude'")
 	}
@@ -922,7 +879,6 @@ func TestDescribeListingDescriptions(t *testing.T) {
 		t.Error("output missing role name 'assistant'")
 	}
 
-	// Check descriptions are present alongside names
 	if !strings.Contains(output, "Claude by Anthropic") {
 		t.Error("output missing description 'Claude by Anthropic'")
 	}
@@ -934,7 +890,6 @@ func TestDescribeListingDescriptions(t *testing.T) {
 	}
 }
 
-// TestDescribeListingNoDescriptions verifies items without descriptions are listed.
 func TestDescribeListingNoDescriptions(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
@@ -972,7 +927,6 @@ roles: {
 	}
 }
 
-// TestDescribeCrossCategory verifies cross-category search with a single match.
 func TestDescribeCrossCategory(t *testing.T) {
 	setupTestConfig(t)
 
@@ -988,19 +942,15 @@ func TestDescribeCrossCategory(t *testing.T) {
 
 	output := buf.String()
 
-	// Should show verbose dump for claude agent
 	if !strings.Contains(output, "Agent: claude") {
 		t.Errorf("output missing 'Agent: claude'\ngot:\n%s", output)
 	}
 
-	// Should contain CUE definition
 	if !strings.Contains(output, "bin:") {
 		t.Errorf("output missing CUE definition\ngot:\n%s", output)
 	}
 }
 
-// TestDescribeCrossCategoryMultipleExact verifies ambiguity when an exact name exists
-// in multiple categories (non-TTY returns error).
 func TestDescribeCrossCategoryMultipleExact(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
@@ -1008,7 +958,7 @@ func TestDescribeCrossCategoryMultipleExact(t *testing.T) {
 		t.Fatalf("creating .start dir: %v", err)
 	}
 
-	// "helper" exists as both a role and a task
+	// "helper" exists as both a role and a task.
 	cueConfig := `
 roles: {
 	helper: {
@@ -1034,7 +984,6 @@ tasks: {
 	cmd := NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	// stdin is not a TTY in tests, so multiple matches should return an error
 	cmd.SetArgs([]string{"describe", "helper"})
 
 	err := cmd.Execute()
@@ -1046,7 +995,6 @@ tasks: {
 	}
 }
 
-// TestDescribeCommandIntegration tests the full command flow via Cobra.
 func TestDescribeCommandIntegration(t *testing.T) {
 	setupTestConfig(t)
 
@@ -1148,7 +1096,6 @@ func TestDescribeCommandIntegration(t *testing.T) {
 	}
 }
 
-// TestFormatCUEDefinition verifies the CUE definition formatter.
 func TestFormatCUEDefinition(t *testing.T) {
 	setupTestConfig(t)
 
@@ -1162,7 +1109,6 @@ func TestFormatCUEDefinition(t *testing.T) {
 		t.Fatal("formatCUEDefinition returned empty string")
 	}
 
-	// Should contain CUE syntax markers
 	if !strings.Contains(def, "{") {
 		t.Error("CUE definition missing struct marker '{'")
 	}
@@ -1174,9 +1120,7 @@ func TestFormatCUEDefinition(t *testing.T) {
 	}
 }
 
-// TestResolveDescribeFile verifies file resolution for different path types.
 func TestResolveDescribeFile(t *testing.T) {
-	// Create a temp file
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.md")
 	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
@@ -1214,7 +1158,6 @@ func TestResolveDescribeFile(t *testing.T) {
 	})
 }
 
-// TestDeriveCacheDir verifies cache directory derivation from origin.
 func TestDeriveCacheDir(t *testing.T) {
 	t.Run("origin with version", func(t *testing.T) {
 		result := deriveCacheDir("github.com/start-cli/library/roles/golang@v1.0.0")
@@ -1237,10 +1180,8 @@ func TestDeriveCacheDir(t *testing.T) {
 	})
 }
 
-// TestNotifyScopeWidenedIfLocal pins the conditions under which the notice
-// fires. The message itself carries grep-able text that scripted callers may
-// use to detect silent --local widening; the test asserts both presence of
-// that text in positive cases and absence in negative cases.
+// Pins when the notice fires; its grep-able text lets scripted callers detect
+// silent --local widening.
 func TestNotifyScopeWidenedIfLocal(t *testing.T) {
 	t.Parallel()
 
@@ -1277,17 +1218,8 @@ func TestNotifyScopeWidenedIfLocal(t *testing.T) {
 	}
 }
 
-// TestVerboseDumpMetadataBlock covers the formatted metadata block added to
-// printVerboseDump. Each case asserts the labelled lines a category emits
-// when its fields are populated, and verifies the empty-fields case emits no
-// metadata block for categories where every field is optional.
-//
-// Tier-3/tier-4 resolver behaviour is covered in cross_resolve_test.go
-// (TestResolveCrossCategory_ExactRegistryBranchInstalls,
-// TestResolveCrossCategory_CombinedSingleRegistryBranchInstalls,
-// TestResolveCrossCategory_CombinedMultipleRegistryNonTTY). runDescribeSearch
-// is a thin wrapper around resolveCrossCategory plus printVerboseDump, so
-// duplicating those at the handler level adds no new code-path coverage.
+// Asserts the labelled lines each category emits, and that the empty-fields
+// case emits no block where every field is optional.
 func TestVerboseDumpMetadataBlock(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -1507,8 +1439,6 @@ tasks: {
 	}
 }
 
-// TestVerboseDumpMetadataBlock_ModelsSortedByAlias verifies that agent model
-// aliases are emitted in alphabetical order, as required by the spec.
 func TestVerboseDumpMetadataBlock_ModelsSortedByAlias(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
@@ -1555,9 +1485,7 @@ agents: {
 	}
 }
 
-// TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE verifies the
-// metadata block lands between the Cache line (when origin set) and the CUE
-// Definition section.
+// The metadata block must land between the Cache line and the CUE Definition.
 func TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE(t *testing.T) {
 	setupTestConfigWithOrigin(t)
 
@@ -1575,8 +1503,6 @@ func TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE(t *testing.T) {
 		t.Fatalf("output missing Cache line\n%s", output)
 	}
 
-	// CUE Definition: pretty-printed CUE struct opens with the item name
-	// followed by a colon-brace on its own line in cueformat output.
 	cueDefMarker := "{"
 	cueIdx := strings.Index(output[cacheIdx:], cueDefMarker)
 	if cueIdx == -1 {
@@ -1590,13 +1516,9 @@ func TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE(t *testing.T) {
 	}
 }
 
-// TestVerboseDumpMetadataBlock_EmptyDoesNotInsertBlankLine verifies that when
-// no metadata fields are populated, printVerboseDump emits no extra blank
-// line between the header separator (or Config/Origin/Cache section) and the
-// CUE Definition. An earlier version of printMetadataBlock could have emitted
-// a bare "\n" in the empty case, producing a double blank line at this
-// boundary; the guard at describe.go's bytes.Buffer length check prevents
-// that, and this test pins it.
+// With no metadata fields, printVerboseDump must emit no extra blank line before
+// the CUE Definition. printMetadataBlock's empty case once emitted a bare "\n"
+// producing a double blank line; this pins the buffer-length guard against it.
 func TestVerboseDumpMetadataBlock_EmptyDoesNotInsertBlankLine(t *testing.T) {
 	dir := t.TempDir()
 	startDir := filepath.Join(dir, ".start")
@@ -1625,11 +1547,8 @@ agents: {
 	printVerboseDump(&buf, result)
 	output := buf.String()
 
-	// Locate the header separator, then advance past its trailing newline so
-	// the inspection window starts at the first byte after the separator
-	// line. The window ends at the CUE definition opening brace — this is
-	// the only segment where printMetadataBlock could insert a spurious
-	// blank line in the empty case.
+	// Inspect the window from just after the separator line to the CUE
+	// definition brace — the only segment printMetadataBlock could pad.
 	sepIdx := strings.Index(output, "─")
 	if sepIdx == -1 {
 		t.Fatalf("output missing separator\n%s", output)
@@ -1647,9 +1566,7 @@ agents: {
 	cueIdx += windowStart
 
 	window := output[windowStart:cueIdx]
-	// Three consecutive newlines means two blank lines stacked, which is
-	// the signature of an empty-metadata bug emitting a bare \n on top of
-	// the legitimate blank line that precedes the CUE definition.
+	// Three newlines = two stacked blank lines, the empty-metadata bug signature.
 	if strings.Contains(window, "\n\n\n") {
 		t.Errorf("found double blank line between separator and CUE definition:\nwindow:\n%q\nfull:\n%s", window, output)
 	}

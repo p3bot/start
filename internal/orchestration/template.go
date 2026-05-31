@@ -15,37 +15,25 @@ import (
 )
 
 // TemplateData holds the data available for UTD template substitution.
-// Uses lowercase keys to match documented placeholder names (e.g., {{.file}}, {{.instructions}}).
+// Keys are lowercase to match documented placeholder names (e.g., {{.file}}).
 type TemplateData map[string]string
 
 // UTDFields represents the raw Unified Template Design (UTD) fields extracted from CUE configuration.
 type UTDFields struct {
-	// File is the path to read content from.
-	File string
-	// Command is the shell command to execute.
+	File    string
 	Command string
-	// Prompt is the template string to render.
-	Prompt string
-	// Shell is the shell to use for command execution (optional).
-	Shell string
-	// Timeout is the command timeout in seconds (optional, 0 = default).
-	Timeout int
+	Prompt  string
+	Shell   string
+	Timeout int // command timeout in seconds, 0 = default
 }
 
 // ShellRunner executes shell commands and returns output.
-// This interface allows for dependency injection in tests.
 type ShellRunner interface {
-	// Run executes a command and returns stdout.
-	// workingDir specifies the directory to run in.
-	// shell specifies the shell to use (e.g., "bash -c").
-	// timeout specifies the timeout in seconds (0 = default).
 	Run(command, workingDir, shell string, timeout int) (string, error)
 }
 
 // FileReader reads file contents.
-// This interface allows for dependency injection in tests.
 type FileReader interface {
-	// Read reads the contents of a file.
 	Read(path string) (string, error)
 }
 
@@ -57,7 +45,7 @@ func (r *DefaultFileReader) Read(path string) (string, error) {
 	return ReadFilePath(path)
 }
 
-// TemplateProcessor handles UTD template resolution.
+// TemplateProcessor resolves UTD templates.
 type TemplateProcessor struct {
 	fileReader  FileReader
 	shellRunner ShellRunner
@@ -78,17 +66,12 @@ func NewTemplateProcessor(fr FileReader, sr ShellRunner, workingDir string) *Tem
 
 // ProcessResult contains the result of template processing.
 type ProcessResult struct {
-	// Content is the rendered template output.
 	Content string
-	// TempFile is the path to the temp file created for {{.file}} placeholder.
-	// Only set when the source was file-based and temp file was created.
-	TempFile string
-	// FileRead indicates whether a file was read.
-	FileRead bool
-	// CommandExecuted indicates whether a command was executed.
+	// TempFile is set only when the source was file-based and a temp file was created.
+	TempFile        string
+	FileRead        bool
 	CommandExecuted bool
-	// Warnings contains any non-fatal issues encountered.
-	Warnings []string
+	Warnings        []string
 }
 
 // Process resolves a UTD template with lazy evaluation.
@@ -96,10 +79,8 @@ type ProcessResult struct {
 func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (ProcessResult, error) {
 	var result ProcessResult
 
-	// Determine the template source
 	templateStr := fields.Prompt
 	if templateStr == "" {
-		// If no prompt, check for file content
 		if fields.File != "" {
 			content, err := p.fileReader.Read(fields.File)
 			if err != nil {
@@ -108,7 +89,6 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 			templateStr = content
 			result.FileRead = true
 		} else if fields.Command != "" {
-			// Command output becomes the template
 			if p.shellRunner == nil {
 				return result, fmt.Errorf("shell runner required for command execution")
 			}
@@ -123,21 +103,17 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 		}
 	}
 
-	// Check if template uses placeholders that require file/command execution
-	// Match documented lowercase/snake_case placeholders
 	needsFileContents := strings.Contains(templateStr, "{{.file_contents}}") ||
 		strings.Contains(templateStr, "{{ .file_contents }}")
 	needsCommandOutput := strings.Contains(templateStr, "{{.command_output}}") ||
 		strings.Contains(templateStr, "{{ .command_output }}")
 
-	// Build template data with lowercase keys to match documented placeholders
 	data := envTemplateData(p.workingDir)
 	data["file"] = fields.File
 	data["command"] = fields.Command
 	data["datetime"] = time.Now().Format(time.RFC3339)
 	data["instructions"] = instructions
 
-	// Lazy evaluation: only read file if needed
 	if needsFileContents && fields.File != "" && !result.FileRead {
 		content, err := p.fileReader.Read(fields.File)
 		if err != nil {
@@ -148,7 +124,6 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 		}
 	}
 
-	// Lazy evaluation: only execute command if needed
 	if needsCommandOutput && fields.Command != "" && !result.CommandExecuted {
 		if p.shellRunner == nil {
 			result.Warnings = append(result.Warnings, "shell runner not available for command execution")
@@ -163,10 +138,7 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 		}
 	}
 
-	// Parse and execute template
-	// Use Option("missingkey=zero") to handle unknown placeholders gracefully.
-	// This allows file-only contexts to contain template-like syntax (e.g., in code examples)
-	// without causing errors.
+	// missingkey=zero lets file content carry template-like syntax (e.g. code examples) without erroring.
 	tmpl, err := template.New("utd").Option("missingkey=zero").Parse(templateStr)
 	if err != nil {
 		return result, fmt.Errorf("parsing template: %w", err)
@@ -181,8 +153,8 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 	return result, nil
 }
 
-// envTemplateData builds the environment-based template variables.
-// All values fall back to empty string on error so templates always render.
+// envTemplateData builds the environment-based template variables. All values
+// fall back to empty string on error so templates always render.
 func envTemplateData(workingDir string) TemplateData {
 	data := TemplateData{}
 
@@ -205,7 +177,6 @@ func envTemplateData(workingDir string) TemplateData {
 		data["shell"] = filepath.Base(sh)
 	}
 
-	// Git variables: run in workingDir, fall back to empty string if not a repo.
 	if branch, err := gitOutput(workingDir, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
 		data["git_branch"] = branch
 	}
@@ -224,7 +195,6 @@ func envTemplateData(workingDir string) TemplateData {
 	return data
 }
 
-// gitOutput runs a git command in dir and returns trimmed stdout.
 func gitOutput(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
@@ -235,9 +205,7 @@ func gitOutput(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// osName returns a human-readable OS/distro name.
-// On Linux it reads NAME from /etc/os-release; on macOS it runs sw_vers;
-// on other platforms it falls back to runtime.GOOS.
+// osName returns a human-readable OS/distro name, falling back to runtime.GOOS.
 func osName() string {
 	switch runtime.GOOS {
 	case "linux":
@@ -257,8 +225,7 @@ func osName() string {
 	return runtime.GOOS
 }
 
-// IsUTDValid checks if UTD fields satisfy the minimum requirement.
-// At least one of file, command, or prompt must be specified.
+// IsUTDValid reports whether at least one of file, command, or prompt is set.
 func IsUTDValid(fields UTDFields) bool {
 	return fields.File != "" || fields.Command != "" || fields.Prompt != ""
 }

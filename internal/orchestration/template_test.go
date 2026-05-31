@@ -8,7 +8,6 @@ import (
 	"testing"
 )
 
-// mockShellRunner implements ShellRunner for testing.
 type mockShellRunner struct {
 	output string
 	err    error
@@ -33,7 +32,7 @@ func TestTemplateProcessor_Process(t *testing.T) {
 		name         string
 		fields       UTDFields
 		instructions string
-		fileContent  string // content to write to temp file
+		fileContent  string
 		shellOutput  string
 		wantContains string
 		wantErr      bool
@@ -51,7 +50,7 @@ func TestTemplateProcessor_Process(t *testing.T) {
 			fields: UTDFields{
 				Prompt: "Today is {{.datetime}}",
 			},
-			wantContains: "Today is 20", // Partial match for year prefix
+			wantContains: "Today is 20",
 		},
 		{
 			name: "prompt with instructions placeholder",
@@ -79,10 +78,8 @@ func TestTemplateProcessor_Process(t *testing.T) {
 			wantContains: "Output: hello\n",
 		},
 		{
-			name:   "file only - content becomes template",
-			fields: UTDFields{
-				// File will be set in test
-			},
+			name:         "file only - content becomes template",
+			fields:       UTDFields{},
 			fileContent:  "Content from file only",
 			wantContains: "Content from file only",
 		},
@@ -149,7 +146,6 @@ func TestTemplateProcessor_Process(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 
-			// Create file if content provided
 			if tt.fileContent != "" && tt.fields.File == "" {
 				filePath := filepath.Join(tmpDir, "test.md")
 				if err := os.WriteFile(filePath, []byte(tt.fileContent), 0644); err != nil {
@@ -158,7 +154,6 @@ func TestTemplateProcessor_Process(t *testing.T) {
 				tt.fields.File = filePath
 			}
 
-			// Create mock shell runner
 			var runner *mockShellRunner
 			if tt.shellOutput != "" || tt.fields.Command != "" {
 				runner = &mockShellRunner{output: tt.shellOutput}
@@ -194,7 +189,6 @@ func TestTemplateProcessor_LazyEvaluation(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 
-	// Create a test file
 	filePath := filepath.Join(tmpDir, "test.md")
 	if err := os.WriteFile(filePath, []byte("file content"), 0644); err != nil {
 		t.Fatalf("writing test file: %v", err)
@@ -202,7 +196,7 @@ func TestTemplateProcessor_LazyEvaluation(t *testing.T) {
 
 	t.Run("file not read when file_contents not used", func(t *testing.T) {
 		fields := UTDFields{
-			File:   "/nonexistent/file.md", // Would error if read
+			File:   "/nonexistent/file.md", // would error if read
 			Prompt: "Simple prompt without file placeholder",
 		}
 
@@ -280,15 +274,10 @@ func TestTemplateProcessor_LazyEvaluation(t *testing.T) {
 	})
 }
 
-// TestTemplateProcessor_SourcePriorityContract pins the source-selection and
-// lazy-expansion behaviour that internal/cli/get.go's getUTD trim block
-// depends on. `start get` documents source priority as file > prompt >
-// command, but Process picks Prompt > File > Command. get.go flips the
-// order by clearing higher-priority fields before calling Process. If
-// Process's source-selection or its lazy {{.command_output}} expansion ever
-// changes, this test fails — at which point the maintainer must also revisit
-// getUTD's trim block in get.go (it relies on the behaviour pinned here to
-// implement file > prompt > command without shelling out).
+// TestTemplateProcessor_SourcePriorityContract pins the Prompt > File > Command
+// source selection and lazy {{.command_output}} expansion that get.go's getUTD
+// trim block relies on to present file > prompt > command without shelling out.
+// A change here means getUTD's trim block must be revisited too.
 func TestTemplateProcessor_SourcePriorityContract(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
@@ -336,10 +325,8 @@ func TestTemplateProcessor_SourcePriorityContract(t *testing.T) {
 	})
 
 	t.Run("lazy command expansion fires for file source referencing command_output", func(t *testing.T) {
-		// getUTD's trim block (get.go: file != "" → fields.Command = "")
-		// deliberately neutralises this path. Pinning the underlying lazy
-		// expansion here means a refactor that removes it makes the trim
-		// block dead code and surfaces in this test.
+		// getUTD's trim block neutralises this path; pinning the lazy expansion
+		// here makes a refactor that removes it surface as dead code in this test.
 		cmdRefFile := filepath.Join(tmpDir, "cmd-ref.md")
 		if err := os.WriteFile(cmdRefFile, []byte("before {{.command_output}} after"), 0644); err != nil {
 			t.Fatalf("writing test file: %v", err)
@@ -399,7 +386,6 @@ func TestEnvTemplateData(t *testing.T) {
 	})
 
 	t.Run("git_branch empty outside repo", func(t *testing.T) {
-		// tmpDir is not a git repo so git_branch should be absent or empty.
 		if v, ok := data["git_branch"]; ok && v != "" {
 			t.Logf("git_branch = %q (may be set if tmpDir is inside a repo)", v)
 		}
@@ -440,7 +426,6 @@ func TestDefaultFileReader_Read(t *testing.T) {
 			t.Skip("could not get home directory")
 		}
 
-		// Create a file in home directory for testing
 		testFile := filepath.Join(home, ".start-test-file")
 		if err := os.WriteFile(testFile, []byte("home content"), 0644); err != nil {
 			t.Skip("could not write test file in home directory")

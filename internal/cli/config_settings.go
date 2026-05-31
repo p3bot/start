@@ -18,7 +18,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigSettingsCommand adds the settings subcommand to config.
 func addConfigSettingsCommand(parent *cobra.Command) {
 	settingsCmd := &cobra.Command{
 		Use:     "settings [key] [value]",
@@ -53,7 +52,6 @@ Available settings:
 	parent.AddCommand(settingsCmd)
 }
 
-// executeConfigSettings handles the settings command.
 func executeConfigSettings(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -80,7 +78,6 @@ func executeConfigSettings(cmd *cobra.Command, args []string) error {
 		if jsonFlag {
 			return listSettingsJSON(stdout, scope)
 		}
-		// List all settings
 		return listSettings(stdout, scope)
 	case 1:
 		if args[0] == "list" || args[0] == "ls" {
@@ -95,24 +92,20 @@ func executeConfigSettings(cmd *cobra.Command, args []string) error {
 		if jsonFlag {
 			return showSettingJSON(stdout, args[0], scope)
 		}
-		// Show single setting
 		return showSetting(stdout, args[0], scope)
 	case 2:
-		// Set setting
 		return setSetting(stdout, flags, args[0], args[1], flags.Local)
 	default:
 		return usageError(fmt.Errorf("too many arguments"))
 	}
 }
 
-// listSettings displays all settings with their values and sources.
 func listSettings(w io.Writer, scope config.Scope) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	// Show config paths
 	fmt.Fprintln(w)
 	printConfigPaths(w, paths)
 	fmt.Fprintln(w)
@@ -128,7 +121,6 @@ func listSettings(w io.Writer, scope config.Scope) error {
 	return nil
 }
 
-// printConfigPaths displays the configuration directory paths.
 func printConfigPaths(w io.Writer, paths config.Paths) {
 	tui.ColorPaths.Fprintln(w, "Configuration Paths:")
 	globalStatus := "not found"
@@ -147,7 +139,6 @@ func printConfigPaths(w io.Writer, paths config.Paths) {
 	fmt.Fprintln(w, tui.Annotate("%s", localStatus))
 }
 
-// printSettingsEntries displays resolved setting entries in a formatted table.
 func printSettingsEntries(w io.Writer, entries map[string]config.SettingEntry) {
 	keys := make([]string, 0, len(entries))
 	for k := range entries {
@@ -177,7 +168,6 @@ func printSettingsEntries(w io.Writer, entries map[string]config.SettingEntry) {
 	}
 }
 
-// showSetting displays a single setting value with its source.
 func showSetting(w io.Writer, key string, scope config.Scope) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
 		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))
@@ -204,7 +194,6 @@ func showSetting(w io.Writer, key string, scope config.Scope) error {
 	return nil
 }
 
-// listSettingsJSON outputs all settings as a JSON object keyed by setting name.
 func listSettingsJSON(w io.Writer, scope config.Scope) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -222,7 +211,6 @@ func listSettingsJSON(w io.Writer, scope config.Scope) error {
 	return nil
 }
 
-// showSettingJSON outputs a single setting as a JSON object.
 func showSettingJSON(w io.Writer, key string, scope config.Scope) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
 		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))
@@ -245,7 +233,6 @@ func showSettingJSON(w io.Writer, key string, scope config.Scope) error {
 	return nil
 }
 
-// setSetting sets a setting value.
 func setSetting(w io.Writer, flags *Flags, key, value string, localOnly bool) error {
 	info, valid := config.SettingsRegistry[key]
 	if !valid {
@@ -258,7 +245,6 @@ func setSetting(w io.Writer, flags *Flags, key, value string, localOnly bool) er
 		}
 	}
 
-	// Get config directory
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
@@ -266,21 +252,18 @@ func setSetting(w io.Writer, flags *Flags, key, value string, localOnly bool) er
 
 	configDir := paths.Dir(localOnly)
 
-	// Ensure directory exists
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	// Load existing settings (error ignored: missing file means start fresh)
+	// Error ignored: missing file means start fresh.
 	settings, _ := config.LoadSettingsFromDir(configDir)
 	if settings == nil {
 		settings = make(map[string]string)
 	}
 
-	// Set the value
 	settings[key] = value
 
-	// Write settings file
 	settingsPath := filepath.Join(configDir, "settings.cue")
 	if err := writeSettingsFile(settingsPath, settings); err != nil {
 		return fmt.Errorf("writing settings file: %w", err)
@@ -293,7 +276,6 @@ func setSetting(w io.Writer, flags *Flags, key, value string, localOnly bool) er
 	return nil
 }
 
-// editSettings opens the settings file in the user's editor.
 func editSettings(localOnly bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -302,14 +284,12 @@ func editSettings(localOnly bool) error {
 
 	configDir := paths.Dir(localOnly)
 
-	// Ensure directory exists
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
 	settingsPath := filepath.Join(configDir, "settings.cue")
 
-	// Create file if it doesn't exist
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
 		if err := writeSettingsFile(settingsPath, nil); err != nil {
 			return fmt.Errorf("creating settings file: %w", err)
@@ -319,7 +299,6 @@ func editSettings(localOnly bool) error {
 	return openInEditor(settingsPath)
 }
 
-// loadSettingsForScope loads settings from the appropriate scope.
 // Returns an empty map if no settings are configured.
 func loadSettingsForScope(scope config.Scope) (map[string]string, error) {
 	paths, err := config.ResolvePaths("")
@@ -339,8 +318,7 @@ func loadSettingsForScope(scope config.Scope) (map[string]string, error) {
 	return settings, nil
 }
 
-// hasNonSettingsContent checks if CUE content has non-settings top-level keys.
-// This prevents accidental data loss when overwriting settings.cue.
+// Guards against data loss when overwriting settings.cue.
 func hasNonSettingsContent(content string) bool {
 	ctx := cuecontext.New()
 	v := ctx.CompileString(content)
@@ -360,10 +338,7 @@ func hasNonSettingsContent(content string) bool {
 	return false
 }
 
-// writeSettingsFile writes the settings to a CUE file.
-// It checks for existing non-settings content to prevent data loss.
 func writeSettingsFile(path string, settings map[string]string) error {
-	// Check if file exists with non-settings content
 	if existingContent, err := os.ReadFile(path); err == nil {
 		if hasNonSettingsContent(string(existingContent)) {
 			return fmt.Errorf("settings.cue contains non-settings content (agents, roles, etc.)\n\nPlease edit the file manually: %s", path)
@@ -377,7 +352,7 @@ func writeSettingsFile(path string, settings map[string]string) error {
 	sb.WriteString("settings: {\n")
 
 	if len(settings) > 0 {
-		// Sort keys for consistent output
+		// Sort for deterministic output.
 		var keys []string
 		for k := range settings {
 			keys = append(keys, k)
@@ -386,12 +361,9 @@ func writeSettingsFile(path string, settings map[string]string) error {
 
 		for _, k := range keys {
 			v := settings[k]
-			// Check if this is an int setting
 			if info, exists := config.SettingsRegistry[k]; exists && info.Type == "int" {
-				// Write as integer (no quotes)
 				fmt.Fprintf(&sb, "\t%s: %s\n", k, v)
 			} else {
-				// Write as string (with quotes)
 				fmt.Fprintf(&sb, "\t%s: %q\n", k, v)
 			}
 		}
@@ -402,7 +374,6 @@ func writeSettingsFile(path string, settings map[string]string) error {
 	return os.WriteFile(path, []byte(sb.String()), 0644)
 }
 
-// unsetSetting removes a setting key from the settings file.
 func unsetSetting(w io.Writer, flags *Flags, key string, localOnly bool) error {
 	if _, valid := config.SettingsRegistry[key]; !valid {
 		return usageError(fmt.Errorf("unknown setting %q\n\nValid settings: %s", key, config.ValidSettingsKeysString()))

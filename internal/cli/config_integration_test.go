@@ -8,13 +8,9 @@ import (
 	"testing"
 )
 
-// Integration tests for config commands that test the full workflow.
-//
-// Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
-// to any test that calls os.Chdir — it will cause data races on the working directory.
+// Tests use os.Chdir (process-global): do not add t.Parallel() or the working directory races.
 
 func TestConfigAgent_FullWorkflow(t *testing.T) {
-	// Setup isolated environment
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -32,7 +28,6 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 			t.Fatalf("add failed: %v", err)
 		}
 
-		// Verify file exists
 		agentsPath := filepath.Join(globalDir, "agents.cue")
 		if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
 			t.Fatal("agents.cue was not created")
@@ -76,10 +71,8 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 		}
 
 		output := stdout.String()
-		// The canonical header is "agents:claude" (formatAddress uses ':').
-		// Asserting the old "agents/claude" slash form made this flaky: a slash
-		// only survives in the optional registry Origin line, which depends on
-		// non-isolated registry cache state from earlier tests.
+		// Assert ':' header form, not "agents/claude": the slash only survives in the
+		// optional registry Origin line, which depends on non-isolated cache state.
 		if !strings.Contains(output, "agents:claude") {
 			t.Errorf("get output missing agent name: %s", output)
 		}
@@ -126,7 +119,6 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 			t.Fatalf("settings set failed: %v", err)
 		}
 
-		// Verify settings.cue was created with default_agent
 		configPath := filepath.Join(globalDir, "settings.cue")
 		content, err := os.ReadFile(configPath)
 		if err != nil {
@@ -165,7 +157,6 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 			t.Fatalf("remove failed: %v", err)
 		}
 
-		// Verify gemini is removed
 		content, _ := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
 		if strings.Contains(string(content), `"gemini"`) {
 			t.Errorf("gemini should be removed: %s", content)
@@ -459,7 +450,6 @@ func TestConfigTask_FullWorkflow(t *testing.T) {
 }
 
 func TestConfigLocal_Isolation(t *testing.T) {
-	// Test that --local flag properly isolates local and global configs
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -469,7 +459,6 @@ func TestConfigLocal_Isolation(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origWd) }()
 
-	// Create a project directory
 	projectDir := filepath.Join(tmpDir, "myproject")
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatal(err)
@@ -478,7 +467,6 @@ func TestConfigLocal_Isolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create global config
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -495,7 +483,6 @@ func TestConfigLocal_Isolation(t *testing.T) {
 			t.Fatalf("add local failed: %v", err)
 		}
 
-		// Verify local config was created
 		localPath := filepath.Join(projectDir, ".start", "agents.cue")
 		if _, err := os.Stat(localPath); os.IsNotExist(err) {
 			t.Fatal("local agents.cue was not created")
@@ -544,7 +531,6 @@ func TestConfigLocal_Isolation(t *testing.T) {
 }
 
 func TestConfigTask_SubstringResolution(t *testing.T) {
-	// Setup isolated environment
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -555,7 +541,6 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add tasks with namespace-style names
 	// Prompts: name, description (empty), content choice (Enter→"3"→inline), prompt text,
 	//          blank line to finish, role (empty), tags (skip)
 	for _, tc := range []struct{ name, prompt string }{
@@ -607,7 +592,7 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		// "review" matches golang/review/architecture and golang/review/code
 		// In non-interactive mode, this should return an error about ambiguity
 		cmd := NewRootCmd()
-		cmd.SetIn(strings.NewReader("")) // non-interactive stdin
+		cmd.SetIn(strings.NewReader(""))
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"config", "get", "review"})
@@ -644,7 +629,6 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 			t.Fatalf("edit with substring failed: %v", err)
 		}
 
-		// Verify the update was applied to the correct task
 		cmd2 := NewRootCmd()
 		stdout2 := &bytes.Buffer{}
 		cmd2.SetOut(stdout2)
@@ -670,7 +654,6 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 			t.Fatalf("remove failed: %v", err)
 		}
 
-		// Verify it was removed
 		content, _ := os.ReadFile(filepath.Join(globalDir, "tasks.cue"))
 		if strings.Contains(string(content), "create-role") {
 			t.Errorf("create-role should be removed: %s", content)
@@ -715,7 +698,6 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 	})
 
 	t.Run("remove with ambiguous query in non-interactive mode without --force errors", func(t *testing.T) {
-		// Re-add some tasks first
 		if err := configTaskAdd(slowStdin("golang/review/security\n\n\nReview security.\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("re-add failed: %v", err)
 		}
@@ -724,7 +706,7 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 
 		cmd := NewRootCmd()
-		cmd.SetIn(strings.NewReader("")) // non-interactive
+		cmd.SetIn(strings.NewReader(""))
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"config", "remove", "golang/review"})
@@ -789,7 +771,6 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 	})
 
 	t.Run("cross-category remove with --force removes all matches", func(t *testing.T) {
-		// Create an agent and role both named "shared" to test cross-category removal
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		chdir(t, tmpDir)
@@ -799,11 +780,9 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Add an agent named "shared"
 		if err := configAgentAdd(slowStdin("shared\nshared\n"+`shared "{{.prompt}}"`+"\n\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("add agent failed: %v", err)
 		}
-		// Add a role named "shared"
 		if err := configRoleAdd(slowStdin("shared\n\n3\nShared role prompt.\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("add role failed: %v", err)
 		}
@@ -818,7 +797,6 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			t.Fatalf("cross-category remove failed: %v", err)
 		}
 
-		// Verify both were removed
 		agentContent, _ := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
 		if strings.Contains(string(agentContent), `"shared"`) {
 			t.Errorf("shared agent should be removed: %s", agentContent)
@@ -846,7 +824,6 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			}
 		}
 
-		// Remove alpha
 		cmd := NewRootCmd()
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
@@ -857,7 +834,6 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			t.Fatalf("remove alpha failed: %v", err)
 		}
 
-		// Remove beta
 		cmd2 := NewRootCmd()
 		cmd2.SetOut(&bytes.Buffer{})
 		cmd2.SetErr(&bytes.Buffer{})
@@ -894,9 +870,8 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			t.Fatalf("add failed: %v", err)
 		}
 
-		// Non-interactive mode without --force should error
 		cmd := NewRootCmd()
-		cmd.SetIn(strings.NewReader("")) // non-interactive
+		cmd.SetIn(strings.NewReader(""))
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"config", "remove", "testagent"})
@@ -909,7 +884,6 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			t.Errorf("expected '--force' in error, got: %v", err)
 		}
 
-		// Verify the agent was NOT removed
 		content, _ := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
 		if !strings.Contains(string(content), "testagent") {
 			t.Errorf("testagent should still exist after failed remove: %s", content)
@@ -1099,7 +1073,6 @@ func TestConfigListAll_GroupsCategories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Seed one item in each category
 	if err := os.WriteFile(filepath.Join(globalDir, "agents.cue"), []byte(`agents: { "my-agent": { command: "a" } }`), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -1173,7 +1146,6 @@ func TestConfigListPluralAliases(t *testing.T) {
 }
 
 func TestConfigRemovedCommands(t *testing.T) {
-	// Verify that the old noun-group command paths return errors.
 	for _, tc := range []struct {
 		args []string
 	}{

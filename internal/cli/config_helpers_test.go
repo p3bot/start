@@ -558,4 +558,3 @@ func TestPromptSelectFromList_EmptyQuery(t *testing.T) {
 		}
 	})
 }
-

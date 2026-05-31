@@ -7,9 +7,7 @@ import (
 )
 
 // IsFilePath returns true if the string looks like a file path.
-// Strings starting with ./, /, or ~ are file paths. Only bare ~ and ~/ are
-// recognised as tilde paths; ~user syntax is not supported by ExpandTilde
-// and is therefore not treated as a file path.
+// Only bare ~ and ~/ count as tilde paths; ~user is unsupported by ExpandTilde.
 func IsFilePath(s string) bool {
 	if s == "" {
 		return false
@@ -22,7 +20,6 @@ func IsFilePath(s string) bool {
 
 // ExpandTilde expands a leading ~ or ~/ to the user's home directory.
 // Only handles bare ~ and ~/path, not ~user syntax.
-// Returns the path unchanged if it does not start with ~ or ~/.
 func ExpandTilde(path string) (string, error) {
 	if path == "~" {
 		return os.UserHomeDir()
@@ -38,7 +35,6 @@ func ExpandTilde(path string) (string, error) {
 }
 
 // ExpandFilePath expands tilde and converts to absolute path.
-// Returns the expanded path and any error.
 func ExpandFilePath(path string) (string, error) {
 	if path == "" {
 		return "", nil
@@ -49,12 +45,10 @@ func ExpandFilePath(path string) (string, error) {
 		return "", err
 	}
 
-	// Convert to absolute path
 	return filepath.Abs(expanded)
 }
 
 // ReadFilePath reads the content of a file path, expanding tilde if present.
-// Returns the content and any error.
 func ReadFilePath(path string) (string, error) {
 	expanded, err := ExpandFilePath(path)
 	if err != nil {

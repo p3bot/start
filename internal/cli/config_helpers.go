@@ -18,10 +18,8 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// loadForScope loads entities from the appropriate scope using a generic merge strategy.
-// Returns the entity map, names in definition order, and any error.
-// Order: global entries first (in definition order), then local entries (in definition order).
-// Local entries override global entries with the same name but retain their global position.
+// loadForScope merges global then local entries: a local entry overrides the
+// global one of the same name but retains the global entry's position in order.
 func loadForScope[T any](
 	scope config.Scope,
 	loadFromDir func(string) (map[string]T, []string, error),
@@ -59,9 +57,7 @@ func loadForScope[T any](
 	return items, order, nil
 }
 
-// promptString prompts for a string value with a default.
 func promptString(w io.Writer, r io.Reader, label, defaultVal string) (string, error) {
-	// Print label with cyan () delimiters for "(optional)"
 	if base, found := strings.CutSuffix(label, " (optional)"); found {
 		fmt.Fprint(w, base)
 		fmt.Fprintf(w, " %s", tui.Annotate("optional"))
@@ -86,10 +82,8 @@ func promptString(w io.Writer, r io.Reader, label, defaultVal string) (string, e
 	return input, nil
 }
 
-// promptContentSource prompts the user to choose a content source (file, command, or inline prompt).
-// defaultChoice is the default menu option ("1" for file, "3" for inline prompt).
-// currentPrompt is passed to promptText as the default value for option 3.
-// Returns the selected file, command, and prompt values (only one will be non-empty).
+// promptContentSource prompts for a file, command, or inline prompt; exactly
+// one of the returned values is non-empty.
 func promptContentSource(w io.Writer, r io.Reader, defaultChoice, currentPrompt string) (file, command, prompt string, err error) {
 	fmt.Fprintf(w, "\nContent source %s:\n", tui.Annotate("choose one"))
 	fmt.Fprintln(w, "  1. File path")
@@ -130,14 +124,11 @@ func promptContentSource(w io.Writer, r io.Reader, defaultChoice, currentPrompt 
 	return file, command, prompt, nil
 }
 
-// ansiEscapeRe matches ANSI CSI escape sequences (arrow keys, home, end, etc.).
 var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z~]`)
 
-// promptText prompts for multi-line text input.
-// Users can type text directly (finish with a blank line) or press Enter
-// to open $EDITOR for longer input.
+// promptText reads multi-line input: typed lines ending in a blank line, or an
+// empty first line to open $EDITOR.
 func promptText(w io.Writer, r io.Reader, label, defaultVal string) (string, error) {
-	// Show current value if editing a multi-line default
 	if defaultVal != "" && strings.Contains(defaultVal, "\n") {
 		fmt.Fprintf(w, "Current value:\n%s\n\n", defaultVal)
 	}
@@ -160,7 +151,6 @@ func promptText(w io.Writer, r io.Reader, label, defaultVal string) (string, err
 	firstLine = strings.TrimRight(firstLine, "\r\n")
 	firstLine = ansiEscapeRe.ReplaceAllString(firstLine, "")
 
-	// Empty first line: open editor
 	if firstLine == "" {
 		tmpFile, err := os.CreateTemp("", "start-prompt-*.md")
 		if err != nil {
@@ -190,7 +180,6 @@ func promptText(w io.Writer, r io.Reader, label, defaultVal string) (string, err
 		return result, nil
 	}
 
-	// User typed text: read lines until blank line
 	var lines []string
 	lines = append(lines, firstLine)
 
@@ -198,7 +187,7 @@ func promptText(w io.Writer, r io.Reader, label, defaultVal string) (string, err
 		tui.ColorSuccess.Fprint(w, "↪ ")
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			// EOF without newline - include what we have
+			// EOF without trailing newline: keep the partial line.
 			line = strings.TrimRight(line, "\r\n")
 			line = ansiEscapeRe.ReplaceAllString(line, "")
 			if line != "" {
@@ -217,15 +206,14 @@ func promptText(w io.Writer, r io.Reader, label, defaultVal string) (string, err
 	return strings.Join(lines, "\n"), nil
 }
 
-// promptDefaultModel prompts for a default model selection.
-// When models are defined, displays a numbered list for selection.
-// Falls back to free-text input when no models are defined.
+// promptDefaultModel shows a numbered list when models are defined, else falls
+// back to free-text input.
 func promptDefaultModel(w io.Writer, r io.Reader, current string, models map[string]string) (string, error) {
 	if len(models) == 0 {
 		return promptString(w, r, "Default model", current)
 	}
 
-	// Sort aliases for stable ordering
+	// Sort aliases for stable ordering.
 	aliases := make([]string, 0, len(models))
 	for alias := range models {
 		aliases = append(aliases, alias)
@@ -259,7 +247,6 @@ func promptDefaultModel(w io.Writer, r io.Reader, current string, models map[str
 		return current, nil
 	}
 
-	// Try parsing as number
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= len(aliases) {
 			return aliases[choice-1], nil
@@ -267,7 +254,6 @@ func promptDefaultModel(w io.Writer, r io.Reader, current string, models map[str
 		return "", fmt.Errorf("invalid selection: %s (choose 1-%d)", input, len(aliases))
 	}
 
-	// Try matching by alias
 	for _, alias := range aliases {
 		if strings.EqualFold(alias, input) {
 			return alias, nil
@@ -277,8 +263,6 @@ func promptDefaultModel(w io.Writer, r io.Reader, current string, models map[str
 	return "", fmt.Errorf("invalid selection: %q is not a known model alias", input)
 }
 
-// promptTags prompts for editing a slice of tags.
-// Shows current tags (when showCurrent is true) and allows: comma-separated input to replace, empty to clear, Enter to keep.
 func promptTags(w io.Writer, r io.Reader, current []string, showCurrent bool) ([]string, error) {
 	if showCurrent {
 		if len(current) > 0 {
@@ -301,17 +285,14 @@ func promptTags(w io.Writer, r io.Reader, current []string, showCurrent bool) ([
 
 	input = strings.TrimSpace(input)
 
-	// Enter keeps current
 	if input == "" {
 		return current, nil
 	}
 
-	// "-" clears tags
 	if input == "-" {
 		return nil, nil
 	}
 
-	// Parse comma-separated tags
 	var tags []string
 	for t := range strings.SplitSeq(input, ",") {
 		t = strings.TrimSpace(t)
@@ -323,8 +304,7 @@ func promptTags(w io.Writer, r io.Reader, current []string, showCurrent bool) ([
 	return tags, nil
 }
 
-// promptModelsAdd prompts for adding model aliases in the add flow (no existing models).
-// Returns the map (may be nil if user skips).
+// promptModelsAdd collects model aliases for the add flow; returns nil if skipped.
 func promptModelsAdd(w io.Writer, r io.Reader) (map[string]string, error) {
 	reader := bufio.NewReader(r)
 	fmt.Fprintln(w, "Add model aliases (alias=model-id, empty to finish):")
@@ -338,8 +318,6 @@ func promptModelsAdd(w io.Writer, r io.Reader) (map[string]string, error) {
 	return result, nil
 }
 
-// promptModels prompts for editing a map of model aliases.
-// Offers options: (k)eep, (c)lear, (e)dit.
 func promptModels(w io.Writer, r io.Reader, current map[string]string) (map[string]string, error) {
 	reader := bufio.NewReader(r)
 
@@ -378,11 +356,9 @@ func promptModels(w io.Writer, r io.Reader, current map[string]string) (map[stri
 	}
 }
 
-// promptModelsEdit handles the edit mode for models.
 func promptModelsEdit(w io.Writer, reader *bufio.Reader, current map[string]string) (map[string]string, error) {
 	result := make(map[string]string)
 
-	// Edit existing models
 	if len(current) > 0 {
 		fmt.Fprintln(w, "Edit existing models (Enter to keep, - to delete):")
 		var aliases []string
@@ -402,20 +378,16 @@ func promptModelsEdit(w io.Writer, reader *bufio.Reader, current map[string]stri
 			input = strings.TrimSpace(input)
 
 			if input == "-" {
-				// Delete this model
 				continue
 			}
 			if input == "" {
-				// Keep current value
 				result[alias] = currentVal
 			} else {
-				// Update value
 				result[alias] = input
 			}
 		}
 	}
 
-	// Add new models
 	fmt.Fprintln(w, "Add new models (alias=model-id, empty to finish):")
 	newModels, err := readModelAliases(w, reader)
 	if err != nil {
@@ -426,7 +398,6 @@ func promptModelsEdit(w io.Writer, reader *bufio.Reader, current map[string]stri
 	return result, nil
 }
 
-// readModelAliases reads alias=model-id pairs from the reader until an empty line.
 func readModelAliases(w io.Writer, reader *bufio.Reader) (map[string]string, error) {
 	result := make(map[string]string)
 	for {
@@ -460,7 +431,6 @@ func readModelAliases(w io.Writer, reader *bufio.Reader) (map[string]string, err
 	return result, nil
 }
 
-// openInEditor opens a file in the user's editor.
 func openInEditor(path string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -478,9 +448,7 @@ func openInEditor(path string) error {
 	return cmd.Run()
 }
 
-// truncatePrompt truncates a prompt for display.
 func truncatePrompt(s string, max int) string {
-	// Replace newlines with spaces
 	s = strings.ReplaceAll(s, "\n", " ")
 	if len(s) <= max {
 		return s
@@ -488,7 +456,6 @@ func truncatePrompt(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-// writeCUETags writes a CUE tags array field into a strings.Builder.
 func writeCUETags(sb *strings.Builder, tags []string) {
 	if len(tags) == 0 {
 		return
@@ -503,8 +470,6 @@ func writeCUETags(sb *strings.Builder, tags []string) {
 	sb.WriteString("]\n")
 }
 
-// writeCUEPrompt writes a CUE prompt field into a strings.Builder,
-// using triple-quote syntax for long or multi-line prompts.
 func writeCUEPrompt(sb *strings.Builder, prompt string) {
 	if prompt == "" {
 		return
@@ -520,7 +485,6 @@ func writeCUEPrompt(sb *strings.Builder, prompt string) {
 	}
 }
 
-// extractTags extracts a string slice from the "tags" field of a CUE value.
 func extractTags(val cue.Value) []string {
 	tagsVal := val.LookupPath(cue.ParsePath("tags"))
 	if !tagsVal.Exists() {
@@ -539,7 +503,6 @@ func extractTags(val cue.Value) []string {
 	return tags
 }
 
-// scopeString returns "local" or "global" based on the flag.
 func scopeString(local bool) string {
 	if local {
 		return "local"
@@ -547,10 +510,9 @@ func scopeString(local bool) string {
 	return "global"
 }
 
-// scoreAndSortNames scores each map key against the compiled patterns and
-// returns matching keys sorted by score descending then name ascending.
-// Each pattern that matches a key contributes 3 to its score, so keys
-// matching more query terms rank higher. Keys with score zero are excluded.
+// scoreAndSortNames returns keys matching at least one pattern, sorted by score
+// (descending) then name. Each matching pattern adds weight, so keys matching
+// more query terms rank higher.
 func scoreAndSortNames[T any](items map[string]T, patterns []*regexp.Regexp) []string {
 	type match struct {
 		name  string
@@ -562,7 +524,7 @@ func scoreAndSortNames[T any](items map[string]T, patterns []*regexp.Regexp) []s
 		score := 0
 		for _, pattern := range patterns {
 			if pattern.MatchString(name) {
-				score += 3 // Each matching pattern adds weight; higher score = more query terms matched
+				score += 3
 			}
 		}
 		if score > 0 {
@@ -584,14 +546,12 @@ func scoreAndSortNames[T any](items map[string]T, patterns []*regexp.Regexp) []s
 	return names
 }
 
-// resolveAllMatchingNames resolves a query to all matching names in a map.
-// Unlike resolveInstalledName, it returns every match when a query is ambiguous
-// rather than erroring. On zero matches it returns a "not found" error.
-// Results are sorted by score descending then name ascending.
+// resolveAllMatchingNames returns every match for an ambiguous query rather than
+// erroring (unlike resolveInstalledName); zero matches returns a "not found" error.
 func resolveAllMatchingNames[T any](items map[string]T, typeName, query string) ([]string, error) {
-	// Fast path: exact match — but only when the query contains "/" or has no
-	// "query/" siblings. If siblings exist (e.g. "claude" matched alongside
-	// "claude/edit"), fall through to the regex search so all are returned.
+	// Fast path on exact match, but only when the query contains "/" or has no
+	// "query/" siblings; if siblings exist (e.g. "claude" alongside "claude/edit"),
+	// fall through to the regex search so all are returned.
 	if _, ok := items[query]; ok {
 		if strings.Contains(query, "/") {
 			return []string{query}, nil
@@ -607,7 +567,6 @@ func resolveAllMatchingNames[T any](items map[string]T, typeName, query string) 
 		if !hasSiblings {
 			return []string{query}, nil
 		}
-		// Has siblings — fall through so the regex search returns all matches.
 	}
 
 	terms := modules.ParseSearchPatterns(query)
@@ -627,10 +586,9 @@ func resolveAllMatchingNames[T any](items map[string]T, typeName, query string) 
 	return names, nil
 }
 
-// parseSelectionInput parses a user selection string containing comma-separated
-// numbers and/or ranges (e.g. "1,3,5" or "1-3" or "1,3-5") and returns
-// deduplicated 0-based indices in input order. count is the total number of
-// selectable items (used for bounds validation).
+// parseSelectionInput parses comma-separated numbers and/or ranges (e.g.
+// "1,3-5") into deduplicated 0-based indices in input order, bounds-checked
+// against count.
 func parseSelectionInput(input string, count int) ([]int, error) {
 	seen := make(map[int]bool)
 	var indices []int
@@ -667,9 +625,7 @@ func parseSelectionInput(input string, count int) ([]int, error) {
 	return indices, nil
 }
 
-// promptSelectCategory displays a colour-coded numbered list of config categories
-// and returns the chosen category name. Returns "" and nil if the user cancels
-// (empty input).
+// promptSelectCategory returns the chosen category, or "" and nil if cancelled.
 func promptSelectCategory(w io.Writer, r io.Reader, categories []string) (string, error) {
 	for i, cat := range categories {
 		fmt.Fprintf(w, "  %d. %s\n", i+1, tui.CategoryColor(cat).Sprint(cat))
@@ -696,8 +652,7 @@ func promptSelectCategory(w io.Writer, r io.Reader, categories []string) (string
 	return categories[n-1], nil
 }
 
-// promptSelectOneFromList displays a numbered list and lets the user pick a
-// single entry by number. Returns "" and nil if the user cancels (empty input).
+// promptSelectOneFromList returns the picked entry, or "" and nil if cancelled.
 func promptSelectOneFromList(w io.Writer, r io.Reader, entityType string, names []string) (string, error) {
 	if len(names) == 0 {
 		return "", nil
@@ -728,10 +683,8 @@ func promptSelectOneFromList(w io.Writer, r io.Reader, entityType string, names 
 	return names[n-1], nil
 }
 
-// promptSelectFromList displays a numbered list of candidates and lets the user
-// choose which to include. The user may enter comma-separated numbers, ranges
-// (e.g. "1-3"), or "all". Returns the chosen names in list order, or nil if
-// the user cancels (empty input).
+// promptSelectFromList accepts comma-separated numbers, ranges, or "all" and
+// returns the chosen names in list order, or nil if cancelled.
 func promptSelectFromList(w io.Writer, r io.Reader, entityType, query string, names []string) ([]string, error) {
 	if len(names) == 0 {
 		return nil, nil
@@ -781,9 +734,8 @@ func promptSelectFromList(w io.Writer, r io.Reader, entityType, query string, na
 	return selected, nil
 }
 
-// normalizeCategoryArg converts a category argument (singular or plural) to a
-// canonical singular category name ("agent", "role", "context", "task").
-// Returns "" for unknown inputs.
+// normalizeCategoryArg maps a singular or plural category arg to its canonical
+// singular form, or "" for unknown inputs.
 func normalizeCategoryArg(arg string) string {
 	singular := strings.TrimSuffix(strings.ToLower(arg), "s")
 	switch singular {
@@ -793,15 +745,13 @@ func normalizeCategoryArg(arg string) string {
 	return ""
 }
 
-// configMatch represents a single cross-category search result.
 type configMatch struct {
 	Name     string
 	Category string // "agent", "role", "context", or "task"
 }
 
-// searchAllConfigCategories searches all four config categories for a query string.
-// Returns all matches across categories tagged with their category name.
-// Zero matches in a category is not an error; the returned slice may be empty.
+// searchAllConfigCategories searches all four categories; zero matches is not an
+// error, so the returned slice may be empty.
 func searchAllConfigCategories(query string, scope config.Scope) ([]configMatch, error) {
 	var results []configMatch
 
@@ -848,9 +798,8 @@ func searchAllConfigCategories(query string, scope config.Scope) ([]configMatch,
 	return results, nil
 }
 
-// promptSelectConfigMatch shows a numbered list of cross-category matches and
-// lets the user pick one. Items are displayed as "name (category)".
-// Returns a zero-value configMatch{} and nil if the user cancels.
+// promptSelectConfigMatch returns the picked match, or a zero configMatch{} and
+// nil if cancelled.
 func promptSelectConfigMatch(w io.Writer, r io.Reader, query string, matches []configMatch) (configMatch, error) {
 	if query != "" {
 		fmt.Fprintf(w, "Found %d items matching %q:\n\n", len(matches), query)
@@ -880,9 +829,7 @@ func promptSelectConfigMatch(w io.Writer, r io.Reader, query string, matches []c
 	return matches[n-1], nil
 }
 
-// promptSelectConfigMatchesFromList shows a numbered multi-select list of cross-category
-// matches and returns the user's selection. Items are displayed as "name (category)".
-// Returns nil and nil if the user cancels.
+// promptSelectConfigMatchesFromList multi-selects matches, or returns nil if cancelled.
 func promptSelectConfigMatchesFromList(w io.Writer, r io.Reader, query string, matches []configMatch) ([]configMatch, error) {
 	if len(matches) == 0 {
 		return nil, nil
@@ -930,10 +877,8 @@ func promptSelectConfigMatchesFromList(w io.Writer, r io.Reader, query string, m
 	return selected, nil
 }
 
-// promptSearchQuery checks if stdin is a TTY and prompts the user for a search query.
-// Loops until a valid query (at least 3 characters) is entered.
-// Returns the entered query string, or an error in non-interactive mode.
-// Returns empty string and nil if the user presses Enter without input.
+// promptSearchQuery loops until a query of at least 3 characters is entered;
+// returns "" and nil on empty input, or an error in non-interactive mode.
 func promptSearchQuery(w io.Writer, r io.Reader) (string, error) {
 	if !isTerminal(r) {
 		return "", usageError(fmt.Errorf("query required in non-interactive mode"))
@@ -957,19 +902,15 @@ func promptSearchQuery(w io.Writer, r io.Reader) (string, error) {
 	}
 }
 
-// resolveInstalledName resolves a name from a map using exact match first,
-// then regex-based search. Returns the resolved key and value.
-// On zero matches, returns a "not found" error.
-// On multiple matches, returns an "ambiguous" error listing the matches.
+// resolveInstalledName resolves a name by exact match then regex search. Zero
+// matches returns "not found"; multiple matches returns an "ambiguous" error.
 func resolveInstalledName[T any](items map[string]T, typeName, query string) (string, T, error) {
 	var zero T
 
-	// Fast path: exact match
 	if val, ok := items[query]; ok {
 		return query, val, nil
 	}
 
-	// Regex-based search across map keys
 	terms := modules.ParseSearchPatterns(query)
 	if len(terms) == 0 {
 		return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, query))

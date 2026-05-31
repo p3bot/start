@@ -56,10 +56,9 @@ type resolver struct {
 	indexErr     error
 	didFetch     bool
 	didInstall   bool
-	skipRegistry bool // When true, skip registry fetch (for testing)
+	skipRegistry bool // skip registry fetch (for testing)
 }
 
-// newResolver creates a resolver for the given config.
 func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) *resolver {
 	return &resolver{
 		cfg:    cfg,
@@ -70,27 +69,18 @@ func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Wri
 	}
 }
 
-// resolveAgent resolves an agent name through three-tier search.
 func (r *resolver) resolveAgent(name string) (string, error) {
 	return r.resolveModule(name, internalcue.KeyAgents, "agents", "Agent", false)
 }
 
-// resolveRole resolves a role name through file path bypass then three-tier search.
 func (r *resolver) resolveRole(name string) (string, error) {
 	return r.resolveModule(name, internalcue.KeyRoles, "roles", "Role", true)
 }
 
-// resolveModule performs two-phase resolution for a module:
-// Phase 1: Exact full name match in installed config - use directly, no registry needed.
-// Phase 2: Collect all candidates from installed config and registry, merge, select.
-// displayType is the capitalised display name (e.g., "Agent", "Role").
-// When allowFilePath is true, file paths bypass resolution.
-//
-// The name argument may be a bare short name or a fully-qualified
-// "category:name" address. When a category prefix is present and matches the
-// resolver's expected category, the prefix is stripped and the bare name is
-// resolved as usual. When the prefix names a different category, an error is
-// returned identifying the mismatch.
+// resolveModule resolves a module in two phases: exact installed-config match
+// (no registry needed), else merge installed + registry candidates and select.
+// A "category:name" prefix matching category is stripped; a mismatched prefix
+// errors. allowFilePath lets file paths bypass resolution.
 func (r *resolver) resolveModule(name, cueKey, category, displayType string, allowFilePath bool) (string, error) {
 	if name == "" {
 		return "", nil
@@ -112,13 +102,13 @@ func (r *resolver) resolveModule(name, cueKey, category, displayType string, all
 
 	searchType := strings.ToLower(displayType)
 
-	// Phase 1: Exact full name in installed config - unambiguous, no registry needed.
+	// Phase 1: exact installed match is unambiguous, no registry needed.
 	if isExactInstalledKey(r.cfg.Value, cueKey, name) {
 		debugf(r.stderr, r.flags, dbgResolve, "%s %q: exact installed match", displayType, name)
 		return name, nil
 	}
 
-	// Phase 2: Collect all candidates from installed config and registry, merge, select.
+	// Phase 2: merge installed + registry candidates, then select.
 	installedMatches, err := searchInstalled(r.cfg.Value, cueKey, category, name)
 	if err != nil {
 		return "", err
@@ -128,7 +118,7 @@ func (r *resolver) resolveModule(name, cueKey, category, displayType string, all
 		fmt.Fprintf(r.stdout, "%s %q not found in configuration\n", displayType, name)
 	}
 
-	// ensureIndex returns nil error; errors are stored in r.indexErr for graceful fallback.
+	// ensureIndex returns nil error; failures land in r.indexErr (graceful fallback).
 	index, client, _ := r.ensureIndex()
 	var registryMatches []ModuleMatch
 	if index != nil {
@@ -162,7 +152,6 @@ func (r *resolver) resolveModule(name, cueKey, category, displayType string, all
 }
 
 // isExactInstalledKey returns true if name is a verbatim key in the config category.
-// Used for Phase 1 exact-name fast path that bypasses registry lookup.
 func isExactInstalledKey(cfg cue.Value, cueKey, name string) bool {
 	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {
@@ -171,7 +160,6 @@ func isExactInstalledKey(cfg cue.Value, cueKey, name string) bool {
 	return catVal.LookupPath(cue.MakePath(cue.Str(name))).Exists()
 }
 
-// registryEntries returns the entries map for a category from the index.
 func registryEntries(index *registry.Index, category string) map[string]registry.IndexEntry {
 	switch category {
 	case "agents":
@@ -187,22 +175,18 @@ func registryEntries(index *registry.Index, category string) map[string]registry
 	}
 }
 
-// resolveModelName resolves a model name against an agent's models map.
-// 1. Exact match in agent.Models
-// 2. Substring match in agent.Models (multi-term AND if comma/space separated)
-// 3. Passthrough (value used as-is)
+// resolveModelName resolves a model name against agent.Models: exact match,
+// then multi-term AND substring match, then passthrough.
 func (r *resolver) resolveModelName(name string, agent orchestration.Agent) string {
 	if name == "" {
 		return ""
 	}
 
-	// Exact match
 	if _, ok := agent.Models[name]; ok {
 		debugf(r.stderr, r.flags, dbgResolve, "Model %q: exact match in models map", name)
 		return name
 	}
 
-	// Multi-term AND substring match
 	terms := modules.ParseSearchTerms(name)
 	if len(terms) == 0 {
 		return name
@@ -223,7 +207,7 @@ func (r *resolver) resolveModelName(name string, agent orchestration.Agent) stri
 		}
 	}
 
-	sort.Strings(matches) // Deterministic ordering for consistent output
+	sort.Strings(matches) // deterministic ordering
 
 	if len(matches) == 1 {
 		debugf(r.stderr, r.flags, dbgResolve, "Model %q: match %q", name, matches[0])
@@ -234,14 +218,12 @@ func (r *resolver) resolveModelName(name string, agent orchestration.Agent) stri
 		debugf(r.stderr, r.flags, dbgResolve, "Model %q: multiple matches %v, using passthrough", name, matches)
 	}
 
-	// Passthrough
 	debugf(r.stderr, r.flags, dbgResolve, "Model %q: passthrough", name)
 	return name
 }
 
-// resolveContexts resolves context flag values.
-// Per-term: file path bypass -> "default" passthrough -> exact name -> search (all above threshold).
-// Returns the resolved list of context terms for ContextSelection.Tags.
+// resolveContexts resolves context flag values per-term: file path bypass ->
+// "default" passthrough -> exact name -> search (all above threshold).
 func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 	if len(terms) == 0 {
 		return nil, nil
@@ -249,21 +231,18 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 
 	var resolved []string
 	for _, term := range terms {
-		// File path bypass
 		if orchestration.IsFilePath(term) {
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: file path bypass", term)
 			resolved = append(resolved, term)
 			continue
 		}
 
-		// "default" pseudo-tag passthrough
 		if term == "default" {
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: default passthrough", term)
 			resolved = append(resolved, term)
 			continue
 		}
 
-		// Strip the category prefix when present, or error on a mismatch.
 		addr, err := parseAddress(term)
 		if err != nil {
 			return nil, err
@@ -273,9 +252,8 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 		}
 		term = addr.Name
 
-		// Exact or short name match in installed config
 		if resolvedCtx, err := findExactInstalledName(r.cfg.Value, internalcue.KeyContexts, term); err != nil {
-			// Ambiguous short name - fall through to substring search
+			// Ambiguous short name: fall through to substring search.
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: short name ambiguous, falling through: %v", term, err)
 		} else if resolvedCtx != "" {
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: installed match -> %q", term, resolvedCtx)
@@ -283,24 +261,22 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 			continue
 		}
 
-		// Substring search in installed config before going to registry
 		installedMatches, err := searchInstalled(r.cfg.Value, internalcue.KeyContexts, "contexts", term)
 		if err != nil {
-			// Invalid regex in context term - pass through as-is
+			// Invalid regex: pass through as-is.
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: invalid pattern, passing through", term)
 			resolved = append(resolved, term)
 			continue
 		}
 		hasInstalledMatches := len(installedMatches) > 0
 
-		// Only show "not found" when no installed matches exist
 		if !hasInstalledMatches {
 			if !r.flags.Quiet {
 				fmt.Fprintf(r.stdout, "Context %q not found in configuration\n", term)
 			}
 		}
 
-		// Exact name match in registry (only when no installed matches)
+		// Exact registry match only when no installed matches.
 		index, client, indexErr := r.ensureIndex()
 		if indexErr != nil {
 			debugf(r.stderr, r.flags, dbgResolve, "Registry unavailable for context search: %v", indexErr)
@@ -327,8 +303,7 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 			}
 		}
 
-		// Combined search across installed + registry (all matches above threshold).
-		// Reuse installed matches from above.
+		// Combined search across installed + registry (matches above threshold).
 		var registryMatches []ModuleMatch
 		if index != nil {
 			registryMatches, err = searchRegistryCategory(index.Contexts, "contexts", term)
@@ -340,7 +315,6 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 		}
 		allMatches := mergeModuleMatches(installedMatches, registryMatches)
 
-		// Filter by threshold
 		var qualified []ModuleMatch
 		for _, m := range allMatches {
 			if m.Score >= contextScoreThreshold {
@@ -351,13 +325,12 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 		debugf(r.stderr, r.flags, dbgResolve, "Context %q: %d matches above threshold", term, len(qualified))
 
 		if len(qualified) == 0 {
-			// No matches - pass through as-is (composer will warn)
+			// Composer will warn on the unresolved term.
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: no matches, passing through", term)
 			resolved = append(resolved, term)
 			continue
 		}
 
-		// Install any registry matches and add all to resolved
 		for _, m := range qualified {
 			if m.Source == ModuleSourceRegistry && client != nil {
 				if err := r.autoInstall(client, modules.SearchResult{
@@ -378,22 +351,20 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 	return resolved, nil
 }
 
-// findExactInstalledName finds a module by exact or short name in installed config.
-// Supports both full name (e.g., "golang/assistant") and short name match.
-// Returns the resolved full name, or empty string if not found.
-// Returns an error if the short name is ambiguous.
+// findExactInstalledName matches a module by full or short name in installed
+// config, returning the full name (empty if none) or an error if ambiguous.
 func findExactInstalledName(cfg cue.Value, cueKey, name string) (string, error) {
 	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {
 		return "", nil
 	}
 
-	// Full name match is always unambiguous
+	// Full name match is always unambiguous.
 	if catVal.LookupPath(cue.MakePath(cue.Str(name))).Exists() {
 		return name, nil
 	}
 
-	// Short name match: collect all matches to detect ambiguity
+	// Short name: collect all matches to detect ambiguity.
 	iter, err := catVal.Fields()
 	if err != nil {
 		return "", nil
@@ -420,11 +391,10 @@ func findExactInstalledName(cfg cue.Value, cueKey, name string) (string, error) 
 	}
 }
 
-// findExactInRegistry searches for an exact name match in registry entries.
-// Supports both full name (e.g., "golang/assistant") and short name match.
-// Returns an error if multiple entries share the same short name.
+// findExactInRegistry matches a registry entry by full or short name, erroring
+// if multiple entries share the same short name.
 func findExactInRegistry(entries map[string]registry.IndexEntry, category, name string) (*modules.SearchResult, error) {
-	// Full name match is always unambiguous
+	// Full name match is always unambiguous.
 	if entry, ok := entries[name]; ok {
 		return &modules.SearchResult{
 			Category: category,
@@ -433,7 +403,7 @@ func findExactInRegistry(entries map[string]registry.IndexEntry, category, name 
 		}, nil
 	}
 
-	// Short name match: collect all matches to detect ambiguity
+	// Short name: collect all matches to detect ambiguity.
 	var matches []string
 	for entryName := range entries {
 		if idx := strings.LastIndex(entryName, "/"); idx != -1 {
@@ -458,7 +428,6 @@ func findExactInRegistry(entries map[string]registry.IndexEntry, category, name 
 	}
 }
 
-// searchInstalled searches installed config entries and returns ModuleMatch results.
 func searchInstalled(cfg cue.Value, cueKey, category, query string) ([]ModuleMatch, error) {
 	results, err := modules.SearchInstalledConfig(cfg, cueKey, category, query, nil)
 	if err != nil {
@@ -477,7 +446,6 @@ func searchInstalled(cfg cue.Value, cueKey, category, query string) ([]ModuleMat
 	return matches, nil
 }
 
-// searchRegistryCategory searches registry entries and returns ModuleMatch results.
 func searchRegistryCategory(entries map[string]registry.IndexEntry, category, query string) ([]ModuleMatch, error) {
 	results, err := modules.SearchCategoryEntries(category, entries, query, nil)
 	if err != nil {
@@ -496,8 +464,8 @@ func searchRegistryCategory(entries map[string]registry.IndexEntry, category, qu
 	return matches, nil
 }
 
-// mergeModuleMatches combines installed and registry matches, deduplicating by name.
-// Installed matches take precedence. Results are sorted by score descending, then name.
+// mergeModuleMatches dedupes by name (installed wins) and sorts by score
+// descending, then name.
 func mergeModuleMatches(installed, reg []ModuleMatch) []ModuleMatch {
 	seen := make(map[string]bool)
 	var merged []ModuleMatch
@@ -523,8 +491,8 @@ func mergeModuleMatches(installed, reg []ModuleMatch) []ModuleMatch {
 	return merged
 }
 
-// selectSingleMatch handles single-select resolution: auto-select on one match,
-// prompt on multiple matches (TTY), error on multiple (non-TTY), error on zero.
+// selectSingleMatch auto-selects one match, prompts on multiple (TTY), errors
+// on multiple (non-TTY), errors on zero.
 func (r *resolver) selectSingleMatch(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
 	switch len(matches) {
 	case 0:
@@ -536,8 +504,8 @@ func (r *resolver) selectSingleMatch(matches []ModuleMatch, categoryType, query 
 	}
 }
 
-// promptModuleSelection prompts the user to select from multiple matches.
-// In non-TTY mode, returns an error with the match list.
+// promptModuleSelection prompts to select from multiple matches; in non-TTY
+// mode it returns an error listing the matches.
 func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
 	isTTY := isTerminal(r.stdin)
 
@@ -559,7 +527,6 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 
 	fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), categoryType, query)
 
-	// Find longest name for alignment
 	maxNameLen := 0
 	for i := 0; i < displayCount; i++ {
 		if len(matches[i].Name) > maxNameLen {
@@ -594,7 +561,6 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 	}
 	input = strings.TrimSpace(input)
 
-	// Try number
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
 			fmt.Fprintln(r.stdout)
@@ -603,7 +569,6 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
 	}
 
-	// Try exact name match
 	inputLower := strings.ToLower(input)
 	for i := 0; i < displayCount; i++ {
 		if strings.ToLower(matches[i].Name) == inputLower {
@@ -612,7 +577,6 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 		}
 	}
 
-	// Try substring
 	var subMatches []ModuleMatch
 	for i := 0; i < displayCount; i++ {
 		if strings.Contains(strings.ToLower(matches[i].Name), inputLower) {
@@ -627,7 +591,6 @@ func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, qu
 	return ModuleMatch{}, fmt.Errorf("invalid selection: %s", input)
 }
 
-// autoInstall installs a registry module to global config.
 func (r *resolver) autoInstall(client registry.Client, result modules.SearchResult) error {
 	if client == nil {
 		return fmt.Errorf("registry client unavailable")
@@ -664,13 +627,11 @@ func (r *resolver) autoInstall(client registry.Client, result modules.SearchResu
 	return nil
 }
 
-// ensureIndex lazily fetches the registry index. Returns nil index with nil error
-// if the registry is unavailable (graceful fallback).
-//
-// When a fresh cache exists (< 24h), the cached canonical version is passed to
-// FetchIndex which short-circuits version resolution and serves from CUE's module
-// cache — no network call. When the cache is stale or missing, a full fetch is
-// performed and the cache is updated.
+// ensureIndex lazily fetches the registry index, returning a nil index with nil
+// error when the registry is unavailable (graceful fallback). A fresh cache
+// (< 24h) supplies a canonical version that lets FetchIndex serve from CUE's
+// module cache without a network call; a stale or missing cache triggers a full
+// fetch and cache update.
 func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	if r.skipRegistry {
 		return nil, nil, nil
@@ -681,8 +642,7 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	}
 	r.didFetch = true
 
-	// Check cache for a fresh canonical version to avoid network calls.
-	// Only use the cache when it belongs to the same module as the configured index.
+	// Use the cache only when it belongs to the same module as the configured index.
 	indexPath := resolveLibraryIndexPath()
 	effectivePath := registry.EffectiveIndexPath(indexPath)
 	usedCache := false
@@ -702,7 +662,7 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	if err != nil {
 		debugf(r.stderr, r.flags, dbgResolve, "Registry unavailable: %v", err)
 		r.indexErr = err
-		return nil, nil, nil // Graceful fallback
+		return nil, nil, nil // graceful fallback
 	}
 	r.client = client
 
@@ -712,7 +672,6 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
 
-	// Warn the user if the fetch is taking longer than expected.
 	if !r.flags.Quiet {
 		go func() {
 			select {
@@ -728,7 +687,7 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	if err != nil {
 		debugf(r.stderr, r.flags, dbgResolve, "Index fetch failed: %v", err)
 		r.indexErr = err
-		return nil, client, nil // Graceful fallback
+		return nil, client, nil // graceful fallback
 	}
 	if !usedCache {
 		if err := cache.WriteIndex(indexVersion); err != nil {
@@ -741,9 +700,8 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	return index, client, nil
 }
 
-// resolveLibraryIndexPath returns the configured library_index setting value,
-// or empty string if not set or on any error. Callers should pass the result
-// to registry.EffectiveIndexPath to get the final module path.
+// resolveLibraryIndexPath returns the library_index setting (empty on unset or
+// error); pass the result to registry.EffectiveIndexPath for the module path.
 func resolveLibraryIndexPath() string {
 	settings, err := loadSettingsForScope(config.ScopeMerged)
 	if err != nil {
@@ -752,7 +710,6 @@ func resolveLibraryIndexPath() string {
 	return settings["library_index"]
 }
 
-// reloadConfig reloads the merged config after installs.
 func (r *resolver) reloadConfig(workingDir string) error {
 	cfg, err := loadMergedConfigFromDirWithDebug(r.stdout, r.stderr, r.stdin, workingDir, r.flags)
 	if err != nil {

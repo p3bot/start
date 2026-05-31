@@ -21,7 +21,6 @@ func TestFormatError(t *testing.T) {
 
 	t.Run("formats CUE error with position", func(t *testing.T) {
 		ctx := cuecontext.New()
-		// Create a value with an error
 		v := ctx.CompileString(`
 			name: "hello" & 42
 		`)
@@ -36,13 +35,11 @@ func TestFormatError(t *testing.T) {
 			t.Fatal("FormatError returned nil for non-nil error")
 		}
 
-		// Check that it's a ValidationError
 		ve, ok := formatted.(*ValidationError)
 		if !ok {
 			t.Fatalf("FormatError returned %T, want *ValidationError", formatted)
 		}
 
-		// Error message should contain something about the conflict
 		if ve.Message == "" {
 			t.Error("ValidationError.Message is empty")
 		}
@@ -52,7 +49,6 @@ func TestFormatError(t *testing.T) {
 		err := &testError{msg: "custom error"}
 		formatted := FormatError(err)
 
-		// FormatError should return something with the same message
 		if formatted == nil {
 			t.Fatal("FormatError returned nil for non-nil error")
 		}
@@ -73,7 +69,6 @@ func TestFormatErrors(t *testing.T) {
 
 	t.Run("formats multiple CUE errors", func(t *testing.T) {
 		ctx := cuecontext.New()
-		// Create a value with multiple potential errors
 		v := ctx.CompileString(`
 			a: "hello" & 42
 			b: true & "false"
@@ -89,7 +84,6 @@ func TestFormatErrors(t *testing.T) {
 			t.Fatal("FormatErrors returned empty slice")
 		}
 
-		// Each error should be a ValidationError
 		for i, e := range formatted {
 			if _, ok := e.(*ValidationError); !ok {
 				t.Errorf("FormatErrors[%d] = %T, want *ValidationError", i, e)
@@ -136,8 +130,7 @@ func TestErrorSummary(t *testing.T) {
 
 		summary := ErrorSummary(err)
 
-		// Should mention additional errors if there are multiple
-		// Note: CUE may or may not produce multiple errors for this case
+		// CUE may or may not collapse this into a single error.
 		if summary == "" {
 			t.Error("ErrorSummary returned empty string")
 		}
@@ -183,7 +176,6 @@ func TestValidationError_ErrorFormat(t *testing.T) {
 func TestGenerateSourceContext(t *testing.T) {
 	t.Parallel()
 
-	// Create a test file with known content
 	content := `line one
 line two
 line three
@@ -203,7 +195,6 @@ line seven
 
 		result := generateSourceContext(path, 4, 6)
 
-		// Should show lines 2-6 (2 before, error line, 2 after)
 		if !strings.Contains(result, "line two") {
 			t.Errorf("missing context line before error\nGot:\n%s", result)
 		}
@@ -213,11 +204,9 @@ line seven
 		if !strings.Contains(result, "line six") {
 			t.Errorf("missing context line after error\nGot:\n%s", result)
 		}
-		// Should have column pointer
 		if !strings.Contains(result, "^") {
 			t.Errorf("missing column pointer\nGot:\n%s", result)
 		}
-		// Should have line numbers
 		if !strings.Contains(result, "4 |") {
 			t.Errorf("missing line number for error line\nGot:\n%s", result)
 		}
@@ -232,7 +221,6 @@ line seven
 
 		result := generateSourceContext(path, 1, 3)
 
-		// Should start at line 1 (can't go before)
 		if !strings.Contains(result, "line one") {
 			t.Errorf("missing first line\nGot:\n%s", result)
 		}
@@ -281,7 +269,6 @@ line seven
 		if !strings.Contains(result, "line three") {
 			t.Errorf("missing error line\nGot:\n%s", result)
 		}
-		// Should NOT have column pointer when column is 0
 		if strings.Contains(result, "^") {
 			t.Errorf("should not have pointer with column 0\nGot:\n%s", result)
 		}
@@ -289,7 +276,6 @@ line seven
 
 	t.Run("line number alignment", func(t *testing.T) {
 		t.Parallel()
-		// Create a file with enough lines to test alignment
 		var sb strings.Builder
 		for i := 1; i <= 12; i++ {
 			fmt.Fprintf(&sb, "line %d\n", i)
@@ -301,8 +287,7 @@ line seven
 
 		result := generateSourceContext(path, 10, 1)
 
-		// Lines 8-12 should be shown; single-digit 8,9 should be padded
-		// to align with double-digit 10,11,12
+		// Single-digit 8,9 should be padded to align with double-digit 10,11,12.
 		if !strings.Contains(result, " 8 |") {
 			t.Errorf("expected padded single-digit line number\nGot:\n%s", result)
 		}
@@ -336,7 +321,6 @@ language: version: "v0.15.1"
 			t.Fatalf("writing module.cue: %v", err)
 		}
 
-		// Write an invalid CUE file
 		cueContent := `package err
 
 name: "hello"
@@ -348,24 +332,20 @@ extra: true
 			t.Fatalf("writing test.cue: %v", err)
 		}
 
-		// Load the file to get a CUE error with real position
 		loader := NewLoader()
 		result, err := loader.LoadSingle(tmpDir)
 		if err != nil {
-			// LoadSingle might return the error directly
 			ve := FormatErrorWithContext(err)
 			if ve == nil {
 				t.Fatal("FormatErrorWithContext returned nil for load error")
 				return
 			}
-			// Should have a message
 			if ve.Message == "" {
 				t.Error("expected non-empty message")
 			}
 			return
 		}
 
-		// If loading succeeded, validate to get errors
 		cueErr := result.Validate()
 		if cueErr == nil {
 			t.Fatal("expected validation error for conflicting types")
@@ -385,7 +365,6 @@ extra: true
 		if ve.Line == 0 {
 			t.Error("expected line number in error")
 		}
-		// Should have source context since file exists
 		if ve.Context == "" {
 			t.Error("expected source context snippet")
 		}
@@ -411,8 +390,6 @@ extra: true
 		if ve.Message == "" {
 			t.Error("expected non-empty message")
 		}
-		// In-memory compilation has no real file, so context should be empty
-		// (generateSourceContext returns "" for non-existent files)
 	})
 
 	t.Run("non-CUE error wraps message", func(t *testing.T) {
@@ -435,7 +412,6 @@ extra: true
 func TestErrorSummary_MultipleErrors(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
-	// Two distinct type conflicts produce two errors
 	v := ctx.CompileString(`
 		a: "x" & 1
 		b: true & "y"
@@ -449,15 +425,12 @@ func TestErrorSummary_MultipleErrors(t *testing.T) {
 	if summary == "" {
 		t.Error("ErrorSummary returned empty string for multi-error")
 	}
-	// If multiple errors were produced, summary should mention "more"
-	// If CUE collapses them into one, it still returns a non-empty string.
 	t.Logf("ErrorSummary result: %s", summary)
 }
 
 func TestErrorSummary_NonCUEError(t *testing.T) {
 	t.Parallel()
-	// A plain Go error — errors.Errors may return empty, triggering the
-	// len(cueErrs)==0 branch which returns err.Error() directly.
+	// A plain Go error exercises the len(cueErrs)==0 branch.
 	err := &testError{msg: "plain error"}
 	summary := ErrorSummary(err)
 	if summary == "" {
@@ -465,7 +438,6 @@ func TestErrorSummary_NonCUEError(t *testing.T) {
 	}
 }
 
-// testError is a simple error type for testing
 type testError struct {
 	msg string
 }

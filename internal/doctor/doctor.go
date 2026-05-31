@@ -62,20 +62,20 @@ func (s Status) Symbol() string {
 // CheckResult holds the result of a single check item.
 type CheckResult struct {
 	Status  Status   `json:"status"`
-	Label   string   `json:"label"`             // Short label (e.g., "claude", "agents.cue")
-	Message string   `json:"message"`           // Detail message (e.g., "/usr/local/bin/claude", "NOT FOUND")
-	Fix     string   `json:"fix,omitempty"`     // Suggested fix action
-	Details []string `json:"details,omitempty"` // Additional details for verbose mode
-	Indent  int      `json:"-"`                 // Additional indentation level (0 = normal, 1+ = nested)
-	NoIcon  bool     `json:"-"`                 // Suppress status icon for this result
+	Label   string   `json:"label"`
+	Message string   `json:"message"`
+	Fix     string   `json:"fix,omitempty"`
+	Details []string `json:"details,omitempty"`
+	Indent  int      `json:"-"`
+	NoIcon  bool     `json:"-"`
 }
 
 // SectionResult holds the results for a check section.
 type SectionResult struct {
 	Name    string        `json:"name"`
 	Results []CheckResult `json:"results"`
-	Summary string        `json:"summary,omitempty"` // Optional summary (e.g., "2 configured")
-	NoIcons bool          `json:"-"`                 // If true, don't show status icons (for info-only sections)
+	Summary string        `json:"summary,omitempty"`
+	NoIcons bool          `json:"-"`
 }
 
 // Report holds the complete diagnostic report.

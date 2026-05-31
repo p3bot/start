@@ -16,12 +16,8 @@ import (
 )
 
 // IsSilentError returns true if the error should not be printed to stderr.
-// Used by main.go to suppress output for errors that only set the exit code.
-//
-// The chain is walked with errors.As, mirroring ExitCodeFromError: main.go
-// classifies the same returned error with both helpers, so silence detection
-// must stay consistent with exit-code derivation even when a silenced error is
-// wrapped further up the chain.
+// Walks the chain with errors.As to stay consistent with ExitCodeFromError,
+// which main.go pairs it with.
 func IsSilentError(err error) bool {
 	type silent interface {
 		Silent() bool
@@ -34,9 +30,8 @@ func IsSilentError(err error) bool {
 }
 
 // silenced wraps err so main.go suppresses its own "Error:" stderr line — the
-// command has already reported the condition in its own words — while the
-// exit-code mapper still derives the process code from the wrapped chain.
-// Returns nil for nil.
+// command has already reported the condition — while the exit-code mapper still
+// derives the process code from the wrapped chain.
 func silenced(err error) error {
 	if err == nil {
 		return nil
@@ -50,7 +45,7 @@ func (e silentErr) Error() string { return e.err.Error() }
 func (e silentErr) Unwrap() error { return e.err }
 func (e silentErr) Silent() bool  { return true }
 
-// Build-time variables set via ldflags
+// Build-time variables set via ldflags.
 var (
 	cliVersion = "dev"
 	commit     = "unknown"
@@ -64,9 +59,8 @@ var versionTemplate = fmt.Sprintf(`start version %s
 `, cliVersion, repoURL, repoURL)
 
 // NewRootCmd creates a new root command instance with all subcommands attached.
-// This factory function ensures tests get isolated command instances with their own Flags.
+// Each instance owns its Flags so tests stay isolated and can run in parallel.
 func NewRootCmd() *cobra.Command {
-	// Create flags scoped to this command instance
 	flags := &Flags{}
 
 	cmd := &cobra.Command{
@@ -89,20 +83,16 @@ Examples:
   start task review/pre-commit       Run a predefined task
   start doctor                       Check installation and configuration`,
 		Version: cliVersion,
-		// SilenceUsage prevents usage from being printed on RunE errors.
-		// Usage is still shown for flag/argument parsing errors.
+		// SilenceUsage suppresses usage on RunE errors; flag/arg parse errors still show it.
 		SilenceUsage: true,
-		// SilenceErrors prevents Cobra from printing errors - we handle them
-		// ourselves in main.go with colored output.
+		// SilenceErrors: main.go prints errors itself with coloured output.
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Store flags in context for access by all commands
 			ctx := context.WithValue(cmd.Context(), flagsKey{}, flags)
 			cmd.SetContext(ctx)
 
-			// Resolve colour to a single settled state from --color plus the
-			// environment, then drive fatih/color's global from it. An invalid
-			// value is a usage error (exit 2).
+			// Resolve colour from --color plus env into one settled state; an
+			// invalid value is a usage error (exit 2).
 			decorated, err := resolveColorMode(flags.Color, isTerminalWriter(cmd.OutOrStdout()))
 			if err != nil {
 				return err
@@ -117,16 +107,13 @@ Examples:
 		},
 	}
 
-	// Bind the production registry-client provider into the root context.
-	// Cobra copies the root context onto the resolved subcommand before
-	// running it, so every subcommand observes this provider; tests override
-	// the bound provider before Execute to run offline.
+	// Cobra copies the root context onto each subcommand before running it, so
+	// every subcommand observes this provider; tests override it before Execute
+	// to run offline.
 	cmd.SetContext(WithProvider(context.Background(), registry.NewClient))
 
-	// Custom version template
 	cmd.SetVersionTemplate(versionTemplate)
 
-	// Add persistent flags bound to this instance's Flags struct
 	cmd.PersistentFlags().StringVarP(&flags.Agent, "agent", "a", "", "Override agent selection")
 	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name or file path)")
 	cmd.PersistentFlags().StringVarP(&flags.Model, "model", "m", "", "Override model selection")
@@ -140,17 +127,14 @@ Examples:
 	cmd.PersistentFlags().BoolVar(&flags.NoRole, "no-role", false, "Skip role assignment")
 	cmd.MarkFlagsMutuallyExclusive("role", "no-role")
 
-	// Set RunE on root command for `start` execution
 	cmd.RunE = runStart
 
-	// Define command groups for help output
 	cmd.AddGroup(
 		&cobra.Group{ID: "modules", Title: "Modules:"},
 		&cobra.Group{ID: "workflow", Title: "Workflow:"},
 		&cobra.Group{ID: "utilities", Title: "Utilities:"},
 	)
 
-	// Add subcommands
 	addDescribeCommand(cmd, flags)
 	addGetCommand(cmd, flags)
 	addPromptCommand(cmd)
@@ -164,13 +148,10 @@ Examples:
 	addDoctorCommand(cmd)
 	addCompletionCommand(cmd)
 
-	// Replace default help command with one that includes agent-focused topic subcommands
 	addHelpCommand(cmd)
 
-	// Classify Cobra's own flag-parse and arg-count failures as usage errors
-	// (exit 2). FlagErrorFunc is inherited by every subcommand; wrapUsageArgs
-	// wraps each command's Args validator. Cobra's unknown-command error is
-	// produced earlier, during Find, and is intentionally left at exit 1 to
+	// Classify Cobra flag-parse and arg-count failures as usage errors (exit 2).
+	// Unknown-command errors are produced earlier during Find and stay exit 1 to
 	// match git/gh.
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return usageError(err)
@@ -180,9 +161,8 @@ Examples:
 	return cmd
 }
 
-// wrapUsageArgs wraps every command's positional-argument validator so an
-// arg-count failure carries the usage fault domain (exit 2) without changing
-// its message. A nil Args validator (Cobra's ArbitraryArgs default) never
+// wrapUsageArgs wraps every command's positional-arg validator so an arg-count
+// failure carries the usage fault domain (exit 2). A nil Args validator never
 // errors, so it is left untouched.
 func wrapUsageArgs(cmd *cobra.Command) {
 	if cmd.Args != nil {
@@ -199,7 +179,7 @@ func wrapUsageArgs(cmd *cobra.Command) {
 	}
 }
 
-// Execute runs the root command. This is the main entry point for the CLI.
+// Execute runs the root command.
 func Execute() error {
 	if runtime.GOOS == "windows" {
 		return fmt.Errorf("start does not support Windows")
@@ -207,9 +187,8 @@ func Execute() error {
 	return NewRootCmd().Execute()
 }
 
-// checkHelpArg checks if the first argument is "help" and shows help if so.
-// Returns true if help was shown, false otherwise.
-// Use this at the top of RunE on commands that use noArgsOrHelp as their Args validator.
+// checkHelpArg reports whether the first arg is "help" and shows help if so.
+// Call at the top of RunE on commands using noArgsOrHelp.
 func checkHelpArg(cmd *cobra.Command, args []string) (bool, error) {
 	if len(args) > 0 && args[0] == "help" {
 		return true, cmd.Help()
@@ -222,9 +201,8 @@ func unknownCommandError(cmdPath, arg string) error {
 	return fmt.Errorf("unknown command %q for %q\nRun '%s --help' for usage", arg, cmdPath, cmdPath)
 }
 
-// noArgsOrHelp is like cobra.NoArgs but allows "help" as a single argument.
-// When combined with checkHelpArg in RunE, it enables "cmd help" as an alias
-// for "cmd --help" on leaf commands that take no positional arguments.
+// noArgsOrHelp is like cobra.NoArgs but allows a lone "help" arg, enabling
+// "cmd help" as an alias for "cmd --help" on leaf commands.
 func noArgsOrHelp(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 && args[0] == "help" {
 		return nil
@@ -232,12 +210,11 @@ func noArgsOrHelp(cmd *cobra.Command, args []string) error {
 	return cobra.NoArgs(cmd, args)
 }
 
-// resolveColorMode collapses the --color value and the environment into a
-// single decoration decision. Precedence (Requirement 2): NO_COLOR (set to any
-// value) disables colour and wins even over --color=always; --color=never
-// disables; --color=always forces on; --color=auto enables only when stdout is
-// a TTY, with TERM=dumb disabling and FORCE_COLOR/CLICOLOR_FORCE forcing on
-// when stdout is not a TTY. An out-of-set value is a usage error (exit 2).
+// resolveColorMode collapses --color and the environment into one decoration
+// decision. Precedence: NO_COLOR disables and wins even over --color=always;
+// --color=never disables; --color=always forces on; --color=auto enables only
+// on a TTY, with TERM=dumb disabling and FORCE_COLOR/CLICOLOR_FORCE forcing on
+// off-TTY. An out-of-set value is a usage error (exit 2).
 func resolveColorMode(mode string, stdoutTTY bool) (decorated bool, err error) {
 	switch mode {
 	case "auto", "always", "never":
@@ -264,9 +241,8 @@ func resolveColorMode(mode string, stdoutTTY bool) (decorated bool, err error) {
 	}
 }
 
-// envTruthy reports whether a cross-ecosystem boolean env var is on. Any
-// non-empty, non-falsy value is truthy, matching the de facto FORCE_COLOR /
-// CLICOLOR_FORCE convention so the same value behaves identically across tools.
+// envTruthy reports whether a boolean env var is on, matching the de facto
+// FORCE_COLOR / CLICOLOR_FORCE convention (any non-empty, non-falsy value).
 func envTruthy(name string) bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
 	return v != "" && v != "0" && v != "false" && v != "no"
@@ -281,9 +257,8 @@ func isTerminal(r io.Reader) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
-// isTerminalWriter reports whether w is connected to a terminal. Used for the
-// stdout TTY check that drives --color=auto; in tests the writer is a buffer,
-// so auto resolves to no colour unless FORCE_COLOR is set.
+// isTerminalWriter reports whether w is connected to a terminal. In tests the
+// writer is a buffer, so --color=auto resolves to no colour unless FORCE_COLOR.
 func isTerminalWriter(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -292,16 +267,10 @@ func isTerminalWriter(w io.Writer) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
-// readPipedStdin returns the full contents of stdin when it is piped
-// (not a TTY). Content is returned raw to preserve leading whitespace
-// and trailing newlines, matching file-sourced prompts via
-// orchestration.ReadFilePath. When stdin is a TTY, returns
-// ("", false, nil) so callers can fall back to their interactive path.
-//
-// Callers decide their own empty-stdin policy. runStart treats a blank
-// pipe as "no prompt given" and runs the normal start flow with default
-// contexts, so `start </dev/null` behaves like bare `start`; runPrompt and
-// runTask accept an empty pipe as a valid no-text invocation.
+// readPipedStdin returns the full contents of stdin when it is piped (not a
+// TTY). Content is raw to preserve leading whitespace and trailing newlines,
+// matching file-sourced prompts. A TTY returns ("", false, nil) so callers can
+// fall back to interactive input. Callers decide their own empty-stdin policy.
 func readPipedStdin(stdin io.Reader) (text string, piped bool, err error) {
 	if isTerminal(stdin) {
 		return "", false, nil

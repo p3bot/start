@@ -6,9 +6,7 @@ import (
 	"testing"
 )
 
-// TestTag_PreservesMessage verifies a tagged error delegates Error() to the
-// wrapped error, so producers keep their existing user-facing text (e.g.
-// `role "x" not found`) rather than appending the sentinel's own words.
+// Tagging must not append the sentinel's text to the producer's message.
 func TestTag_PreservesMessage(t *testing.T) {
 	t.Parallel()
 	const msg = `role "x" not found`
@@ -17,9 +15,8 @@ func TestTag_PreservesMessage(t *testing.T) {
 	}
 }
 
-// TestTag_ClassifiableViaIs verifies each constructor attaches exactly its own
-// domain sentinel and no other, so the exit-code mapper's errors.Is branches
-// cannot cross-classify.
+// Each constructor must attach only its own domain, so the exit-code mapper's
+// errors.Is branches cannot cross-classify.
 func TestTag_ClassifiableViaIs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -47,9 +44,8 @@ func TestTag_ClassifiableViaIs(t *testing.T) {
 	}
 }
 
-// TestTag_PreservesOriginalChain verifies Unwrap reports both the original
-// chain and the domain sentinel, so a sentinel wrapped inside the tagged error
-// (e.g. fs.ErrPermission) stays reachable via errors.Is alongside the domain.
+// A sentinel wrapped inside the tagged error must stay reachable via errors.Is
+// alongside the domain.
 func TestTag_PreservesOriginalChain(t *testing.T) {
 	t.Parallel()
 	inner := errors.New("inner cause")
@@ -63,8 +59,7 @@ func TestTag_PreservesOriginalChain(t *testing.T) {
 	}
 }
 
-// TestTag_NilReturnsNil verifies the constructors are nil-safe, so call sites
-// can tag unconditionally without converting a nil error into a non-nil one.
+// Constructors must be nil-safe so call sites can tag unconditionally.
 func TestTag_NilReturnsNil(t *testing.T) {
 	t.Parallel()
 	for _, ctor := range []struct {

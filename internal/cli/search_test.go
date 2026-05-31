@@ -106,7 +106,6 @@ func TestPrintSearchSections(t *testing.T) {
 		printSearchSections(&buf, sections, false, installed)
 		out := buf.String()
 
-		// Split output into local and registry parts
 		registryIdx := strings.Index(out, "registry")
 		localPart := out[:registryIdx]
 		registryPart := out[registryIdx:]
@@ -298,7 +297,6 @@ func TestSearchCommandJSON_WithConfigResults(t *testing.T) {
 		t.Error("expected at least one section (global config) in JSON output")
 	}
 
-	// Verify section structure
 	for _, section := range sections {
 		if _, ok := section["label"]; !ok {
 			t.Error("section missing 'label' field")
@@ -348,7 +346,6 @@ func TestSearchCommandValidation(t *testing.T) {
 	t.Run("find alias is registered", func(t *testing.T) {
 		t.Parallel()
 		cmd := NewRootCmd()
-		// Walk the command tree to find the search command
 		for _, sub := range cmd.Commands() {
 			if sub.Name() == "search" {
 				found := false

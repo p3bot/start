@@ -9,8 +9,8 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// fprintDim writes text with dim styling and cyan parenthetical delimiters.
-// Text is dim, ( and ) are cyan. Byte iteration is safe here as delimiters are ASCII.
+// fprintDim writes text dim with cyan parentheses. Byte iteration is safe
+// since the delimiters are ASCII.
 func fprintDim(w io.Writer, s string) {
 	start := 0
 	for i := 0; i < len(s); i++ {
@@ -59,7 +59,6 @@ func (r *Reporter) Print(report Report) {
 	r.printSummary(report)
 }
 
-// printHeader prints the doctor header.
 func (r *Reporter) printHeader() {
 	fmt.Fprintln(r.w)
 	tui.ColorHeader.Fprintln(r.w, "start doctor")
@@ -67,9 +66,7 @@ func (r *Reporter) printHeader() {
 	fmt.Fprintln(r.w)
 }
 
-// printSection prints a single section.
 func (r *Reporter) printSection(section SectionResult) {
-	// Section header
 	sc := tui.CategoryColor(section.Name)
 	if sc != nil {
 		sc.Fprintf(r.w, "%s", section.Name)
@@ -82,7 +79,6 @@ func (r *Reporter) printSection(section SectionResult) {
 	}
 	fmt.Fprintln(r.w)
 
-	// Section results
 	for _, result := range section.Results {
 		r.printResult(result, section.NoIcons)
 	}
@@ -90,7 +86,6 @@ func (r *Reporter) printSection(section SectionResult) {
 	fmt.Fprintln(r.w)
 }
 
-// statusColor returns the colour for a status.
 func statusColor(s Status) *color.Color {
 	switch s {
 	case StatusPass:
@@ -104,14 +99,10 @@ func statusColor(s Status) *color.Color {
 	}
 }
 
-// printResult prints a single check result.
 func (r *Reporter) printResult(result CheckResult, noIcons bool) {
 	indent := strings.Repeat("  ", result.Indent+1)
 
-	// Format based on content and icon mode
 	if noIcons || result.NoIcon {
-		// No icons - used for info-only sections like Version, Repository
-		// and per-result headers like config directory names
 		if result.Message == "" {
 			fmt.Fprintf(r.w, "%s%s\n", indent, result.Label)
 		} else {
@@ -125,7 +116,6 @@ func (r *Reporter) printResult(result CheckResult, noIcons bool) {
 	sc := statusColor(result.Status)
 	symbol := result.Status.Symbol()
 
-	// Format based on content
 	fmt.Fprint(r.w, indent)
 	sc.Fprintf(r.w, "%s", symbol)
 	if result.Message == "" {
@@ -136,9 +126,6 @@ func (r *Reporter) printResult(result CheckResult, noIcons bool) {
 		fmt.Fprintln(r.w)
 	}
 
-	// Print fix suggestion if present and the result is actionable.
-	// IsIssue treats NotFound as actionable only when Fix is non-empty,
-	// so the explicit Fix != "" guard here covers Fail/Warn alone.
 	if result.Fix != "" && result.IsIssue() {
 		fixIndent := strings.Repeat("  ", result.Indent+2)
 		fmt.Fprint(r.w, fixIndent)
@@ -146,7 +133,6 @@ func (r *Reporter) printResult(result CheckResult, noIcons bool) {
 		fmt.Fprintln(r.w)
 	}
 
-	// Print details in verbose mode
 	if r.verbose && len(result.Details) > 0 {
 		detailIndent := strings.Repeat("  ", result.Indent+2)
 		for _, detail := range result.Details {
@@ -155,7 +141,6 @@ func (r *Reporter) printResult(result CheckResult, noIcons bool) {
 	}
 }
 
-// printSummary prints the summary section.
 func (r *Reporter) printSummary(report Report) {
 	tui.ColorHeader.Fprintln(r.w, "Summary")
 	tui.ColorSeparator.Fprintln(r.w, strings.Repeat("─", 59))
@@ -170,8 +155,7 @@ func (r *Reporter) printSummary(report Report) {
 		return
 	}
 
-	// Count summary. Sep tracks whether the next segment needs a leading
-	// ", " so segments compose cleanly regardless of which are non-zero.
+	// sep prefixes each non-first segment so they compose regardless of which counts are non-zero.
 	fmt.Fprint(r.w, "  ")
 	sep := ""
 	if errCount > 0 {
@@ -199,7 +183,6 @@ func (r *Reporter) printSummary(report Report) {
 	fmt.Fprintln(r.w, " found")
 	fmt.Fprintln(r.w)
 
-	// List issues
 	issues := report.Issues()
 	if len(issues) > 0 {
 		fmt.Fprintln(r.w, "Issues:")
@@ -219,7 +202,6 @@ func (r *Reporter) printSummary(report Report) {
 	}
 }
 
-// printQuiet prints minimal output for quiet mode.
 func (r *Reporter) printQuiet(report Report) {
 	issues := report.Issues()
 	for _, issue := range issues {

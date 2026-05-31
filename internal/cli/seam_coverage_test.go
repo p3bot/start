@@ -12,22 +12,17 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// errFetchBoom is the canned fetch failure used to drive update's per-module
+// errFetchBoom is the canned fetch failure that drives update's per-module
 // error path offline.
 var errFetchBoom = errors.New("registry stub: boom")
 
-// This file exercises the command paths the registry-client provider seam
-// makes reachable offline but that the project's --json drift guard
-// (json_capture_test.go) does not cover: text-mode rendering, category
-// filtering, --export, the update apply/upgrade write path, doctor's
-// schema-validation success branch, and the install flow. Each test drives a
-// real command through NewRootCmd with the stub bound, asserting observable
-// behaviour rather than implementation details. No application code changes.
+// Exercises the command paths the registry-client provider seam makes reachable
+// offline but that the --json drift guard (json_capture_test.go) does not cover:
+// text-mode rendering, category filtering, --export, the update apply/upgrade
+// write path, doctor's schema-validation success branch, and the install flow.
 
-// captureText runs a command through a fresh root command with the
-// registry-client provider bound to stub and returns captured stdout plus the
-// Execute error. It mirrors captureJSON but for text-mode output, so the
-// non-JSON rendering paths can be exercised offline.
+// captureText mirrors captureJSON but for text-mode output, binding the
+// registry-client provider to stub and returning stdout plus the Execute error.
 func captureText(t *testing.T, stub *registryStub, args ...string) (string, error) {
 	t.Helper()
 
@@ -46,10 +41,9 @@ func captureText(t *testing.T, stub *registryStub, args ...string) (string, erro
 	return buf.String(), err
 }
 
-// buildModuleFixture writes a self-contained CUE module (cue.mod/module.cue
-// plus pkg.cue) to a temp dir and returns its path, suitable as a stub Fetch
-// SourceDir for ExtractModuleContent / LoadSchemas. It has no external deps so
-// it builds with a nil registry.
+// buildModuleFixture writes a self-contained CUE module to a temp dir and
+// returns its path, suitable as a stub Fetch SourceDir. It has no external deps
+// so it builds with a nil registry.
 func buildModuleFixture(t *testing.T, pkg, body string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -67,8 +61,8 @@ func buildModuleFixture(t *testing.T, pkg, body string) string {
 	return dir
 }
 
-// agentFixtureBody is a registry agent module the stub serves for the
-// sentinel agent's Fetch, so update/install can extract real content offline.
+// agentFixtureBody is the agent module the stub serves for the sentinel agent's
+// Fetch, so update/install can extract real content offline.
 const agentFixtureBody = `package agent
 
 agent: {
@@ -78,9 +72,8 @@ agent: {
 }
 `
 
-// schemaFixtureBody is a permissive schemas module (open definitions) the stub
-// serves for the schema module's Fetch, so doctor's schema-validation success
-// branch runs offline and the isolated test config validates cleanly.
+// schemaFixtureBody is a permissive schemas module the stub serves so doctor's
+// schema-validation success branch runs offline against the isolated config.
 const schemaFixtureBody = `package schemas
 
 #Agent: {...}
@@ -90,15 +83,14 @@ const schemaFixtureBody = `package schemas
 #Settings: {...}
 `
 
-// sentinelModuleBase is the sentinel agent's module path with major version,
-// matching the stub index entry. Lookups strip the version suffix, so a
-// SetFetch keyed here matches the resolved @v1.0.0 path too.
+// sentinelModuleBase is the sentinel agent's module path with major version.
+// Lookups strip the version suffix, so a SetFetch keyed here also matches the
+// resolved @v1.0.0 path.
 const sentinelModuleBase = "github.com/start-cli/library/agents/" + sentinelAgentName + "@v1"
 
-// writeInstalledAgentAt writes the sentinel agent into the named config file in
-// the local .start dir at the given origin version, so collectInstalledModules
-// picks it up and determineScopeAndFile resolves the rewrite target to that
-// file.
+// writeInstalledAgentAt writes the sentinel agent into the named local config
+// file at the given origin version, so collectInstalledModules picks it up and
+// the rewrite target resolves to that file.
 func writeInstalledAgentAt(t *testing.T, tmpDir, fileName, version string) string {
 	t.Helper()
 	content := `agents: {
@@ -135,10 +127,8 @@ func findUpdateResult(t *testing.T, results []any, name string) map[string]any {
 	return nil
 }
 
-// --- library ---------------------------------------------------------------
-
 // TestLibraryTextOffline asserts library renders its grouped text output
-// offline from the on-disk index fixture the stub serves via Fetch+LoadIndex.
+// offline from the index fixture the stub serves.
 func TestLibraryTextOffline(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 
@@ -172,7 +162,7 @@ func TestLibraryCategoryFilterOffline(t *testing.T) {
 	if _, ok := obj["agents"].(map[string]any); !ok {
 		t.Errorf("library agents --json missing agents object; got keys %v", mapKeys(obj))
 	}
-	// The role/context/task entries must not leak through the category filter.
+	// Non-agent entries must not leak through the category filter.
 	for _, gone := range []string{"go-expert", "environment", "review/pre-commit"} {
 		if strings.Contains(string(raw), gone) {
 			t.Errorf("library agents --json leaked non-agent entry %q\noutput: %s", gone, raw)
@@ -239,8 +229,6 @@ func TestLibraryUnknownCategory(t *testing.T) {
 	}
 }
 
-// --- search ----------------------------------------------------------------
-
 // TestSearchTextOffline asserts search renders its text-mode results offline,
 // including the registry-only sentinel served by the stub index.
 func TestSearchTextOffline(t *testing.T) {
@@ -256,8 +244,7 @@ func TestSearchTextOffline(t *testing.T) {
 }
 
 // captureStreams mirrors captureText but keeps stdout and stderr separate, so
-// tests can assert which stream carries what — the offline-search paths split
-// the friendly result/no-match line (stdout) from the outage warning (stderr).
+// tests can assert which stream carries the result line versus the outage warning.
 func captureStreams(t *testing.T, stub *registryStub, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 
@@ -361,13 +348,9 @@ func TestSearchJSONResultsOffline(t *testing.T) {
 	}
 }
 
-// --- update (apply paths) --------------------------------------------------
-
-// TestUpdateAppliesUpgradeOffline drives the full update apply path offline:
-// an installed agent at v0.0.1 is upgraded to the stub index's v1.0.0, with the
-// new module content fetched from the stub fixture and written back to config.
-// This is the core update behaviour the --json drift guard's no-op fixture
-// never exercises.
+// TestUpdateAppliesUpgradeOffline drives the full update apply path offline: an
+// installed agent at v0.0.1 is upgraded to the stub index's v1.0.0 and written
+// back to config — the core behaviour the drift guard's no-op fixture never hits.
 func TestUpdateAppliesUpgradeOffline(t *testing.T) {
 	tmpDir, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 	cfgPath := writeInstalledAgentAt(t, tmpDir, "agents.cue", "v0.0.1")
@@ -394,7 +377,6 @@ func TestUpdateAppliesUpgradeOffline(t *testing.T) {
 		t.Errorf("update reported an error\noutput: %s", raw)
 	}
 
-	// The config file must be rewritten with the new origin version.
 	rewritten, err := os.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatalf("reading rewritten config: %v", err)
@@ -511,12 +493,9 @@ func TestUpdateQueryFilterOffline(t *testing.T) {
 	findUpdateResult(t, results, sentinelAgentName)
 }
 
-// --- doctor (schema success) -----------------------------------------------
-
 // TestDoctorSchemaSuccessOffline drives doctor's schema-validation success
-// branch offline: the stub serves a permissive schemas module so LoadSchemas
-// succeeds and the isolated config validates, exercising the path the --json
-// drift guard only covers in its degraded "Skipped" form.
+// branch offline, exercising the path the drift guard only covers in its
+// degraded "Skipped" form.
 func TestDoctorSchemaSuccessOffline(t *testing.T) {
 	_, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 	stub.SetFetch(registry.SchemaModulePath, registry.FetchResult{
@@ -537,7 +516,6 @@ func TestDoctorSchemaSuccessOffline(t *testing.T) {
 	if !strings.Contains(string(raw), "Schema Validation") {
 		t.Errorf("doctor --json missing Schema Validation section\noutput: %s", raw)
 	}
-	// The success branch must not emit the registry-unavailable degradations.
 	for _, degraded := range []string{"registry unavailable", "cannot fetch schemas", "cannot resolve schema version", "cannot load schemas"} {
 		if strings.Contains(string(raw), degraded) {
 			t.Errorf("schema section degraded (%q) despite a served schema module\noutput: %s", degraded, raw)
@@ -545,11 +523,9 @@ func TestDoctorSchemaSuccessOffline(t *testing.T) {
 	}
 }
 
-// --- install ---------------------------------------------------------------
-
-// TestInstallOffline drives the install flow offline: the stub serves the
-// index for module resolution and the agent fixture for Fetch, and the module
-// is written into local config. install has no other offline coverage.
+// TestInstallOffline drives the install flow offline: the stub serves the index
+// and agent fixture, and the module is written into local config. install has
+// no other offline coverage.
 func TestInstallOffline(t *testing.T) {
 	tmpDir, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
 	stub.SetFetch(sentinelModuleBase, registry.FetchResult{
@@ -588,8 +564,6 @@ func TestInstallAlreadyInstalledOffline(t *testing.T) {
 		t.Errorf("expected already-installed notice\noutput: %s", out)
 	}
 }
-
-// --- list --verbose --------------------------------------------------------
 
 // TestListVerboseOffline asserts list --verbose consults the registry through
 // the seam to annotate update availability, running offline against the stub.

@@ -9,28 +9,14 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// Shared per-category metadata writers. Each takes a strongly-typed value
-// and an io.Writer and emits the labelled metadata lines for that category
-// in a fixed order, with the existing skip-when-empty rules.
-//
 // Each writer owns its own leading blank line: when any field would be
-// emitted, the writer prints a single `\n` before the first field; when
-// nothing would be emitted, the writer is a no-op. Callers do not need
-// (and must not add) a separator before invoking the writer.
-//
-// For agents, a blank line is also emitted before the `Models:` block when
-// prior fields (Description / Bin / Default Model / Tags) emitted content;
-// when `Models:` is the only field, the writer's leading `\n` already
-// provides the separator.
+// emitted it prints a single `\n` before the first field; otherwise it is a
+// no-op. Callers must not add a separator before invoking the writer.
 
-// writeAgentMetadata writes Description, Bin, Default Model, Tags, then a
-// blank line, then the Models block. AgentConfig.Command is intentionally
-// not emitted here — both consumers render it outside the metadata block
-// (config_get as a header line; describe via ExtractUTDFields).
+// writeAgentMetadata does not emit AgentConfig.Command: both consumers render
+// it outside the metadata block (config_get as a header line; describe via
+// ExtractUTDFields).
 func writeAgentMetadata(w io.Writer, agent AgentConfig) {
-	// hasHeader gates the inner blank line before `Models:`. Keep it in
-	// sync with the field emissions below if a new pre-Models field is
-	// added to AgentConfig.
 	hasHeader := agent.Description != "" || agent.Bin != "" ||
 		agent.DefaultModel != "" || len(agent.Tags) > 0
 	hasModels := len(agent.Models) > 0
@@ -72,8 +58,6 @@ func writeAgentMetadata(w io.Writer, agent AgentConfig) {
 	}
 }
 
-// writeRoleMetadata writes Description, File, Command, Prompt,
-// Optional (only when true), Tags.
 func writeRoleMetadata(w io.Writer, role RoleConfig) {
 	if role.Description == "" && role.File == "" && role.Command == "" &&
 		role.Prompt == "" && !role.Optional && len(role.Tags) == 0 {
@@ -103,9 +87,8 @@ func writeRoleMetadata(w io.Writer, role RoleConfig) {
 	}
 }
 
-// writeContextMetadata writes Description, File, Command, Prompt,
-// Required (always), Default (always), Tags. Required and Default print
-// unconditionally, so this writer always produces output.
+// writeContextMetadata always produces output: Required and Default print
+// unconditionally.
 func writeContextMetadata(w io.Writer, ctx ContextConfig) {
 	label := tui.ColorDim.Sprint
 	fmt.Fprintln(w)
@@ -129,7 +112,6 @@ func writeContextMetadata(w io.Writer, ctx ContextConfig) {
 	}
 }
 
-// writeTaskMetadata writes Description, File, Command, Prompt, Role, Tags.
 func writeTaskMetadata(w io.Writer, task TaskConfig) {
 	if task.Description == "" && task.File == "" && task.Command == "" &&
 		task.Prompt == "" && task.Role == "" && len(task.Tags) == 0 {

@@ -10,7 +10,6 @@ import (
 	"github.com/start-cli/start/internal/config"
 )
 
-// addConfigExportCommand registers the "config export [category]" subcommand.
 func addConfigExportCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "export [category]",
@@ -27,7 +26,6 @@ Use --local to target project-specific configuration (.start/).`,
 	parent.AddCommand(cmd)
 }
 
-// runConfigExport handles the "config export [category]" command.
 func runConfigExport(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -56,7 +54,6 @@ func runConfigExport(cmd *cobra.Command, args []string) error {
 	return printCueFiles(w, configDir)
 }
 
-// exportSingleCategory outputs a single CUE config file (no header).
 func exportSingleCategory(w io.Writer, local bool, category string) error {
 	path, err := resolveConfigOpenPath(local, category)
 	if err != nil {
@@ -75,7 +72,6 @@ func exportSingleCategory(w io.Writer, local bool, category string) error {
 	return nil
 }
 
-// printCueFiles reads and prints all .cue files from dir with // filename headers.
 func printCueFiles(w io.Writer, dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

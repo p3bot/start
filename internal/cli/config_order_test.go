@@ -14,22 +14,18 @@ func TestResolveOrderCategory(t *testing.T) {
 		want  string
 		known bool
 	}{
-		// orderable — singular and plural, lowercase
 		{"context", "contexts", true},
 		{"contexts", "contexts", true},
 		{"role", "roles", true},
 		{"roles", "roles", true},
-		// orderable — mixed case
 		{"Context", "contexts", true},
 		{"Role", "roles", true},
 		{"ROLES", "roles", true},
 		{"CONTEXTS", "contexts", true},
-		// non-orderable known categories
 		{"agent", "", true},
 		{"agents", "", true},
 		{"task", "", true},
 		{"tasks", "", true},
-		// truly unknown
 		{"xyz", "", false},
 		{"", "", false},
 	}
@@ -78,7 +74,6 @@ func TestRunReorderLoop_MoveUp(t *testing.T) {
 		return "  " + name
 	}
 
-	// Input: move item 2 up, then save
 	input := "2\n\n"
 	stdout := &bytes.Buffer{}
 
@@ -107,7 +102,6 @@ func TestRunReorderLoop_MoveToTop(t *testing.T) {
 		return "  " + name
 	}
 
-	// Move gamma (3) up twice to reach top, then save
 	input := "3\n2\n\n"
 	stdout := &bytes.Buffer{}
 
@@ -164,7 +158,6 @@ func TestRunReorderLoop_AlreadyAtTop(t *testing.T) {
 		return "  " + name
 	}
 
-	// Position 1 is already at top, then save
 	input := "1\n\n"
 	stdout := &bytes.Buffer{}
 
@@ -181,7 +174,6 @@ func TestRunReorderLoop_AlreadyAtTop(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Already at top") {
 		t.Errorf("expected 'Already at top' message, got: %s", stdout.String())
 	}
-	// Order should be unchanged
 	if result[0] != "alpha" || result[1] != "beta" {
 		t.Errorf("order should be unchanged, got: %v", result)
 	}
@@ -224,7 +216,6 @@ func TestRunReorderLoop_SaveEmpty(t *testing.T) {
 		return "  " + name
 	}
 
-	// Immediately save without changes
 	input := "\n"
 	stdout := &bytes.Buffer{}
 
@@ -257,7 +248,6 @@ func TestRunReorderLoop_DoesNotMutateInput(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Original order should be unchanged
 	if order[0] != "alpha" || order[1] != "beta" || order[2] != "gamma" {
 		t.Errorf("original order was mutated: %v", order)
 	}
@@ -282,7 +272,6 @@ func TestWriteContextsFile_PreservesOrder(t *testing.T) {
 		},
 	}
 
-	// Write in non-alphabetical order
 	order := []string{"zebra", "alpha", "middle"}
 	err := writeContextsFile(path, contexts, order)
 	if err != nil {
@@ -452,8 +441,7 @@ func TestWriteReadRoundTrip_Roles(t *testing.T) {
 	}
 }
 
-// Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
-// to any test that calls os.Chdir — it will cause data races on the working directory.
+// Tests use os.Chdir (process-global): do not add t.Parallel() or the working directory races.
 
 func TestConfigContextOrder_Command(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -464,7 +452,6 @@ func TestConfigContextOrder_Command(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write contexts in specific order
 	contextsContent := `contexts: {
 	"zebra": {
 		file: "zebra.md"
@@ -482,7 +469,6 @@ func TestConfigContextOrder_Command(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Move item 2 (alpha) up, then save
 	stdout := &bytes.Buffer{}
 	if err := reorderContexts(stdout, strings.NewReader("2\n\n"), false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -493,7 +479,6 @@ func TestConfigContextOrder_Command(t *testing.T) {
 		t.Errorf("expected 'Order saved' in output, got: %s", output)
 	}
 
-	// Verify the file was rewritten with new order
 	content, err := os.ReadFile(filepath.Join(globalDir, "contexts.cue"))
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
@@ -534,7 +519,6 @@ func TestConfigRoleOrder_Command(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Move item 2 (alpha) up, then save
 	stdout := &bytes.Buffer{}
 	if err := reorderRoles(stdout, strings.NewReader("2\n\n"), false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -545,7 +529,6 @@ func TestConfigRoleOrder_Command(t *testing.T) {
 		t.Errorf("expected 'Order saved' in output, got: %s", output)
 	}
 
-	// Verify the file was rewritten with new order
 	content, err := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
@@ -585,7 +568,6 @@ func TestConfigContextOrder_Cancel(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Move item 2 up, then cancel
 	stdout := &bytes.Buffer{}
 	if err := reorderContexts(stdout, strings.NewReader("2\nq\n"), false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -596,7 +578,6 @@ func TestConfigContextOrder_Cancel(t *testing.T) {
 		t.Errorf("expected 'Cancelled' in output, got: %s", output)
 	}
 
-	// Verify the file was NOT rewritten (original order preserved)
 	content, err := os.ReadFile(filepath.Join(globalDir, "contexts.cue"))
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
@@ -655,7 +636,6 @@ func TestConfigContextOrder_SingleItem(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Test reorder with single item (save immediately)
 	stdout := &bytes.Buffer{}
 	if err := reorderContexts(stdout, strings.NewReader("\n"), false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -676,7 +656,6 @@ func TestConfigContextAdd_PreservesOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write contexts in specific order: zebra, alpha
 	contextsContent := `contexts: {
 	"zebra": {
 		file: "zebra.md"
@@ -691,13 +670,12 @@ func TestConfigContextAdd_PreservesOrder(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Add a new context "beta" - should appear at end
+	// New context should append, not sort alphabetically.
 	// Prompts: name, description (empty), content choice (Enter=default file), file path, required (N), default (N), tags (skip)
 	if err := configContextAdd(slowStdin("beta\n\n\nbeta.md\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
 
-	// Verify order: zebra, alpha, beta (not alphabetical)
 	content, err := os.ReadFile(filepath.Join(globalDir, "contexts.cue"))
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
@@ -723,7 +701,6 @@ func TestConfigRoleAdd_PreservesOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write roles in specific order: zebra, alpha
 	rolesContent := `roles: {
 	"zebra": {
 		prompt: "Zebra role"
@@ -738,13 +715,12 @@ func TestConfigRoleAdd_PreservesOrder(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Add a new role "beta"
+	// New role should append, not sort alphabetically.
 	// Prompts: name, description (empty), content choice "3" (inline prompt), prompt text, blank line to finish, tags (skip)
 	if err := configRoleAdd(slowStdin("beta\n\n3\nBeta role\n\n\n"), &bytes.Buffer{}, false); err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
 
-	// Verify order: zebra, alpha, beta (not alphabetical)
 	content, err := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
@@ -770,7 +746,6 @@ func TestConfigRoleList_PreservesInjectionOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Define roles in non-alphabetical order
 	rolesContent := `roles: {
 	"zebra": {
 		prompt: "Zebra role"
@@ -811,9 +786,7 @@ func TestConfigRoleList_PreservesInjectionOrder(t *testing.T) {
 		t.Fatalf("expected all roles in output, got: %s", output)
 	}
 
-	// Injection order: zebra (defined first) < alpha (second) < middle (third).
-	// The `config list` output preserves CUE definition order and labels the
-	// roles section "injection order"; it does not sort alphabetically.
+	// config list preserves CUE definition order ("injection order"), not alphabetical.
 	if zebraIdx >= alphaIdx || alphaIdx >= middleIdx {
 		t.Errorf("role list not in injection order (expected zebra < alpha < middle): zebra=%d, alpha=%d, middle=%d\noutput: %s",
 			zebraIdx, alphaIdx, middleIdx, output)

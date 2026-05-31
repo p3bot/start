@@ -25,11 +25,9 @@ type AgentConfig struct {
 	Origin       string            `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
-// decodeAgentValue extracts the agent fields from a per-item CUE value and
-// returns a populated AgentConfig (Name and Source are not populated — those
-// are set by the caller). Accepts both simple- and object-form `models`
-// entries using the try-string-then-`id` pattern; the same walk is used by
-// the runtime sites in `executor.go` and `partialFillAgentCommand`.
+// decodeAgentValue populates an AgentConfig from a per-item CUE value (Name and
+// Source are left for the caller). Accepts both simple- and object-form `models`
+// entries; the same walk runs in executor.go and partialFillAgentCommand.
 func decodeAgentValue(val cue.Value) AgentConfig {
 	var agent AgentConfig
 
@@ -74,14 +72,10 @@ func decodeAgentValue(val cue.Value) AgentConfig {
 	return agent
 }
 
-// loadAgentsForScope loads agents from the appropriate scope.
-// Returns the agents map, names in definition order, and any error.
 func loadAgentsForScope(scope config.Scope) (map[string]AgentConfig, []string, error) {
 	return loadForScope(scope, loadAgentsFromDir, func(a *AgentConfig, s string) { a.Source = s })
 }
 
-// loadAgentsFromDir loads agents from a specific directory.
-// Returns the agents map, names in definition order, and any error.
 func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 	agents := make(map[string]AgentConfig)
 	var order []string
@@ -89,7 +83,6 @@ func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(dir)
 	if err != nil {
-		// If no CUE files exist, return empty map (not an error)
 		if errors.Is(err, internalcue.ErrNoCUEFiles) {
 			return agents, order, nil
 		}
@@ -117,8 +110,7 @@ func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 	return agents, order, nil
 }
 
-// writeAgentsFile writes the agents configuration to a file.
-// Agents are not order-dependent, so names are sorted alphabetically for consistent output.
+// Agents are not order-dependent, so names are sorted for stable output.
 func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 	var sb strings.Builder
 
@@ -126,7 +118,6 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 	sb.WriteString("// Edit this file to customize your agent configuration\n\n")
 	sb.WriteString("agents: {\n")
 
-	// Sort agent names for consistent output
 	var names []string
 	for name := range agents {
 		names = append(names, name)
@@ -137,7 +128,6 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 		agent := agents[name]
 		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
-		// Write origin first if present (registry provenance)
 		if agent.Origin != "" {
 			fmt.Fprintf(&sb, "\t\torigin: %q\n", agent.Origin)
 		}
@@ -176,7 +166,6 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 	return os.WriteFile(path, []byte(sb.String()), 0644)
 }
 
-// loadConfigForScope loads the settings.cue settings for the scope.
 func loadConfigForScope(scope config.Scope) (cue.Value, error) {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -197,7 +186,6 @@ func loadConfigForScope(scope config.Scope) (cue.Value, error) {
 	return result.Value, nil
 }
 
-// getDefaultAgentFromConfig extracts default_agent from config value.
 func getDefaultAgentFromConfig(cfg cue.Value) string {
 	val := cfg.LookupPath(cue.ParsePath("settings.default_agent"))
 	if val.Exists() {
@@ -220,8 +208,8 @@ type RoleConfig struct {
 	Origin      string   `json:"origin,omitempty"`   // Registry module path when installed from registry
 }
 
-// decodeRoleValue extracts the role fields from a per-item CUE value and
-// returns a populated RoleConfig (Name and Source are set by the caller).
+// decodeRoleValue populates a RoleConfig from a per-item CUE value (Name and
+// Source are left for the caller).
 func decodeRoleValue(val cue.Value) RoleConfig {
 	var role RoleConfig
 
@@ -250,14 +238,10 @@ func decodeRoleValue(val cue.Value) RoleConfig {
 	return role
 }
 
-// loadRolesForScope loads roles from the appropriate scope.
-// Returns the roles map, names in definition order, and any error.
 func loadRolesForScope(scope config.Scope) (map[string]RoleConfig, []string, error) {
 	return loadForScope(scope, loadRolesFromDir, func(r *RoleConfig, s string) { r.Source = s })
 }
 
-// loadRolesFromDir loads roles from a specific directory.
-// Returns the roles map, names in definition order, and any error.
 func loadRolesFromDir(dir string) (map[string]RoleConfig, []string, error) {
 	roles := make(map[string]RoleConfig)
 	var order []string
@@ -265,7 +249,6 @@ func loadRolesFromDir(dir string) (map[string]RoleConfig, []string, error) {
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(dir)
 	if err != nil {
-		// If no CUE files exist, return empty map (not an error)
 		if errors.Is(err, internalcue.ErrNoCUEFiles) {
 			return roles, order, nil
 		}
@@ -293,8 +276,6 @@ func loadRolesFromDir(dir string) (map[string]RoleConfig, []string, error) {
 	return roles, order, nil
 }
 
-// writeRolesFile writes the roles configuration to a file.
-// Fields are written in the provided order.
 func writeRolesFile(path string, roles map[string]RoleConfig, order []string) error {
 	var sb strings.Builder
 
@@ -306,7 +287,6 @@ func writeRolesFile(path string, roles map[string]RoleConfig, order []string) er
 		role := roles[name]
 		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
-		// Write origin first if present (registry provenance)
 		if role.Origin != "" {
 			fmt.Fprintf(&sb, "\t\torigin: %q\n", role.Origin)
 		}
@@ -347,8 +327,8 @@ type ContextConfig struct {
 	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
-// decodeContextValue extracts the context fields from a per-item CUE value and
-// returns a populated ContextConfig (Name and Source are set by the caller).
+// decodeContextValue populates a ContextConfig from a per-item CUE value (Name
+// and Source are left for the caller).
 func decodeContextValue(val cue.Value) ContextConfig {
 	var ctx ContextConfig
 
@@ -380,14 +360,10 @@ func decodeContextValue(val cue.Value) ContextConfig {
 	return ctx
 }
 
-// loadContextsForScope loads contexts from the appropriate scope.
-// Returns the contexts map, names in definition order, and any error.
 func loadContextsForScope(scope config.Scope) (map[string]ContextConfig, []string, error) {
 	return loadForScope(scope, loadContextsFromDir, func(c *ContextConfig, s string) { c.Source = s })
 }
 
-// loadContextsFromDir loads contexts from a specific directory.
-// Returns the contexts map, names in definition order, and any error.
 func loadContextsFromDir(dir string) (map[string]ContextConfig, []string, error) {
 	contexts := make(map[string]ContextConfig)
 	var order []string
@@ -395,7 +371,6 @@ func loadContextsFromDir(dir string) (map[string]ContextConfig, []string, error)
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(dir)
 	if err != nil {
-		// If no CUE files exist, return empty map (not an error)
 		if errors.Is(err, internalcue.ErrNoCUEFiles) {
 			return contexts, order, nil
 		}
@@ -423,8 +398,6 @@ func loadContextsFromDir(dir string) (map[string]ContextConfig, []string, error)
 	return contexts, order, nil
 }
 
-// writeContextsFile writes the contexts configuration to a file.
-// Fields are written in the provided order.
 func writeContextsFile(path string, contexts map[string]ContextConfig, order []string) error {
 	var sb strings.Builder
 
@@ -436,7 +409,6 @@ func writeContextsFile(path string, contexts map[string]ContextConfig, order []s
 		ctx := contexts[name]
 		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
-		// Write origin first if present (registry provenance)
 		if ctx.Origin != "" {
 			fmt.Fprintf(&sb, "\t\torigin: %q\n", ctx.Origin)
 		}
@@ -479,8 +451,8 @@ type TaskConfig struct {
 	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
-// decodeTaskValue extracts the task fields from a per-item CUE value and
-// returns a populated TaskConfig (Name and Source are set by the caller).
+// decodeTaskValue populates a TaskConfig from a per-item CUE value (Name and
+// Source are left for the caller).
 func decodeTaskValue(val cue.Value) TaskConfig {
 	var task TaskConfig
 
@@ -509,14 +481,10 @@ func decodeTaskValue(val cue.Value) TaskConfig {
 	return task
 }
 
-// loadTasksForScope loads tasks from the appropriate scope.
-// Returns the tasks map, names in definition order, and any error.
 func loadTasksForScope(scope config.Scope) (map[string]TaskConfig, []string, error) {
 	return loadForScope(scope, loadTasksFromDir, func(t *TaskConfig, s string) { t.Source = s })
 }
 
-// loadTasksFromDir loads tasks from a specific directory.
-// Returns the tasks map, names in definition order, and any error.
 func loadTasksFromDir(dir string) (map[string]TaskConfig, []string, error) {
 	tasks := make(map[string]TaskConfig)
 	var order []string
@@ -524,7 +492,6 @@ func loadTasksFromDir(dir string) (map[string]TaskConfig, []string, error) {
 	loader := internalcue.NewLoader()
 	cfg, err := loader.LoadSingle(dir)
 	if err != nil {
-		// If no CUE files exist, return empty map (not an error)
 		if errors.Is(err, internalcue.ErrNoCUEFiles) {
 			return tasks, order, nil
 		}
@@ -552,8 +519,7 @@ func loadTasksFromDir(dir string) (map[string]TaskConfig, []string, error) {
 	return tasks, order, nil
 }
 
-// writeTasksFile writes the tasks configuration to a file.
-// Tasks are not order-dependent, so names are sorted alphabetically for consistent output.
+// Tasks are not order-dependent, so names are sorted for stable output.
 func writeTasksFile(path string, tasks map[string]TaskConfig) error {
 	var sb strings.Builder
 
@@ -561,7 +527,6 @@ func writeTasksFile(path string, tasks map[string]TaskConfig) error {
 	sb.WriteString("// Edit this file to customize your task configuration\n\n")
 	sb.WriteString("tasks: {\n")
 
-	// Sort task names for consistent output
 	var names []string
 	for name := range tasks {
 		names = append(names, name)
@@ -572,7 +537,6 @@ func writeTasksFile(path string, tasks map[string]TaskConfig) error {
 		task := tasks[name]
 		fmt.Fprintf(&sb, "\t%q: {\n", name)
 
-		// Write origin first if present (registry provenance)
 		if task.Origin != "" {
 			fmt.Fprintf(&sb, "\t\torigin: %q\n", task.Origin)
 		}

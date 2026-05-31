@@ -29,12 +29,10 @@ var (
 	ErrUserConfig = errors.New("invalid configuration")
 )
 
-// tagged attaches a fault-domain sentinel to an error without altering the
-// error's message. Error() delegates to the wrapped error so the user-facing
-// text is unchanged, while Unwrap reports both the original chain and the
-// domain sentinel so errors.Is(result, domain) holds. This lets producers
-// keep their existing messages (e.g. `role "x" not found`) yet remain
-// classifiable, instead of appending the sentinel's own text.
+// tagged attaches a fault-domain sentinel without altering the message:
+// Error() delegates to the wrapped error, while Unwrap reports both the
+// original chain and the domain so errors.Is(result, domain) holds. Producers
+// keep their existing messages yet stay classifiable.
 type tagged struct {
 	err    error
 	domain error

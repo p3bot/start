@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// setupGetTestConfig writes a CUE config covering each get code path.
 func setupGetTestConfig(t *testing.T) string {
 	t.Helper()
 
@@ -20,7 +19,7 @@ func setupGetTestConfig(t *testing.T) string {
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
-	// CUE module cache writes read-only files; chmod before TempDir cleanup.
+	// CUE module cache writes read-only files; chmod before TempDir cleanup can unlink.
 	t.Cleanup(func() {
 		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -38,45 +37,39 @@ func setupGetTestConfig(t *testing.T) string {
 		t.Fatalf("creating .start dir: %v", err)
 	}
 
-	// File-source role (real on-disk file, expanded via DefaultFileReader).
 	roleFile := filepath.Join(dir, "role.md")
 	if err := os.WriteFile(roleFile, []byte("Role file contents.\n"), 0o644); err != nil {
 		t.Fatalf("writing role file: %v", err)
 	}
 
-	// File+prompt UTD: file must win over prompt for get.
 	mixedFile := filepath.Join(dir, "mixed.md")
 	if err := os.WriteFile(mixedFile, []byte("MIXED FILE CONTENT"), 0o644); err != nil {
 		t.Fatalf("writing mixed file: %v", err)
 	}
 
-	// Tilde-path UTD: referenced as "~/tilde-role.md" in CUE; lives at $HOME
-	// (== dir, set above). Exercises ExpandFilePath via DefaultFileReader.
+	// Referenced as "~/tilde-role.md" in CUE; lives at $HOME (== dir) so
+	// ExpandFilePath's tilde branch resolves to it.
 	tildeFile := filepath.Join(dir, "tilde-role.md")
 	if err := os.WriteFile(tildeFile, []byte("Tilde file contents."), 0o644); err != nil {
 		t.Fatalf("writing tilde file: %v", err)
 	}
 
-	// Origin-bearing role: a fake origin string is fine — printGetVerbose only
-	// reads the value from CUE; @module/ resolution is not triggered for an
-	// absolute file path.
+	// Origin-bearing role: a fake origin is fine — printGetVerbose only echoes
+	// it, and @module/ resolution is not triggered for an absolute file path.
 	tracedFile := filepath.Join(dir, "traced.md")
 	if err := os.WriteFile(tracedFile, []byte("traced contents"), 0o644); err != nil {
 		t.Fatalf("writing traced file: %v", err)
 	}
 
-	// Relative-path role: file written into dir (the test's cwd after chdir
-	// below), referenced as "./relative-role.md" in CUE. Exercises
-	// ExpandFilePath's filepath.Abs branch via DefaultFileReader.
+	// Referenced as "./relative-role.md" in CUE (dir is the test's cwd after
+	// chdir below); exercises ExpandFilePath's filepath.Abs branch.
 	relativeFile := filepath.Join(dir, "relative-role.md")
 	if err := os.WriteFile(relativeFile, []byte("relative contents"), 0o644); err != nil {
 		t.Fatalf("writing relative file: %v", err)
 	}
 
-	// File whose content references {{.command_output}}, paired with a non-empty
-	// command in CUE. Used to assert getUTD's trim block suppresses
-	// TemplateProcessor.Process's lazy command execution
-	// (template.go: needsCommandOutput && fields.Command != "").
+	// File content references {{.command_output}}, paired with a non-empty
+	// command, to assert getUTD's trim block suppresses lazy command execution.
 	fcCmdRefFile := filepath.Join(dir, "fc-cmd-ref.md")
 	if err := os.WriteFile(fcCmdRefFile, []byte("before {{.command_output}} after"), 0o644); err != nil {
 		t.Fatalf("writing fc-cmd-ref file: %v", err)
@@ -181,7 +174,6 @@ tasks: {
 }
 
 // runGetCmd runs `start get` with the given args and a non-TTY stdin.
-// Returns stdout, stderr, and any error from cmd.Execute().
 func runGetCmd(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := NewRootCmd()
@@ -195,8 +187,6 @@ func runGetCmd(t *testing.T, args ...string) (string, string, error) {
 	return stdout.String(), stderr.String(), err
 }
 
-// TestGetUTDPromptSource verifies get renders a prompt-source role and the
-// rendered template variables (e.g. {{.user}}) are substituted.
 func TestGetUTDPromptSource(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -213,7 +203,6 @@ func TestGetUTDPromptSource(t *testing.T) {
 	}
 }
 
-// TestGetUTDFileSource verifies a file-source role outputs the file contents.
 func TestGetUTDFileSource(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -227,8 +216,6 @@ func TestGetUTDFileSource(t *testing.T) {
 	}
 }
 
-// TestGetUTDFileWinsOverPrompt verifies the file > prompt > command priority:
-// when both file and prompt are defined, get outputs the file.
 func TestGetUTDFileWinsOverPrompt(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -245,10 +232,8 @@ func TestGetUTDFileWinsOverPrompt(t *testing.T) {
 	}
 }
 
-// TestGetUTDCommandSource verifies a command-source UTD module executes the
-// command and that custom shell/timeout flow through to the runner. The trim
-// block in getUTD must preserve Shell and Timeout — they are execution
-// config, not source fields.
+// TestGetUTDCommandSourceWithShellTimeout pins that getUTD's trim block
+// preserves Shell and Timeout — they are execution config, not source fields.
 func TestGetUTDCommandSourceWithShellTimeout(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -262,8 +247,6 @@ func TestGetUTDCommandSourceWithShellTimeout(t *testing.T) {
 	}
 }
 
-// TestGetAgent verifies an agent's command template is partially rendered:
-// {{.bin}} and {{.model}} are substituted; runtime placeholders remain.
 func TestGetAgent(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -280,8 +263,6 @@ func TestGetAgent(t *testing.T) {
 	}
 }
 
-// TestGetAgentNoCommand verifies an agent with no command field returns a
-// configuration error naming the agent and leaves stdout empty.
 func TestGetAgentNoCommand(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -300,9 +281,6 @@ func TestGetAgentNoCommand(t *testing.T) {
 	}
 }
 
-// TestGetUTDEmptyFields verifies a UTD module with no file, prompt, or command
-// returns a configuration error naming the module and listing the expected
-// fields. Stdout stays empty.
 func TestGetUTDEmptyFields(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -323,9 +301,8 @@ func TestGetUTDEmptyFields(t *testing.T) {
 	}
 }
 
-// TestGetNoArgNonTTY verifies that running `get` with no argument in a
-// non-interactive environment returns an error rather than blocking on a
-// prompt.
+// TestGetNoArgNonTTY verifies no-arg get in a non-interactive environment
+// errors rather than blocking on a prompt.
 func TestGetNoArgNonTTY(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -338,8 +315,8 @@ func TestGetNoArgNonTTY(t *testing.T) {
 	}
 }
 
-// TestGetAmbiguousNonTTY verifies that an ambiguous name in non-TTY mode
-// returns an error listing the candidate matches.
+// TestGetAmbiguousNonTTY verifies an ambiguous name in non-TTY mode errors
+// with the candidate matches listed.
 func TestGetAmbiguousNonTTY(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -393,10 +370,8 @@ tasks: {
 	}
 }
 
-// TestGetVerboseCommandSource verifies --verbose against a command-source
-// UTD module emits a "Command: ..." line on stderr alongside Type/Name.
-// Without this metadata, a user piping `start get --verbose ctx-cmd | ...`
-// has no visibility into the shell-out that produced stdout.
+// TestGetVerboseCommandSource verifies --verbose on a command-source module
+// emits a "Command:" line on stderr so callers can see the shell-out behind stdout.
 func TestGetVerboseCommandSource(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -423,8 +398,6 @@ func TestGetVerboseCommandSource(t *testing.T) {
 	}
 }
 
-// TestGetVerboseToStderr verifies --verbose writes metadata to stderr without
-// polluting stdout.
 func TestGetVerboseToStderr(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -458,16 +431,10 @@ func TestGetVerboseToStderr(t *testing.T) {
 	}
 }
 
-// TestGetQuietSuppressesStderr verifies that --quiet leaves stdout holding
-// only the module content with stderr empty. Three independent stderr-write
-// paths converge in runGet and get* helpers — autoInstall progress
-// (resolve.go), notifyScopeWidenedIfLocal (describe.go), and printGetVerbose
-// (get.go) — and a regression in any single Quiet/Verbose gate would leak
-// metadata into a `start get --quiet | bar` pipeline. The autoInstall arm
-// of that contract is unit-tested in resolve.go's tests; the widen-notice
-// arm in TestNotifyScopeWidenedIfLocal. This test covers the verbose-path
-// gate and the integration shape (no flag combination produces stderr on the
-// happy path).
+// TestGetQuietSuppressesStderr covers the verbose-path Quiet gate and the
+// integration shape: --quiet leaves stdout with only module content and
+// stderr empty on the happy path. The autoInstall and widen-notice arms of
+// the same contract are covered elsewhere.
 func TestGetQuietSuppressesStderr(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -491,10 +458,9 @@ func TestGetQuietSuppressesStderr(t *testing.T) {
 	}
 }
 
-// TestGetResolveQueryRoutesToStderr asserts the wiring contract from the
-// implementation plan: `get` must invoke promptSearchQuery with stderr (not
-// stdout) and emit the short-query fallback to stderr. This keeps `start get
-// | bar` pipe-clean when stdin is a TTY but stdout is piped.
+// TestGetResolveQueryRoutesToStderr asserts get prompts and emits the
+// short-query fallback on stderr (not stdout), keeping the pipe clean when
+// stdin is a TTY but stdout is piped.
 func TestGetResolveQueryRoutesToStderr(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -524,16 +490,9 @@ func TestGetResolveQueryRoutesToStderr(t *testing.T) {
 	})
 }
 
-// TestGetCommandHelp verifies `start get help` prints the command help and
-// that the get command registers --global plus inherits --local from root.
-// Help-string assertions are limited to text that only lives in help (the
-// stdout-routing contract, the start-show pointer, the auto-install widening
-// note); flag presence is asserted via direct flag lookup so cosmetic
-// help-formatter changes (heading order, line wrapping, colour) cannot
-// false-fail it. Source priority is pinned by TestGetUTDFileWinsOverPrompt
-// and TestGetUTDPromptWinsOverCommand, so help wording is not the place to
-// re-assert it. No config isolation is needed: `help` short-circuits in
-// checkHelpArg before any config is loaded.
+// TestGetCommandHelp verifies `start get help` prints the command help and that
+// get registers --global plus inherits --local. Flag presence is asserted via
+// direct lookup so cosmetic help-formatter changes cannot false-fail it.
 func TestGetCommandHelp(t *testing.T) {
 	stdout, _, err := runGetCmd(t, "help")
 	if err != nil {
@@ -564,10 +523,8 @@ func TestGetCommandHelp(t *testing.T) {
 	}
 }
 
-// TestGetAppearsInRootHelp verifies the get command is registered on the
-// root with GroupID "workflow" so it lands in the Workflow section of help
-// output. Asserting the structural property avoids fragility against Cobra
-// help-formatter changes (heading order, colour codes, line wrapping).
+// TestGetAppearsInRootHelp asserts get registers with GroupID "workflow"
+// (structural check avoids fragility against Cobra help-formatter changes).
 func TestGetAppearsInRootHelp(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -585,9 +542,8 @@ func TestGetAppearsInRootHelp(t *testing.T) {
 	t.Fatal("get command not registered on root")
 }
 
-// TestGetUnknownName verifies that a name with no installed or registry
-// matches surfaces a clear error and leaves stdout empty. Acceptance criterion
-// "Unknown module names produce a clear error".
+// TestGetUnknownName verifies a name with no installed or registry match
+// surfaces a clear error and leaves stdout empty.
 func TestGetUnknownName(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -603,10 +559,8 @@ func TestGetUnknownName(t *testing.T) {
 	}
 }
 
-// TestGetUTDTildePath verifies that a UTD module whose `file` field uses a
-// `~/`-prefixed path resolves through DefaultFileReader's tilde expansion and
-// outputs the file's contents. Acceptance criterion: "UTD file resolution
-// succeeds for @module/, ~/, and relative paths".
+// TestGetUTDTildePath verifies a ~/-prefixed file field resolves through tilde
+// expansion and outputs the file's contents.
 func TestGetUTDTildePath(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -619,9 +573,6 @@ func TestGetUTDTildePath(t *testing.T) {
 	}
 }
 
-// TestGetVerboseFileAndOrigin verifies that --verbose against a UTD module
-// with both `file` and `origin` emits Type, Name, Origin, and Path metadata
-// lines to stderr, while stdout still receives the raw file contents.
 func TestGetVerboseFileAndOrigin(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -661,12 +612,9 @@ func TestGetVerboseFileAndOrigin(t *testing.T) {
 }
 
 // TestGetShortQueryNonTTYEndToEnd is the cobra-level counterpart to the
-// getResolveQuery unit test: a short query in a non-TTY environment must
-// return the descriptive error and never write to stdout. Together with
-// TestGetResolveQueryRoutesToStderr this proves the runGet → getResolveQuery
-// wiring keeps stdout pipe-clean on the failure path. The TTY-mode re-prompt
-// on stderr is not covered here because the project has no pseudo-TTY helpers
-// (see project plan, Implementation Guidance).
+// getResolveQuery unit test: a short query in a non-TTY environment must error
+// and never write to stdout. The TTY-mode re-prompt is not covered (no
+// pseudo-TTY helpers).
 func TestGetShortQueryNonTTYEndToEnd(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -680,26 +628,17 @@ func TestGetShortQueryNonTTYEndToEnd(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("stdout must be empty on short-query failure, got: %q", stdout)
 	}
-	// Sanity check that the non-TTY path did not also dump the TTY-mode
-	// "Query must be at least 3 characters" line to stderr — that fallback is
-	// only meaningful when the user can be re-prompted. Failing to gate it
-	// would clutter scripted callers' error output.
+	// The TTY-mode re-prompt notice is only meaningful when re-prompting, so it
+	// must not clutter scripted (non-TTY) callers' stderr.
 	if strings.Contains(stderr, "Query must be at least 3 characters") {
 		t.Errorf("non-TTY path should not emit TTY re-prompt notice, stderr: %q", stderr)
 	}
 }
 
-// TestGetUTDFileSourceSuppressesCommand pins the safety property of
-// getUTD's source-priority trim block for the file branch. With both `file`
-// and `command` set, and the file's content referencing {{.command_output}},
-// the module's command must not execute. TemplateProcessor.Process's lazy
-// {{.command_output}} expansion (template.go: needsCommandOutput &&
-// fields.Command != "") would otherwise shell out — getUTD's trim block
-// (get.go: file != "" → fields.Command = "") is what prevents it. If
-// Process's source-selection or lazy-eval semantics ever change so the trim
-// block stops protecting against this, this test fails. The companion
-// TestGetUTDFileWinsOverPrompt covers the externally observable behaviour
-// (file content wins) but not the no-shell-out invariant.
+// TestGetUTDFileSourceSuppressesCommand pins the no-shell-out invariant of
+// getUTD's trim block: with file and command both set and the file
+// referencing {{.command_output}}, the command must not execute. The
+// companion TestGetUTDFileWinsOverPrompt covers file-wins but not this.
 func TestGetUTDFileSourceSuppressesCommand(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -718,12 +657,9 @@ func TestGetUTDFileSourceSuppressesCommand(t *testing.T) {
 	}
 }
 
-// TestGetUTDPromptSourceSuppressesCommand is the prompt-branch counterpart
-// to TestGetUTDFileSourceSuppressesCommand. With `prompt` set and the prompt
-// referencing {{.command_output}} alongside a non-empty `command`, the
-// command must not execute. Guards the prompt-branch arm of getUTD's trim
-// block (get.go: prompt != "" → fields.Command = "") against the same
-// TemplateProcessor.Process lazy-eval regression.
+// TestGetUTDPromptSourceSuppressesCommand is the prompt-branch counterpart to
+// TestGetUTDFileSourceSuppressesCommand: with prompt set and referencing
+// {{.command_output}} alongside a command, the command must not execute.
 func TestGetUTDPromptSourceSuppressesCommand(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -742,10 +678,8 @@ func TestGetUTDPromptSourceSuppressesCommand(t *testing.T) {
 	}
 }
 
-// TestGetUTDPromptWinsOverCommand covers the second branch of getUTD's
-// source-priority trim. With file empty and both prompt and command set, the
-// prompt must win (file > prompt > command). Without this test the
-// `else if fields.Prompt != ""` branch is uncovered.
+// TestGetUTDPromptWinsOverCommand covers getUTD's else-if branch: with file
+// empty and both prompt and command set, the prompt must win.
 func TestGetUTDPromptWinsOverCommand(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -761,10 +695,8 @@ func TestGetUTDPromptWinsOverCommand(t *testing.T) {
 	}
 }
 
-// TestGetUTDRelativePath verifies a UTD module whose `file` field is a
-// relative path (e.g. "./role.md") resolves through ExpandFilePath's
-// filepath.Abs branch and outputs the file's contents. Acceptance criterion:
-// "UTD file resolution succeeds for @module/, ~/, and relative paths".
+// TestGetUTDRelativePath verifies a relative file field resolves through
+// ExpandFilePath's filepath.Abs branch and outputs the file's contents.
 func TestGetUTDRelativePath(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -777,9 +709,8 @@ func TestGetUTDRelativePath(t *testing.T) {
 	}
 }
 
-// TestGetUTDModuleNoOrigin verifies the error guard in getUTD: a module
-// with an @module/ file path but no origin field returns a descriptive error
-// naming the module, and stdout stays empty.
+// TestGetUTDModuleNoOrigin verifies the error guard for an @module/ file path
+// with no origin field: descriptive error, empty stdout.
 func TestGetUTDModuleNoOrigin(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -801,10 +732,8 @@ func TestGetUTDModuleNoOrigin(t *testing.T) {
 	}
 }
 
-// TestGetTooManyArgs verifies that more than one positional argument is
-// rejected (Requirement 5.1: "accepts zero or one positional argument"). The
-// Args validator runs before RunE, so this is a cobra-level rejection and
-// stdout never gets touched.
+// TestGetTooManyArgs verifies more than one positional arg is rejected at the
+// cobra Args layer (before RunE), so stdout is never touched.
 func TestGetTooManyArgs(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -819,10 +748,8 @@ func TestGetTooManyArgs(t *testing.T) {
 
 // TestGetUTDModulePath verifies @module/ resolution end-to-end: the file is
 // looked up in $CUE_CACHE_DIR/mod/extract/<dir(modulePath)>/<base(modulePath)+version>/
-// (see ResolveModulePath in composer.go). The test fabricates that directory
-// layout and reads through getUTD's @module/ branch and DefaultFileReader.
-// Acceptance criterion: "UTD file resolution succeeds for @module/, ~/, and
-// relative paths".
+// (see ResolveModulePath). The test fabricates that layout and reads through
+// getUTD's @module/ branch.
 func TestGetUTDModulePath(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -885,14 +812,10 @@ roles: {
 	}
 }
 
-// TestGetMergedScopeFindsGlobalAndLocal pins the scope constant in
-// runGet's loadConfig call from both directions. The two existing scopes
-// (Global at $HOME/.config/start/, Local at ./.start/) each contain a unique
-// role; both must be reachable through `start get`. A regression that flipped
-// runGet to ScopeLocal would break the global sub-test; flipping to
-// ScopeGlobal would break the local sub-test. Pattern follows
-// TestDescribeGlobalFlag in describe_test.go: HOME is set but XDG_CONFIG_HOME is not,
-// so globalConfigDir resolves to $HOME/.config/start/.
+// TestGetMergedScopeFindsGlobalAndLocal pins the scope constant in runGet's
+// loadConfig from both directions: a global-only and a local-only role must
+// each be reachable, so flipping runGet to ScopeLocal or ScopeGlobal breaks
+// one sub-test.
 func TestGetMergedScopeFindsGlobalAndLocal(t *testing.T) {
 	dir := t.TempDir()
 
@@ -956,10 +879,9 @@ roles: {
 	})
 }
 
-// TestGetAgentModelOverrideExact verifies that --model with a key in the
-// agent's models map produces the resolved id, not the agent's default_model.
-// Regression guard for the rendering contract: `start --model haiku get claude`
-// and `start --model haiku claude` must agree on the substituted model id.
+// TestGetAgentModelOverrideExact verifies --model with a key in the agent's
+// models map produces the resolved id, not default_model — keeping `get` and
+// `start` agreed on the substituted model.
 func TestGetAgentModelOverrideExact(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -984,10 +906,8 @@ func TestGetAgentModelOverrideExact(t *testing.T) {
 	}
 }
 
-// TestGetAgentModelOverrideSubstring verifies the multi-term substring path
-// of resolveModelName: --model "hai" should match "haiku" since it is the
-// only key containing that substring. Pins parity with `start`'s --model
-// resolution rather than just exact-match.
+// TestGetAgentModelOverrideSubstring verifies the substring path of
+// resolveModelName: --model "hai" matches the only key containing it, "haiku".
 func TestGetAgentModelOverrideSubstring(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1009,9 +929,8 @@ func TestGetAgentModelOverrideSubstring(t *testing.T) {
 	}
 }
 
-// TestGetAgentModelOverridePassthrough verifies that a --model value not
-// present in the agent's models map is substituted verbatim. This lets users
-// pass arbitrary model identifiers without having to register them in CUE.
+// TestGetAgentModelOverridePassthrough verifies a --model value absent from
+// the models map is substituted verbatim, so users can pass unregistered ids.
 func TestGetAgentModelOverridePassthrough(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1034,9 +953,7 @@ func TestGetAgentModelOverridePassthrough(t *testing.T) {
 }
 
 // TestGetVerboseTildePathExpanded verifies --verbose reports the resolved
-// absolute path for a tilde-prefixed file source, not the literal "~/..."
-// string from the CUE config. The file is read from the expanded location
-// regardless; this pins the metadata reported to the user.
+// absolute path for a tilde-prefixed file source, not the literal "~/..." string.
 func TestGetVerboseTildePathExpanded(t *testing.T) {
 	dir := setupGetTestConfig(t)
 
@@ -1062,11 +979,9 @@ func TestGetVerboseTildePathExpanded(t *testing.T) {
 	}
 }
 
-// setupGetDualScopeConfig writes a global config at $HOME/.config/start/ and
-// a local config at ./.start/. Both define a "shared-role" with distinct
-// content so --local vs --global resolution can be told apart; each scope also
-// defines a scope-only role to exercise the not-found path of the other scope.
-// Mirrors TestGetMergedScopeFindsGlobalAndLocal's environment setup.
+// setupGetDualScopeConfig writes global and local configs that both define a
+// "shared-role" with distinct content (so --local vs --global can be told
+// apart) plus a scope-only role each (to exercise the other scope's not-found path).
 func setupGetDualScopeConfig(t *testing.T) string {
 	t.Helper()
 
@@ -1136,19 +1051,10 @@ roles: {
 	return dir
 }
 
-// TestGetLocalScope verifies --local restricts resolution to the local
-// config by asserting a global-only role is not visible under --local.
-//
-// This test has only one assertion (compared to TestGetGlobalScope's two)
-// because merged-scope CUE resolution makes local override global on field
-// conflict — so a "shared role under --local returns local content" check
-// would pass even if --local were silently ignored and merged scope used
-// instead. The only discriminating assertion for --local wiring is the
-// not-found path on a global-only module: under --local-respected the module
-// is invisible, under --local-ignored merged scope finds it. See
-// TestGetGlobalScope for the symmetric test, which has two assertions
-// because merged scope returns the local value for shared roles, making the
-// "global wins under --global" assertion discriminating.
+// TestGetLocalScope verifies --local restricts resolution to local config.
+// The only discriminating assertion is the not-found path on a global-only
+// module: a shared-role check would pass even if --local were ignored, since
+// merged scope makes local override global on conflict.
 func TestGetLocalScope(t *testing.T) {
 	setupGetDualScopeConfig(t)
 
@@ -1164,9 +1070,6 @@ func TestGetLocalScope(t *testing.T) {
 	}
 }
 
-// TestGetGlobalScope verifies --global restricts resolution to the global
-// config: the shared role resolves to the global definition, and a local-only
-// name fails with a not-found error and empty stdout.
 func TestGetGlobalScope(t *testing.T) {
 	setupGetDualScopeConfig(t)
 
@@ -1194,10 +1097,9 @@ func TestGetGlobalScope(t *testing.T) {
 	})
 }
 
-// TestGetLocalAndGlobalMutuallyExclusive verifies that passing both --local and
-// --global is rejected as a usage error (exit 2) and writes nothing to stdout.
-// The check is explicit (validateScopeFlags) rather than Cobra's
-// MarkFlagsMutuallyExclusive, whose error is untyped and would map to exit 1.
+// TestGetLocalAndGlobalMutuallyExclusive verifies both --local and --global is
+// a usage error (exit 2). The check is explicit (validateScopeFlags) rather
+// than Cobra's MarkFlagsMutuallyExclusive, whose untyped error maps to exit 1.
 func TestGetLocalAndGlobalMutuallyExclusive(t *testing.T) {
 	stdout, _, err := runGetCmd(t, "--local", "--global", "any-name")
 	if err == nil {
@@ -1214,11 +1116,6 @@ func TestGetLocalAndGlobalMutuallyExclusive(t *testing.T) {
 	}
 }
 
-// TestEnsureTrailingNewline pins the helper that normalises stdout line-
-// alignment. Empty content stays empty (so an empty module does not produce a
-// stray blank line), an already-newline-terminated string is returned
-// unchanged (no double newline), and a string without a trailing newline
-// gets exactly one appended.
 func TestEnsureTrailingNewline(t *testing.T) {
 	t.Parallel()
 
@@ -1245,10 +1142,8 @@ func TestEnsureTrailingNewline(t *testing.T) {
 	}
 }
 
-// TestGetAgentVerboseMetadata covers the --verbose branch of getAgent
-// (get.go: 175-177). The agent has no file path or command source field,
-// so verbose stderr must contain Type and Name only — no Path or Command
-// line — and stdout is unaffected by the verbose flag.
+// TestGetAgentVerboseMetadata covers getAgent's --verbose branch: an agent has
+// no file or command field, so stderr carries Type and Name only.
 func TestGetAgentVerboseMetadata(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1287,11 +1182,9 @@ func TestGetAgentVerboseMetadata(t *testing.T) {
 	}
 }
 
-// TestGetAgentRuntimePlaceholdersIntact pins get's contract that runtime
-// placeholders are passed through verbatim: only {{.bin}} and {{.model}} are
-// resolved at get time. {{.prompt}}, {{.role}}, {{.role_file}}, and
-// {{.datetime}} are filled by the agent execution path (start/task), not
-// get, and must remain in the rendered command for downstream piping.
+// TestGetAgentRuntimePlaceholdersIntact pins that only {{.bin}} and {{.model}}
+// are resolved at get time; {{.prompt}}, {{.role}}, {{.role_file}}, and
+// {{.datetime}} stay intact for the execution path to fill.
 func TestGetAgentRuntimePlaceholdersIntact(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -1335,10 +1228,8 @@ agents: {
 	}
 }
 
-// TestGetStdoutContentOnly verifies the default-mode output contract: with
-// no --verbose, stdout receives only the rendered content — no Type/Name/
-// Path metadata — and stderr is empty on the happy path. The contract is
-// asserted independently from --quiet so a regression that drops the
+// TestGetStdoutContentOnly verifies default mode emits only rendered content
+// to stdout with stderr empty. Asserted independently of --quiet so a dropped
 // verbose gate cannot pass merely because --quiet still suppresses it.
 func TestGetStdoutContentOnly(t *testing.T) {
 	setupGetTestConfig(t)
@@ -1355,10 +1246,8 @@ func TestGetStdoutContentOnly(t *testing.T) {
 	}
 }
 
-// TestGetAllSourceFieldsFileWins covers the explicit three-field case: an
-// module declaring file, prompt, AND command must emit only the file
-// content. This pins the trim block (file != "" → both prompt and command
-// cleared) against a regression that handled only the two-field case.
+// TestGetAllSourceFieldsFileWins covers the three-field case: file, prompt, and
+// command all set must emit only the file content (trim clears both others).
 func TestGetAllSourceFieldsFileWins(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -1403,9 +1292,8 @@ roles: {
 	}
 }
 
-// TestGetUTDFileMissingOnDisk covers the getUTD process error path
-// (get.go: 265-267). A file source that points at a non-existent file
-// must surface a descriptive error and leave stdout empty.
+// TestGetUTDFileMissingOnDisk covers getUTD's process error path: a file
+// source pointing at a missing file errors and leaves stdout empty.
 func TestGetUTDFileMissingOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -1439,10 +1327,8 @@ roles: {
 	}
 }
 
-// TestGetUTDTaskPromptSource verifies a prompt-source task resolves and
-// renders. The fixture defines task-prompt, but no other test exercises a
-// task module through get — this guards regressions where get silently
-// stops handling a category.
+// TestGetUTDTaskPromptSource verifies a prompt-source task resolves through
+// get, guarding against get silently dropping the task category.
 func TestGetUTDTaskPromptSource(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1455,10 +1341,8 @@ func TestGetUTDTaskPromptSource(t *testing.T) {
 	}
 }
 
-// TestGetUTDTaskCommandSource verifies a command-source task executes its
-// command and the output flows through ensureTrailingNewline. Companion to
-// TestGetUTDTaskPromptSource — together they confirm tasks are not a
-// dead category in the cross-resolver.
+// TestGetUTDTaskCommandSource verifies a command-source task executes and its
+// output flows through ensureTrailingNewline.
 func TestGetUTDTaskCommandSource(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1471,11 +1355,8 @@ func TestGetUTDTaskCommandSource(t *testing.T) {
 	}
 }
 
-// TestGetUTDFileMultilineNoExtraNewline verifies that a multi-line file
-// already carrying a trailing newline is emitted verbatim — no extra blank
-// line appended by ensureTrailingNewline. A double-newline regression in
-// `start get foo | wc -l` would silently shift line counts for scripted
-// callers.
+// TestGetUTDFileMultilineNoExtraNewline verifies a file already ending in a
+// newline is emitted verbatim — no double-newline that would shift `wc -l`.
 func TestGetUTDFileMultilineNoExtraNewline(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -1514,10 +1395,8 @@ roles: {
 	}
 }
 
-// TestGetUTDPromptAddsTrailingNewline verifies that a prompt with no
-// trailing newline gets exactly one appended on the way to stdout. Pins the
-// "abc" → "abc\n" branch of ensureTrailingNewline through the full get
-// pipeline.
+// TestGetUTDPromptAddsTrailingNewline verifies a prompt with no trailing
+// newline gets exactly one appended through the full get pipeline.
 func TestGetUTDPromptAddsTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -1550,11 +1429,9 @@ roles: {
 	}
 }
 
-// TestGetCrossCategoryFindsContext verifies a context module is reachable
-// via the cross-category resolver. The other categories (agents, roles,
-// tasks) all have at least one direct get test; without this case a
-// regression dropping contexts from describeCategories would only surface in
-// `describe` tests.
+// TestGetCrossCategoryFindsContext verifies a context module is reachable via
+// the cross-category resolver, guarding against contexts being dropped from
+// describeCategories.
 func TestGetCrossCategoryFindsContext(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1567,11 +1444,9 @@ func TestGetCrossCategoryFindsContext(t *testing.T) {
 	}
 }
 
-// TestGetAgentExplicitlyEmptyModelFlag verifies that an empty --model
-// value (e.g. `start --model "" get claude`) does not trigger
-// resolveModelName and the agent's default_model still wins. Regression
-// guard for a "treat empty string as override" bug — getAgent gates on
-// flags.Model != "" before invoking the resolver.
+// TestGetAgentExplicitlyEmptyModelFlag verifies an empty --model does not
+// trigger resolveModelName (getAgent gates on flags.Model != ""), so
+// default_model still wins.
 func TestGetAgentExplicitlyEmptyModelFlag(t *testing.T) {
 	setupGetTestConfig(t)
 
@@ -1591,10 +1466,8 @@ func TestGetAgentExplicitlyEmptyModelFlag(t *testing.T) {
 	}
 }
 
-// TestGetDebugFlagDoesNotPolluteStdout verifies that --debug — which
-// emits diagnostic lines via debugf — never writes to stdout. The flag is
-// useful for diagnosing path-expansion failures (get.go: ExpandFilePath
-// debug branch) but stdout must remain pipe-clean regardless of verbosity.
+// TestGetDebugFlagDoesNotPolluteStdout verifies --debug diagnostics never
+// write to stdout, keeping it pipe-clean regardless of verbosity.
 func TestGetDebugFlagDoesNotPolluteStdout(t *testing.T) {
 	setupGetTestConfig(t)
 

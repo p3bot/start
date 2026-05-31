@@ -13,7 +13,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigOrderCommand adds the bare order command to the config command.
 func addConfigOrderCommand(parent *cobra.Command) {
 	orderCmd := &cobra.Command{
 		Use:     "order [category]",
@@ -31,9 +30,8 @@ to the interactive menu.`,
 	parent.AddCommand(orderCmd)
 }
 
-// resolveOrderCategory maps a category argument to the canonical reorder target.
-// Returns ("roles"/"contexts", true) for orderable categories, ("", true) for known
-// non-orderable categories (agent, task), and ("", false) for unknown categories.
+// Returns ("roles"/"contexts", true) for orderable, ("", true) for known non-orderable
+// (agent, task), ("", false) for unknown.
 func resolveOrderCategory(arg string) (string, bool) {
 	singular := strings.TrimSuffix(strings.ToLower(arg), "s")
 	switch singular {
@@ -47,7 +45,6 @@ func resolveOrderCategory(arg string) (string, bool) {
 	return "", false
 }
 
-// runConfigOrder prompts the user to select roles or contexts, then runs reorder.
 func runConfigOrder(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -62,7 +59,7 @@ func runConfigOrder(cmd *cobra.Command, args []string) error {
 
 	category := ""
 	if len(args) > 0 {
-		// Known non-orderable categories (agent, task) fall back silently; unknown categories get an error.
+		// Known non-orderable (agent, task) fall back silently; unknown gets an error.
 		var known bool
 		category, known = resolveOrderCategory(args[0])
 		if category == "" && !known {
@@ -91,7 +88,6 @@ func runConfigOrder(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// reorderContexts performs the interactive context reorder.
 func reorderContexts(stdout io.Writer, stdin io.Reader, local bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -143,7 +139,6 @@ func reorderContexts(stdout io.Writer, stdin io.Reader, local bool) error {
 	return nil
 }
 
-// reorderRoles performs the interactive role reorder.
 func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -192,16 +187,14 @@ func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 	return nil
 }
 
-// runReorderLoop runs the interactive move-up reorder loop.
 // Returns the final order, whether the user saved (true) or cancelled (false), and any error.
 func runReorderLoop(w io.Writer, r io.Reader, heading string, order []string, formatItem func(int, string) string) ([]string, bool, error) {
-	// Make a copy to avoid mutating the caller's slice
+	// Copy to avoid mutating the caller's slice.
 	current := make([]string, len(order))
 	copy(current, order)
 
 	reader := bufio.NewReader(r)
 
-	// Display initial list
 	fmt.Fprintln(w, heading)
 	fmt.Fprintln(w)
 	for i, name := range current {
@@ -218,18 +211,15 @@ func runReorderLoop(w io.Writer, r io.Reader, heading string, order []string, fo
 		}
 		input = strings.TrimSpace(input)
 
-		// Empty input: save
 		if input == "" {
 			return current, true, nil
 		}
 
-		// Cancel
 		lower := strings.ToLower(input)
 		if lower == "q" || lower == "quit" || lower == "exit" {
 			return nil, false, nil
 		}
 
-		// Try to parse as number
 		num, err := strconv.Atoi(input)
 		if err != nil {
 			fmt.Fprintf(w, "Invalid input: %s\n", input)
@@ -246,11 +236,9 @@ func runReorderLoop(w io.Writer, r io.Reader, heading string, order []string, fo
 			continue
 		}
 
-		// Swap item at position num with the one above it (num-1)
 		idx := num - 1
 		current[idx], current[idx-1] = current[idx-1], current[idx]
 
-		// Re-display
 		fmt.Fprintln(w)
 		for i, name := range current {
 			fmt.Fprintln(w, formatItem(i, name))

@@ -29,9 +29,9 @@ const (
 
 // TaskMatch represents a task found during resolution.
 type TaskMatch struct {
-	Name   string              // Task name (e.g., "golang/debug")
-	Source TaskSource          // Where the task comes from
-	Entry  registry.IndexEntry // Registry entry (only set if Source == TaskSourceRegistry)
+	Name   string
+	Source TaskSource
+	Entry  registry.IndexEntry // Only set when Source == TaskSourceRegistry.
 }
 
 // maxTaskResults is the maximum number of tasks to display in interactive selection.
@@ -81,9 +81,8 @@ func runTask(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		instructions = args[1]
 	} else {
-		// Accept piped stdin as the instructions, mirroring `start prompt`.
-		// Positional arg wins; empty pipes are accepted (task templates may
-		// not require {{.instructions}}).
+		// Accept piped stdin as instructions. The positional arg wins; empty
+		// pipes are accepted (templates may not require {{.instructions}}).
 		pipedText, piped, err := readPipedStdin(cmd.InOrStdin())
 		if err != nil {
 			return err
@@ -102,13 +101,11 @@ func runTask(cmd *cobra.Command, args []string) error {
 
 // executeTask handles task execution.
 func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskName, instructions string, tags []string) error {
-	// Phase 1: Load config
 	cfg, workingDir, err := loadExecutionConfig(stdout, stderr, stdin, flags)
 	if err != nil {
 		return err
 	}
 
-	// Phase 2: Resolve module flags (agent, role, context)
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
 
 	agentName := flags.Agent
@@ -138,10 +135,8 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		}
 	}
 
-	// Track if we need a config reload (from flag resolution installs)
 	flagInstalled := r.didInstall
 
-	// If flag resolution installed modules, reload config
 	if flagInstalled {
 		debugf(stderr, flags, dbgConfig, "Reloading config after registry installs")
 		if err := r.reloadConfig(workingDir); err != nil {
@@ -150,13 +145,11 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		cfg = r.cfg
 	}
 
-	// Phase 3: Build execution environment with resolved agent
 	env, err := buildExecutionEnv(cfg, workingDir, agentName, flags, stdout, stderr, stdin)
 	if err != nil {
 		return err
 	}
 
-	// Resolve --model flag against agent's models map
 	resolvedModel := flags.Model
 	if resolvedModel != "" {
 		resolvedModel = r.resolveModelName(resolvedModel, env.Agent)
@@ -172,13 +165,13 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		if err != nil {
 			return fmt.Errorf("reading task file %q: %w", taskName, err)
 		}
-		// Process through template processor for {{.instructions}} support
+		// Process through the template processor for {{.instructions}} support.
 		taskResult, err = env.Composer.ProcessContent(content, instructions)
 		if err != nil {
 			return fmt.Errorf("processing task file: %w", err)
 		}
 		taskResult.FileRead = true
-		resolvedName = taskName // Display file path as task name
+		resolvedName = taskName // Display file path as task name.
 	} else {
 		// Strip the category prefix when present, or error on a mismatch.
 		addr, err := parseAddress(taskName)
@@ -190,17 +183,15 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		}
 		taskName = addr.Name
 
-		// Unified task resolution - two-phase approach.
-
-		// Phase 1: Full exact name in installed config - unambiguous, no registry needed.
-		// Skip when tags filter is active so Phase 2 applies the tag filter correctly.
+		// Phase 1: a full exact name in installed config is unambiguous and needs
+		// no registry. Skipped when tags are active so Phase 2 applies the filter.
 		if len(tags) == 0 && isExactInstalledKey(env.Cfg.Value, internalcue.KeyTasks, taskName) {
 			resolvedName = taskName
 			debugf(stderr, flags, dbgTask, "Exact full name match: %s", resolvedName)
 		}
 
 		if resolvedName == "" {
-			// Phase 2: Collect all candidates from installed config and registry, merge, select.
+			// Phase 2: merge candidates from installed config and registry, then select.
 			installedMatches, err := findInstalledTasks(env.Cfg, taskName, tags)
 			if err != nil {
 				return err
@@ -219,12 +210,10 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 					return err
 				}
 			} else if len(installedMatches) == 0 {
-				// Split the former combined "not found and registry
-				// unavailable" error into its two fault domains. When the
-				// registry failed, the cause is the (transient) index error —
-				// preserve it so a retry signal (75) survives; not-found can't
-				// even be determined. With no index error (e.g. skipped), the
-				// task is genuinely absent (3).
+				// Two fault domains: a registry failure is transient (preserve
+				// the index error so the retry signal 75 survives, since
+				// not-found can't be determined); no index error means the task
+				// is genuinely absent (3).
 				if r.indexErr != nil {
 					return fmt.Errorf("task %q: registry unavailable: %w", taskName, r.indexErr)
 				}
@@ -256,7 +245,6 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 				}
 				resolvedName = match.Name
 			default:
-				// Multiple matches - interactive selection
 				debugf(stderr, flags, dbgTask, "Multiple matches, prompting for selection")
 				isTTY := isTerminal(stdin)
 				if !isTTY {
@@ -295,20 +283,18 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 			debugf(stderr, flags, dbgTask, "Resolved to %q (exact match)", resolvedName)
 		}
 
-		// Resolve task from config
 		taskResult, err = env.Composer.ResolveTask(env.Cfg.Value, resolvedName, instructions)
 		if err != nil {
 			return fmt.Errorf("resolving task: %w", err)
 		}
 
-		// Get task's role if not specified via flag and --no-role not set
 		if !flags.NoRole && roleName == "" {
 			roleName = orchestration.GetTaskRole(env.Cfg.Value, resolvedName)
 			if roleName != "" {
-				// If the task's role is not installed, resolve through three-tier
-				// search which may auto-install from registry (same as --role flag).
+				// An uninstalled task role resolves through the three-tier search,
+				// which may auto-install from the registry (like the --role flag).
 				if resolved, err := findExactInstalledName(env.Cfg.Value, internalcue.KeyRoles, roleName); err != nil {
-					// Ambiguous short name - route through resolver for interactive selection.
+					// Ambiguous short name: route through the resolver.
 					debugf(stderr, flags, dbgTask, "Task role %q: short name ambiguous, routing to resolver: %v", roleName, err)
 					beforeInstall := r.didInstall
 					roleName, err = r.resolveRole(roleName)
@@ -353,7 +339,6 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		debugf(stderr, flags, dbgTask, "Instructions: %s", instructions)
 	}
 
-	// Log role source if specified via flag
 	if flags.Role != "" {
 		debugf(stderr, flags, dbgRole, "Selected %q (--role flag)", flags.Role)
 	}
@@ -368,7 +353,6 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	debugf(stderr, flags, dbgContext, "Selection: required=%t, defaults=%t, tags=%v",
 		selection.IncludeRequired, selection.IncludeDefaults, selection.Tags)
 
-	// Compose contexts and resolve role
 	var composeResult orchestration.ComposeResult
 	var composeErr error
 	if flags.NoRole {
@@ -378,7 +362,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		composeResult, composeErr = env.Composer.ComposeWithRole(env.Cfg.Value, selection, roleName, taskResult.Content)
 	}
 	if composeErr != nil {
-		// Show UI with role resolutions before returning error
+		// Show role resolutions before returning the error.
 		if !flags.Quiet && len(composeResult.RoleResolutions) > 0 {
 			printComposeError(stdout, env.Agent, composeResult)
 		}
@@ -391,11 +375,9 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	debugf(stderr, flags, dbgCompose, "Role: %d bytes", len(composeResult.Role))
 	debugf(stderr, flags, dbgCompose, "Prompt: %d bytes (%d contexts)", len(composeResult.Prompt), len(composeResult.Contexts))
 
-	// Print warnings
 	printWarnings(flags, stderr, taskResult.Warnings)
 	printWarnings(flags, stderr, composeResult.Warnings)
 
-	// Determine effective model and its source
 	model, modelSource := resolveModel(resolvedModel, env.Agent.DefaultModel)
 	if model != "" {
 		debugf(stderr, flags, dbgTask, "Model: %s (%s)", model, modelSource)
@@ -403,7 +385,6 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		debugf(stderr, flags, dbgTask, "Model: agent default (none specified)")
 	}
 
-	// Build execution config
 	execConfig := orchestration.ExecuteConfig{
 		Agent:      env.Agent,
 		Model:      resolvedModel,
@@ -414,7 +395,6 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		DryRun:     flags.DryRun,
 	}
 
-	// Build command and validate before proceeding
 	cmdStr, err := env.Executor.BuildCommand(execConfig)
 	if err != nil {
 		return err
@@ -426,41 +406,35 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		return executeTaskDryRun(stdout, cmdStr, execConfig, composeResult, env.Agent, model, modelSource, resolvedName, instructions)
 	}
 
-	// Print execution info
 	if !flags.Quiet {
 		printTaskExecutionInfo(stdout, env.Agent, model, modelSource, composeResult, resolvedName, instructions, taskResult)
 	}
 
 	debugf(stderr, flags, dbgExec, "Executing agent (process replacement)")
-	// Execute agent (replaces current process) - command already validated
+	// Replaces the current process; command already validated.
 	return env.Executor.ExecuteCommand(cmdStr, execConfig)
 }
 
-// executeTaskDryRun handles --dry-run mode for tasks.
-// cmdStr is the pre-built, pre-validated command string from the caller.
+// executeTaskDryRun handles --dry-run mode for tasks. cmdStr is the pre-built,
+// pre-validated command string from the caller.
 func executeTaskDryRun(w io.Writer, cmdStr string, cfg orchestration.ExecuteConfig, result orchestration.ComposeResult, agent orchestration.Agent, model, modelSource, taskName, instructions string) error {
-	// Create temp directory
 	tempMgr := temp.NewDryRunManager()
 	dir, err := tempMgr.DryRunDir()
 	if err != nil {
 		return fmt.Errorf("creating dry-run directory: %w", err)
 	}
 
-	// Get context names
 	var contextNames []string
 	for _, ctx := range result.Contexts {
 		contextNames = append(contextNames, ctx.Name)
 	}
 
-	// Generate command file content
 	cmdContent := orchestration.GenerateDryRunCommand(agent, cfg.Model, result.RoleName, contextNames, cfg.WorkingDir, cmdStr)
 
-	// Write files
 	if err := tempMgr.WriteDryRunFiles(dir, result.Role, result.Prompt, cmdContent); err != nil {
 		return fmt.Errorf("writing dry-run files: %w", err)
 	}
 
-	// Print summary
 	printTaskDryRunSummary(w, agent, model, modelSource, result, dir, taskName, instructions)
 
 	return nil
@@ -501,13 +475,11 @@ func printTaskDryRunSummary(w io.Writer, agent orchestration.Agent, model, model
 		fmt.Fprintln(w)
 	}
 
-	// Show role preview
 	if result.Role != "" {
 		printContentPreview(w, "Role", tui.ColorRoles, result.Role, 5)
 		fmt.Fprintln(w)
 	}
 
-	// Show prompt preview
 	if result.Prompt != "" {
 		printContentPreview(w, "Prompt", tui.ColorPrompts, result.Prompt, 5)
 		fmt.Fprintln(w)
@@ -530,10 +502,8 @@ func taskInMatches(name string, matches []TaskMatch) bool {
 	return false
 }
 
-// findInstalledTasks finds tasks in the config that match the search term.
-// Uses the scoring system to match against name, description, and tags.
-// Multiple terms (space or comma separated) use AND logic - all must match.
-// When tags is non-empty, entries must also match at least one tag.
+// findInstalledTasks finds config tasks matching the search term. Multiple terms
+// use AND logic; when tags is non-empty, entries must also match at least one tag.
 func findInstalledTasks(cfg internalcue.LoadResult, searchTerm string, tags []string) ([]TaskMatch, error) {
 	results, err := modules.SearchInstalledConfig(cfg.Value, internalcue.KeyTasks, "tasks", searchTerm, tags)
 	if err != nil {
@@ -549,10 +519,8 @@ func findInstalledTasks(cfg internalcue.LoadResult, searchTerm string, tags []st
 	return matches, nil
 }
 
-// findRegistryTasks finds tasks in the registry that match the search term.
-// Uses the scoring system to match against name, description, and tags.
-// Multiple terms (space or comma separated) use AND logic - all must match.
-// When tags is non-empty, entries must also match at least one tag.
+// findRegistryTasks finds registry tasks matching the search term. Multiple terms
+// use AND logic; when tags is non-empty, entries must also match at least one tag.
 func findRegistryTasks(index *registry.Index, searchTerm string, tags []string) ([]TaskMatch, error) {
 	results, err := modules.SearchCategoryEntries("tasks", index.Tasks, searchTerm, tags)
 	if err != nil {
@@ -569,28 +537,23 @@ func findRegistryTasks(index *registry.Index, searchTerm string, tags []string) 
 	return matches, nil
 }
 
-// mergeTaskMatches combines installed and registry matches, deduplicating by name.
-// Installed tasks take precedence over registry tasks with the same name.
-// Results are sorted alphabetically by name.
+// mergeTaskMatches combines installed and registry matches, deduplicating by
+// name (installed wins) and sorting alphabetically.
 func mergeTaskMatches(installed, registry []TaskMatch) []TaskMatch {
-	// Build map of installed task names for deduplication
 	installedNames := make(map[string]bool)
 	for _, m := range installed {
 		installedNames[m.Name] = true
 	}
 
-	// Start with installed matches
 	merged := make([]TaskMatch, len(installed))
 	copy(merged, installed)
 
-	// Add registry matches that aren't already installed
 	for _, m := range registry {
 		if !installedNames[m.Name] {
 			merged = append(merged, m)
 		}
 	}
 
-	// Sort alphabetically by name
 	sort.Slice(merged, func(i, j int) bool {
 		return merged[i].Name < merged[j].Name
 	})
@@ -599,8 +562,7 @@ func mergeTaskMatches(installed, registry []TaskMatch) []TaskMatch {
 }
 
 // promptTaskSelection prompts the user to select a task from multiple matches.
-// The caller is responsible for TTY detection; this function assumes interactive input.
-// Returns the selected TaskMatch or an error if selection fails.
+// The caller is responsible for TTY detection.
 func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch, searchTerm string) (TaskMatch, error) {
 	totalCount := len(matches)
 	displayCount := totalCount
@@ -612,7 +574,6 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 
 	fmt.Fprintf(w, "Found %d tasks matching %q:\n\n", totalCount, searchTerm)
 
-	// Find the longest task name for alignment
 	maxNameLen := 0
 	for i := 0; i < displayCount; i++ {
 		if len(matches[i].Name) > maxNameLen {
@@ -620,7 +581,6 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 		}
 	}
 
-	// Display matches with source labels
 	for i := 0; i < displayCount; i++ {
 		m := matches[i]
 		padding := strings.Repeat(" ", maxNameLen-len(m.Name)+2)
@@ -647,7 +607,6 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 
 	input = strings.TrimSpace(input)
 
-	// Try parsing as number
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
 			return matches[choice-1], nil
@@ -655,7 +614,6 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 		return TaskMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
 	}
 
-	// Try matching by name (exact or substring) within displayed matches
 	inputLower := strings.ToLower(input)
 	for i := 0; i < displayCount; i++ {
 		if strings.ToLower(matches[i].Name) == inputLower {
@@ -663,7 +621,6 @@ func promptTaskSelection(w io.Writer, reader *bufio.Reader, matches []TaskMatch,
 		}
 	}
 
-	// Try substring match on input
 	var subMatches []TaskMatch
 	for i := 0; i < displayCount; i++ {
 		if strings.Contains(strings.ToLower(matches[i].Name), inputLower) {
@@ -698,16 +655,14 @@ func installTaskAndReloadEnv(stdout, stderr io.Writer, stdin io.Reader, flags *F
 func installTaskFromRegistry(stdout io.Writer, flags *Flags, client registry.Client, index *registry.Index, result modules.SearchResult) error {
 	ctx := context.Background()
 
-	// Install the task using the modules package
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return fmt.Errorf("resolving config paths: %w", err)
 	}
 
-	// Always install to global config for auto-install
+	// Auto-install always targets global config.
 	configDir := paths.Global
 
-	// Install the module
 	version, err := modules.InstallModule(ctx, client, index, result, configDir)
 	if err != nil {
 		return err

@@ -13,7 +13,6 @@ import (
 	"github.com/start-cli/start/internal/tui"
 )
 
-// addConfigRemoveCommand adds the "config remove [query]" command.
 func addConfigRemoveCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "remove [query]",
@@ -32,7 +31,6 @@ Use --force to skip the confirmation prompt.`,
 	parent.AddCommand(cmd)
 }
 
-// runConfigRemove is the handler for "config remove [query]".
 func runConfigRemove(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
@@ -65,7 +63,6 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 	if len(matches) == 1 {
 		toRemove = matches
 	} else if skipConfirm {
-		// --force with multiple matches: remove all
 		toRemove = matches
 	} else {
 		if !isTerminal(stdin) {
@@ -107,7 +104,6 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runConfigRemoveInteractive prompts for category, item(s), confirmation, then removes.
 func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, skipConfirm bool, quiet bool) error {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "Remove:")
@@ -159,7 +155,6 @@ func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, s
 	return nil
 }
 
-// confirmConfigRemoval prompts the user to confirm removal of one or more items.
 // Returns false (without error) when the user declines.
 func confirmConfigRemoval(w io.Writer, r io.Reader, items []configMatch, local bool) (bool, error) {
 	scope := scopeString(local)
@@ -187,7 +182,6 @@ func confirmConfigRemoval(w io.Writer, r io.Reader, items []configMatch, local b
 	return true, nil
 }
 
-// removeConfigItem removes a single named item from the appropriate config category file.
 func removeConfigItem(m configMatch, local bool) error {
 	switch m.Category {
 	case "agent":
@@ -202,7 +196,6 @@ func removeConfigItem(m configMatch, local bool) error {
 	return fmt.Errorf("unknown category %q", m.Category)
 }
 
-// removeAgent removes an agent from the config directory.
 func removeAgent(name string, local bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -221,7 +214,7 @@ func removeAgent(name string, local bool) error {
 	return writeAgentsFile(agentPath, agents)
 }
 
-// removeRole removes a role from the config directory (preserving order of remaining roles).
+// Preserves order of the remaining roles.
 func removeRole(name string, local bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -246,7 +239,7 @@ func removeRole(name string, local bool) error {
 	return writeRolesFile(rolePath, roles, newOrder)
 }
 
-// removeContext removes a context from the config directory (preserving order of remaining contexts).
+// Preserves order of the remaining contexts.
 func removeContext(name string, local bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
@@ -271,7 +264,6 @@ func removeContext(name string, local bool) error {
 	return writeContextsFile(contextPath, contexts, newOrder)
 }
 
-// removeTask removes a task from the config directory.
 func removeTask(name string, local bool) error {
 	paths, err := config.ResolvePaths("")
 	if err != nil {

@@ -11,8 +11,7 @@ import (
 	"github.com/start-cli/start/internal/config"
 )
 
-// testSchemaSet creates a SchemaSet from inline CUE for testing.
-// Matches the production schemas in library/schemas/.
+// testSchemaSet mirrors the production schemas in library/schemas/.
 func testSchemaSet(t *testing.T) SchemaSet {
 	t.Helper()
 	cctx := cuecontext.New()
@@ -82,7 +81,6 @@ func testSchemaSet(t *testing.T) SchemaSet {
 	}
 }
 
-// writeConfigFile creates a CUE config file in a directory.
 func writeConfigFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
@@ -416,7 +414,6 @@ something_else: "not a recognised key"
 
 	section := CheckSchemaValidation(paths, schemas)
 
-	// File with no recognised keys should be silently skipped
 	if len(section.Results) != 1 {
 		t.Fatalf("expected 1 result (info), got %d", len(section.Results))
 	}
@@ -441,7 +438,6 @@ func TestCheckSchemaValidation_SyntaxErrorSkipped(t *testing.T) {
 
 	section := CheckSchemaValidation(paths, schemas)
 
-	// Syntax errors should be silently skipped (caught by Configuration section)
 	for _, r := range section.Results {
 		if r.Status == StatusWarn || r.Status == StatusFail {
 			t.Errorf("syntax error file should be skipped, got status %v: %s", r.Status, r.Message)
@@ -487,7 +483,6 @@ func TestCheckSchemaValidation_MixedValidAndInvalid(t *testing.T) {
 	schemas := testSchemaSet(t)
 	tmpDir := t.TempDir()
 
-	// One file with valid and invalid entries
 	writeConfigFile(t, tmpDir, "agents.cue", `
 agents: {
 	"good": {
@@ -508,7 +503,6 @@ agents: {
 
 	section := CheckSchemaValidation(paths, schemas)
 
-	// Should have a warning for the bad agent (no pass since file has errors)
 	hasWarn := false
 	for _, r := range section.Results {
 		if r.Status == StatusWarn && strings.Contains(r.Message, "agents.bad") {

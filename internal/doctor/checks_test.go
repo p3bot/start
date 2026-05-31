@@ -57,12 +57,10 @@ func TestCheckVersion(t *testing.T) {
 		t.Fatalf("CheckVersion() should have 6 results, got %d", len(section.Results))
 	}
 
-	// Check version label includes version
 	if section.Results[0].Label != "start v1.0.0" {
 		t.Errorf("Version label = %q, want %q", section.Results[0].Label, "start v1.0.0")
 	}
 
-	// Check index version
 	indexResult := section.Results[5]
 	if indexResult.Label != "Index" {
 		t.Errorf("Index label = %q, want %q", indexResult.Label, "Index")
@@ -142,7 +140,6 @@ func TestCheckVersion_NoIndexPath(t *testing.T) {
 		GoVersion:    "go1.23.0",
 		Platform:     "linux/amd64",
 		IndexVersion: "v0.3.2",
-		// IndexPath not set — default behaviour
 	}
 
 	section := CheckVersion(info)
@@ -170,12 +167,10 @@ func TestCheckConfiguration_NoConfig(t *testing.T) {
 		t.Errorf("CheckConfiguration().Name = %q, want %q", section.Name, "Configuration")
 	}
 
-	// Should have 4 results (global header, global "Not found", local header, local "Not found")
 	if len(section.Results) != 4 {
 		t.Fatalf("CheckConfiguration() should have 4 results, got %d", len(section.Results))
 	}
 
-	// Headers should be NoIcon with scope in label
 	if !section.Results[0].NoIcon {
 		t.Error("Global header should have NoIcon=true")
 	}
@@ -189,7 +184,6 @@ func TestCheckConfiguration_NoConfig(t *testing.T) {
 		t.Errorf("Local header label should contain 'Local', got %q", section.Results[2].Label)
 	}
 
-	// Children should be indented info results with "Not found" label
 	for _, i := range []int{1, 3} {
 		r := section.Results[i]
 		if r.Status != StatusInfo {
@@ -212,7 +206,6 @@ func TestCheckConfiguration_ValidConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write valid CUE file
 	cueContent := `settings: { default_agent: "test" }`
 	if err := os.WriteFile(filepath.Join(globalDir, "settings.cue"), []byte(cueContent), 0644); err != nil {
 		t.Fatal(err)
@@ -227,7 +220,6 @@ func TestCheckConfiguration_ValidConfig(t *testing.T) {
 
 	section := CheckConfiguration(paths)
 
-	// Should have results for global (header + file), local, and validation
 	hasPass := false
 	for _, r := range section.Results {
 		if r.Status == StatusPass {
@@ -247,7 +239,6 @@ func TestCheckConfiguration_InvalidConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write invalid CUE file
 	cueContent := `this is not valid cue {{{`
 	if err := os.WriteFile(filepath.Join(globalDir, "bad.cue"), []byte(cueContent), 0644); err != nil {
 		t.Fatal(err)
@@ -262,7 +253,6 @@ func TestCheckConfiguration_InvalidConfig(t *testing.T) {
 
 	section := CheckConfiguration(paths)
 
-	// Should have a failure result
 	hasFail := false
 	for _, r := range section.Results {
 		if r.Status == StatusFail {
@@ -295,12 +285,10 @@ func TestCheckEnvironment(t *testing.T) {
 		t.Errorf("CheckEnvironment().Name = %q, want %q", section.Name, "Environment")
 	}
 
-	// Should have results for config directory and working directory
 	if len(section.Results) < 2 {
 		t.Errorf("CheckEnvironment() should have at least 2 results, got %d", len(section.Results))
 	}
 
-	// Config directory should be writable (we just created it)
 	hasWritable := false
 	for _, r := range section.Results {
 		if r.Label == "Config directory" && r.Status == StatusPass {
@@ -360,8 +348,6 @@ func TestShortenPath(t *testing.T) {
 		})
 	}
 }
-
-// --- CheckAgents tests ---
 
 func TestCheckAgents_NoneConfigured(t *testing.T) {
 	t.Parallel()
@@ -441,8 +427,6 @@ func TestCheckAgents_NoBinField(t *testing.T) {
 	}
 }
 
-// --- CheckRoles tests ---
-
 func TestCheckRoles_NoneConfigured(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
@@ -514,11 +498,7 @@ func TestCheckRoles_PromptFallback(t *testing.T) {
 	}
 }
 
-// TestCheckRoles_ModulePath covers the three @module/ outcomes:
-// extract present (StatusPass), extract missing with origin (StatusNotFound),
-// and origin missing (StatusFail). Each scenario is the only legitimate
-// answer doctor can give without lying, and the Fix string is the user's
-// recovery path. t.Setenv precludes t.Parallel.
+// t.Setenv precludes t.Parallel here.
 func TestCheckRoles_ModulePath(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("CUE_CACHE_DIR", cacheDir)
@@ -557,10 +537,8 @@ func TestCheckRoles_ModulePath(t *testing.T) {
 	})
 
 	t.Run("fallback resolves to cached version", func(t *testing.T) {
-		// Config declares v2.0.0 but the only cached version is the
-		// v1.0.0 fabricated at parent test setup. ResolveModulePath falls
-		// back to v1.0.0. The pass-case message must reflect what was
-		// actually resolved, not the version declared in config.
+		// Config declares v2.0.0 but only v1.0.0 is cached; the message must
+		// reflect the resolved version, not the declared one.
 		cctx := cuecontext.New()
 		v := cctx.CompileString(`roles: { myrole: {
 			origin: "github.com/test/roles/library/assistant@v2.0.0"
@@ -584,10 +562,8 @@ func TestCheckRoles_ModulePath(t *testing.T) {
 	})
 
 	t.Run("extract present but file missing", func(t *testing.T) {
-		// Same extract dir as the happy path, but the role's file: field
-		// references a file that the module does not contain. Install
-		// will not fix this — the Fix must point at the file path, not
-		// the module.
+		// Extract present but file: references a file the module lacks;
+		// the Fix must point at the file path, not advise reinstall.
 		cctx := cuecontext.New()
 		v := cctx.CompileString(`roles: { myrole: {
 			origin: "github.com/test/roles/library/assistant@v1.0.0"
@@ -611,11 +587,8 @@ func TestCheckRoles_ModulePath(t *testing.T) {
 	})
 
 	t.Run("stat returns non-IsNotExist error", func(t *testing.T) {
-		// role.md exists as a regular file, so traversing through it as
-		// "role.md/sub.md" returns ENOTDIR — distinct from IsNotExist.
-		// Doctor must classify this as a real failure (StatusFail), not
-		// a missing-file misconfiguration, since the recovery path is
-		// different.
+		// Traversing a regular file as "role.md/sub.md" yields ENOTDIR,
+		// which must classify as StatusFail, not a missing-file result.
 		cctx := cuecontext.New()
 		v := cctx.CompileString(`roles: { myrole: {
 			origin: "github.com/test/roles/library/assistant@v1.0.0"
@@ -690,8 +663,6 @@ func TestCheckRoles_NoFileOrPrompt(t *testing.T) {
 	}
 }
 
-// --- CheckContexts tests ---
-
 func TestCheckContexts_NoneConfigured(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
@@ -730,9 +701,8 @@ func TestCheckContexts_FileExists(t *testing.T) {
 	}
 }
 
-// Missing context files are reported as StatusNotFound regardless of the
-// `required` field. `required` is a composition rule used by the orchestrator
-// to decide which contexts to include, not a doctor severity rule.
+// Missing context files report StatusNotFound regardless of `required`, which
+// is an orchestrator composition rule, not a doctor severity rule.
 func TestCheckContexts_FileMissing(t *testing.T) {
 	t.Parallel()
 
@@ -804,8 +774,6 @@ func TestCheckContexts_Command(t *testing.T) {
 	}
 }
 
-// --- CheckTasks tests ---
-
 func TestCheckTasks_NoneConfigured(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
@@ -865,9 +833,8 @@ func TestCheckTasks_InlinePrompt(t *testing.T) {
 	}
 }
 
-// TestCheckTasks_ModulePathNoOrigin covers the failure case where an
-// @module/ task path is declared without an origin field. The runtime
-// cannot resolve such a path, so doctor must fail loudly rather than pass.
+// An @module/ task path without an origin field is unresolvable, so doctor
+// must fail rather than pass.
 func TestCheckTasks_ModulePathNoOrigin(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
@@ -896,7 +863,6 @@ func TestCheckTasks_RoleExists(t *testing.T) {
 
 	section := CheckTasks(v)
 
-	// Should have 1 result for the task itself, no extra warning
 	if len(section.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(section.Results))
 	}
@@ -915,7 +881,6 @@ func TestCheckTasks_RoleMissing(t *testing.T) {
 
 	section := CheckTasks(v)
 
-	// Should have 2 results: task pass + role warning
 	if len(section.Results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(section.Results))
 	}
@@ -937,7 +902,6 @@ func TestCheckTasks_NoRoleField(t *testing.T) {
 
 	section := CheckTasks(v)
 
-	// Should have 1 result only (no role warning)
 	if len(section.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(section.Results))
 	}
@@ -961,9 +925,6 @@ func TestCheckTasks_FileMissing(t *testing.T) {
 	}
 }
 
-// --- CheckSettings tests ---
-
-// settingsTestPaths creates a temp local directory and writes settings.cue if content is non-empty.
 func settingsTestPaths(t *testing.T, content string) config.Paths {
 	t.Helper()
 	tmpDir := t.TempDir()
@@ -984,7 +945,6 @@ func settingsTestPaths(t *testing.T, content string) config.Paths {
 	}
 }
 
-// findResult searches section results for a matching label.
 func findResult(section SectionResult, label string) (CheckResult, bool) {
 	for _, r := range section.Results {
 		if r.Label == label {
@@ -1006,12 +966,10 @@ func TestCheckSettings_ShowsAllSettings(t *testing.T) {
 		t.Errorf("Name = %q, want %q", section.Name, "Settings")
 	}
 
-	// Should have results for all 4 settings
 	if len(section.Results) != len(config.SettingsRegistry) {
 		t.Errorf("got %d results, want %d", len(section.Results), len(config.SettingsRegistry))
 	}
 
-	// default_agent should show as not set (no default)
 	if r, ok := findResult(section, "default_agent"); ok {
 		if r.Status != StatusInfo {
 			t.Errorf("default_agent status = %v, want StatusInfo", r.Status)
@@ -1020,7 +978,6 @@ func TestCheckSettings_ShowsAllSettings(t *testing.T) {
 		t.Error("missing default_agent result")
 	}
 
-	// library_index should have a default
 	if r, ok := findResult(section, "library_index"); ok {
 		if r.Status != StatusPass {
 			t.Errorf("library_index status = %v, want StatusPass", r.Status)
@@ -1206,7 +1163,6 @@ func TestCheckCache_stale(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", tmp)
 
-	// Write a cache file with a timestamp older than 24 hours.
 	cacheDir := filepath.Join(tmp, "start")
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		t.Fatal(err)

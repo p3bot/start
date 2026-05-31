@@ -10,40 +10,32 @@ import (
 	"time"
 )
 
-// unsafeCharsRe matches characters not safe for filenames.
 var unsafeCharsRe = regexp.MustCompile(`[^a-zA-Z0-9-_.]`)
 
-// consecutiveDashesRe matches runs of two or more consecutive dashes.
 var consecutiveDashesRe = regexp.MustCompile(`-{2,}`)
 
 // Manager handles temporary file creation and management.
 type Manager struct {
-	// BaseDir is the base directory for temp files.
-	// For dry-run: /tmp
-	// For UTD: .start/temp
 	BaseDir string
 }
 
-// NewDryRunManager creates a manager for dry-run output files.
-// Files are written to /tmp/start-YYYYMMDDHHmmss/
+// NewDryRunManager creates a manager writing dry-run output to /tmp/start-YYYYMMDDHHmmss/.
 func NewDryRunManager() *Manager {
 	return &Manager{BaseDir: os.TempDir()}
 }
 
-// NewUTDManager creates a manager for UTD temp files.
-// Files are written to .start/temp/
+// NewUTDManager creates a manager writing UTD temp files to .start/temp/.
 func NewUTDManager(workingDir string) *Manager {
 	return &Manager{BaseDir: filepath.Join(workingDir, ".start", "temp")}
 }
 
 // DryRunDir creates a timestamped directory for dry-run output.
-// Returns the directory path.
 func (m *Manager) DryRunDir() (string, error) {
 	timestamp := time.Now().Format("20060102150405")
 	dirName := fmt.Sprintf("start-%s", timestamp)
 	dirPath := filepath.Join(m.BaseDir, dirName)
 
-	// Handle collision by appending suffix
+	// Append a numeric suffix on collision (same-second invocations).
 	const maxSuffixAttempts = 1000
 	originalPath := dirPath
 	for suffix := 1; ; suffix++ {
@@ -93,10 +85,8 @@ func (m *Manager) EnsureUTDDir() error {
 	return nil
 }
 
-// WriteUTDFile writes a temp file with a path-derived name.
-// entityType is "role", "context", or "task".
-// name is the entity name (e.g., "code-reviewer").
-// Returns the path to the written file.
+// WriteUTDFile writes a temp file named from entityType ("role"/"context"/"task") and name,
+// returning the written path.
 func (m *Manager) WriteUTDFile(entityType, name, content string) (string, error) {
 	if err := m.EnsureUTDDir(); err != nil {
 		return "", err
@@ -112,22 +102,15 @@ func (m *Manager) WriteUTDFile(entityType, name, content string) (string, error)
 	return filePath, nil
 }
 
-// deriveFileName creates a filename from entity type and name.
-// Examples:
-//   - ("role", "code-reviewer") -> "role-code-reviewer.md"
-//   - ("context", "project/readme") -> "context-project-readme.md"
+// deriveFileName sanitises name into a filesystem-safe "entityType-name.md".
 func deriveFileName(entityType, name string) string {
-	// Replace path separators with dashes
 	safeName := strings.ReplaceAll(name, "/", "-")
 	safeName = strings.ReplaceAll(safeName, "\\", "-")
 
-	// Remove or replace unsafe characters
 	safeName = unsafeCharsRe.ReplaceAllString(safeName, "-")
 
-	// Remove consecutive dashes
 	safeName = consecutiveDashesRe.ReplaceAllString(safeName, "-")
 
-	// Trim leading/trailing dashes
 	safeName = strings.Trim(safeName, "-")
 
 	return fmt.Sprintf("%s-%s.md", entityType, safeName)
@@ -137,7 +120,7 @@ func deriveFileName(entityType, name string) string {
 func (m *Manager) Clean() error {
 	entries, err := os.ReadDir(m.BaseDir)
 	if os.IsNotExist(err) {
-		return nil // Directory doesn't exist, nothing to clean
+		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("reading temp directory: %w", err)
@@ -145,7 +128,7 @@ func (m *Manager) Clean() error {
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			continue // Don't remove subdirectories
+			continue
 		}
 		path := filepath.Join(m.BaseDir, entry.Name())
 		if err := os.Remove(path); err != nil {
@@ -156,8 +139,7 @@ func (m *Manager) Clean() error {
 	return nil
 }
 
-// CheckGitignore checks if .start/temp is in .gitignore.
-// Returns true if it appears to be ignored.
+// CheckGitignore reports whether .start/temp appears to be ignored by .gitignore.
 func CheckGitignore(workingDir string) bool {
 	gitignorePath := filepath.Join(workingDir, ".gitignore")
 	content, err := os.ReadFile(gitignorePath)

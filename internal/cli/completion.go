@@ -4,7 +4,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// addCompletionCommand adds the completion command to the parent command.
 func addCompletionCommand(parent *cobra.Command) {
 	completionCmd := &cobra.Command{
 		Use:     "completion",

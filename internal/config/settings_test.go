@@ -18,7 +18,7 @@ func TestSettingDefault(t *testing.T) {
 		name    string
 		key     string
 		want    string
-		nonzero bool // true = just check it's non-empty (for env-dependent values)
+		nonzero bool // env-dependent: only assert non-empty
 	}{
 		{"library_index", "library_index", registry.IndexModulePath, false},
 		{"shell", "shell", "", true},
@@ -52,7 +52,6 @@ func TestValidSettingsKeysString(t *testing.T) {
 		}
 	}
 
-	// Verify sorted
 	keys := strings.Split(result, ", ")
 	if len(keys) != len(SettingsRegistry) {
 		t.Errorf("ValidSettingsKeysString() returned %d keys, want %d", len(keys), len(SettingsRegistry))
@@ -83,17 +82,14 @@ func TestResolveAllSettings_DefaultsOnly(t *testing.T) {
 		t.Errorf("got %d entries, want %d", len(entries), len(SettingsRegistry))
 	}
 
-	// library_index should have a default
 	if e := entries["library_index"]; e.Source != "default" {
 		t.Errorf("library_index source = %q, want %q", e.Source, "default")
 	}
 
-	// default_agent should be not set
 	if e := entries["default_agent"]; e.Source != "not set" {
 		t.Errorf("default_agent source = %q, want %q", e.Source, "not set")
 	}
 
-	// timeout should have a default
 	if e := entries["timeout"]; e.Source != "default" {
 		t.Errorf("timeout source = %q, want %q", e.Source, "default")
 	}
@@ -205,12 +201,10 @@ func TestResolveAllSettings_LocalOnly(t *testing.T) {
 		t.Fatalf("ResolveAllSettings() error = %v", err)
 	}
 
-	// Global default_agent should NOT be picked up
 	if e := entries["default_agent"]; e.Source != "not set" {
 		t.Errorf("default_agent source = %q, want %q (global should be ignored)", e.Source, "not set")
 	}
 
-	// Local timeout should be picked up
 	e := entries["timeout"]
 	if e.Value != "120" {
 		t.Errorf("timeout value = %q, want %q", e.Value, "120")
@@ -252,7 +246,6 @@ func TestResolveAllSettings_GlobalOnly(t *testing.T) {
 		t.Fatalf("ResolveAllSettings() error = %v", err)
 	}
 
-	// Global default_agent should be picked up — local must NOT override
 	e := entries["default_agent"]
 	if e.Value != "claude" {
 		t.Errorf("default_agent value = %q, want %q (local should be ignored)", e.Value, "claude")
@@ -261,7 +254,6 @@ func TestResolveAllSettings_GlobalOnly(t *testing.T) {
 		t.Errorf("default_agent source = %q, want %q", e.Source, "global")
 	}
 
-	// Local timeout should NOT leak through — defaults remain
 	if e := entries["timeout"]; e.Source != "default" {
 		t.Errorf("timeout source = %q, want %q (local should be ignored)", e.Source, "default")
 	}

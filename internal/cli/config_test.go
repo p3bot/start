@@ -11,11 +11,9 @@ import (
 	"github.com/start-cli/start/internal/config"
 )
 
-// Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
-// to any test that calls os.Chdir — it will cause data races on the working directory.
+// Tests use os.Chdir (process-global): do not add t.Parallel() or the working directory races.
 
 func TestConfigListAgent_NoConfig(t *testing.T) {
-	// Set up temp directory with no config
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -42,7 +40,6 @@ func TestConfigListAgent_WithAgents(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with an agent
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -59,7 +56,6 @@ func TestConfigListAgent_WithAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Save and restore working directory
 	chdir(t, tmpDir)
 
 	cmd := NewRootCmd()
@@ -86,7 +82,6 @@ func TestConfigGet_Agent(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with an agent
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -140,7 +135,6 @@ func TestConfigGet_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create empty global config
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -169,7 +163,6 @@ func TestConfigRemove_Agent(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with agents
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -202,7 +195,6 @@ func TestConfigRemove_Agent(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify gemini was removed
 	content, err := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
 	if err != nil {
 		t.Fatalf("failed to read agents.cue: %v", err)
@@ -220,7 +212,6 @@ func TestConfigSettings_DefaultAgentShow(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with settings
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -235,7 +226,6 @@ func TestConfigSettings_DefaultAgentShow(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Use config settings to show the default_agent setting
 	cmd := NewRootCmd()
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
@@ -280,7 +270,6 @@ func TestConfigListContext_WithContexts(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with a context
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -323,13 +312,11 @@ func TestConfigListContext_PreservesInjectionOrder(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with multiple contexts in specific order
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Define contexts in non-alphabetical order: zebra, alpha, middle
 	contextsContent := `contexts: {
 	"zebra": {
 		file: "zebra.md"
@@ -371,7 +358,7 @@ func TestConfigListContext_PreservesInjectionOrder(t *testing.T) {
 		t.Fatalf("expected all contexts in output, got: %s", output)
 	}
 
-	// Injection order: zebra < alpha < middle (matches config definition order)
+	// Injection order matches CUE definition order, not alphabetical.
 	if zebraIdx >= alphaIdx || alphaIdx >= middleIdx {
 		t.Errorf("context list not in injection order (expected zebra < alpha < middle): zebra=%d, alpha=%d, middle=%d\noutput: %s",
 			zebraIdx, alphaIdx, middleIdx, output)
@@ -382,7 +369,6 @@ func TestConfigListTask_WithTasks(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with a task
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -424,7 +410,6 @@ func TestConfigList_IncludesSettings(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config with a setting
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -682,8 +667,6 @@ func TestScopeString(t *testing.T) {
 	}
 }
 
-// Settings command tests
-
 func TestConfigSettingsList_NoConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
@@ -702,11 +685,9 @@ func TestConfigSettingsList_NoConfig(t *testing.T) {
 	}
 
 	output := stdout.String()
-	// Should show config paths
 	if !strings.Contains(output, "Configuration Paths:") {
 		t.Errorf("expected config paths header, got: %s", output)
 	}
-	// Should show all settings with defaults or not set
 	if !strings.Contains(output, "library_index:") {
 		t.Errorf("expected library_index in output, got: %s", output)
 	}
@@ -730,12 +711,11 @@ func TestConfigSettingsList_NoCUEFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config dir with no CUE files
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	// Write a non-CUE file so the dir exists but has no CUE
+	// Non-CUE file so the dir exists but has no CUE.
 	if err := os.WriteFile(filepath.Join(globalDir, "README.md"), []byte("# test"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -793,14 +773,12 @@ func TestConfigSettingsList_WithSettings(t *testing.T) {
 	}
 
 	output := stdout.String()
-	// Configured settings show with global source
 	if !strings.Contains(output, "default_agent: claude (global)") {
 		t.Errorf("expected 'default_agent: claude (global)', got: %s", output)
 	}
 	if !strings.Contains(output, "timeout: 120 (global)") {
 		t.Errorf("expected 'timeout: 120 (global)', got: %s", output)
 	}
-	// Unconfigured settings show defaults
 	if !strings.Contains(output, "library_index:") {
 		t.Errorf("expected library_index in output, got: %s", output)
 	}
@@ -955,14 +933,12 @@ func TestConfigSettingsShow_InvalidKey(t *testing.T) {
 func TestValidSettingsKeysString(t *testing.T) {
 	result := config.ValidSettingsKeysString()
 
-	// Must contain all known keys
 	for key := range config.SettingsRegistry {
 		if !strings.Contains(result, key) {
 			t.Errorf("ValidSettingsKeysString() missing key %q, got: %s", key, result)
 		}
 	}
 
-	// Must be sorted (first key alphabetically should appear before last)
 	keys := strings.Split(result, ", ")
 	if len(keys) != len(config.SettingsRegistry) {
 		t.Errorf("ValidSettingsKeysString() returned %d keys, want %d", len(keys), len(config.SettingsRegistry))
@@ -990,7 +966,6 @@ func TestConfigSettingsSet_LibraryIndex(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify file has quoted string value (not integer-style)
 	settingsPath := filepath.Join(tmpDir, "start", "settings.cue")
 	content, err := os.ReadFile(settingsPath)
 	if err != nil {
@@ -1009,7 +984,6 @@ func TestResolveLibraryIndexPath(t *testing.T) {
 
 		chdir(t, tmpDir)
 
-		// Write settings via command
 		cmd := NewRootCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
@@ -1059,7 +1033,6 @@ func TestConfigSettingsSet(t *testing.T) {
 		t.Errorf("expected set confirmation, got: %s", output)
 	}
 
-	// Verify file was created
 	settingsPath := filepath.Join(tmpDir, "start", "settings.cue")
 	content, err := os.ReadFile(settingsPath)
 	if err != nil {
@@ -1088,7 +1061,6 @@ func TestConfigSettingsSet_Integer(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify file has integer value (no quotes)
 	settingsPath := filepath.Join(tmpDir, "start", "settings.cue")
 	content, err := os.ReadFile(settingsPath)
 	if err != nil {
@@ -1098,7 +1070,6 @@ func TestConfigSettingsSet_Integer(t *testing.T) {
 	if !strings.Contains(string(content), "timeout: 60") {
 		t.Errorf("settings file missing timeout as integer, content: %s", content)
 	}
-	// Make sure it's NOT quoted
 	if strings.Contains(string(content), `timeout: "60"`) {
 		t.Errorf("timeout should not be quoted, content: %s", content)
 	}
@@ -1184,13 +1155,11 @@ func TestConfigSettingsSet_RefusesOverwriteNonSettings(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Create global config directory with mixed content
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Write a settings.cue file that also contains agents
 	mixedContent := `settings: {
 	default_agent: "claude"
 }
@@ -1224,7 +1193,6 @@ agents: {
 		t.Errorf("expected non-settings content error, got: %v", err)
 	}
 
-	// Verify original file is unchanged
 	content, err := os.ReadFile(settingsPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1240,7 +1208,6 @@ func TestConfigSettingsUnset(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// First set a value
 	setCmd := NewRootCmd()
 	setCmd.SetOut(&bytes.Buffer{})
 	setCmd.SetErr(&bytes.Buffer{})
@@ -1249,7 +1216,6 @@ func TestConfigSettingsUnset(t *testing.T) {
 		t.Fatalf("set failed: %v", err)
 	}
 
-	// Now unset it
 	unsetCmd := NewRootCmd()
 	stdout := &bytes.Buffer{}
 	unsetCmd.SetOut(stdout)
@@ -1263,7 +1229,6 @@ func TestConfigSettingsUnset(t *testing.T) {
 		t.Errorf("expected unset confirmation, got: %s", stdout.String())
 	}
 
-	// Verify key is gone from file
 	settingsPath := filepath.Join(tmpDir, "start", "settings.cue")
 	content, err := os.ReadFile(settingsPath)
 	if err != nil {
@@ -1302,7 +1267,6 @@ func TestConfigSettingsUnset_MalformedCUE(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Write a malformed settings.cue directly
 	configDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
@@ -1368,8 +1332,6 @@ func TestConfigSettingsUnset_NoKey(t *testing.T) {
 		t.Errorf("expected requires key error, got: %v", err)
 	}
 }
-
-// Tests for prompt helper functions
 
 func TestPromptTags_KeepCurrent(t *testing.T) {
 	current := []string{"tag1", "tag2"}
@@ -1887,7 +1849,6 @@ func TestPromptText_EmptyOpensEditor_FallsBackToDefault(t *testing.T) {
 }
 
 func TestPromptText_EmptyNoDefault(t *testing.T) {
-	// Empty input with no default returns empty string
 	t.Setenv("EDITOR", "/nonexistent-editor")
 	t.Setenv("VISUAL", "")
 
@@ -2120,7 +2081,6 @@ tasks: {
 		t.Fatalf("expected multiple matches, got %d: %s", len(items), stdout.String())
 	}
 
-	// All matches should have required fields
 	for _, item := range items {
 		if item["name"] == nil || item["name"] == "" {
 			t.Error("item missing 'name' field")
@@ -2247,14 +2207,12 @@ func TestConfigSettingsJSON_List(t *testing.T) {
 		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
 	}
 
-	// All 4 valid setting keys should be present
 	for _, key := range []string{"library_index", "default_agent", "shell", "timeout"} {
 		if _, ok := entries[key]; !ok {
 			t.Errorf("missing setting key %q in JSON output", key)
 		}
 	}
 
-	// Each entry should have a source field
 	for k, entry := range entries {
 		if _, ok := entry["source"]; !ok {
 			t.Errorf("setting %q missing 'source' field", k)
@@ -2288,15 +2246,13 @@ func TestConfigSettingsJSON_SingleKey(t *testing.T) {
 	}
 }
 
-// TestConfigGetScope verifies the four --local/--global scope outcomes for
-// config get against a fixture that defines the same name in both global and
-// local config with different field values.
+// Fixture defines the same name in both scopes with different values to exercise
+// the four --local/--global outcomes.
 func TestConfigGetScope(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// Global config: agent "claude" with bin "claude-global".
 	globalDir := filepath.Join(tmpDir, "start")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
@@ -2312,8 +2268,7 @@ func TestConfigGetScope(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Local config: agent "claude" with bin "claude-local" (same name,
-	// different field value), proving local-wins on merge.
+	// Same name, different value: proves local wins on merge.
 	localDir := filepath.Join(tmpDir, ".start")
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		t.Fatal(err)

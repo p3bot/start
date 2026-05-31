@@ -8,8 +8,6 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// TestResolveCrossCategory_ZeroMatches verifies zero matches across all
-// categories returns a "no matches" error.
 func TestResolveCrossCategory_ZeroMatches(t *testing.T) {
 	t.Parallel()
 
@@ -32,8 +30,6 @@ func TestResolveCrossCategory_ZeroMatches(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_SingleInstalledExact verifies a single installed
-// exact match is returned without prompting.
 func TestResolveCrossCategory_SingleInstalledExact(t *testing.T) {
 	t.Parallel()
 
@@ -65,8 +61,6 @@ func TestResolveCrossCategory_SingleInstalledExact(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_AmbiguousShortNameNonTTY verifies an ambiguous
-// short-name exact match returns an ambiguity error in non-TTY mode.
 func TestResolveCrossCategory_AmbiguousShortNameNonTTY(t *testing.T) {
 	t.Parallel()
 
@@ -91,8 +85,6 @@ func TestResolveCrossCategory_AmbiguousShortNameNonTTY(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_SingleInstalledSubstring verifies a single installed
-// substring match is returned without prompting.
 func TestResolveCrossCategory_SingleInstalledSubstring(t *testing.T) {
 	t.Parallel()
 
@@ -119,9 +111,6 @@ func TestResolveCrossCategory_SingleInstalledSubstring(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_CombinedSearchMultipleNonTTY verifies multiple
-// installed matches (combined-search path) return an ambiguity error in
-// non-TTY mode.
 func TestResolveCrossCategory_CombinedSearchMultipleNonTTY(t *testing.T) {
 	t.Parallel()
 
@@ -150,10 +139,8 @@ func TestResolveCrossCategory_CombinedSearchMultipleNonTTY(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_ExactPlusSubstringFallThrough verifies the
-// fall-through case: a single exact match that coexists with additional
-// substring matches must surface a selection (ambiguity error in non-TTY)
-// rather than silently returning the exact match.
+// A single exact match coexisting with substring matches must surface a
+// selection rather than silently returning the exact match.
 func TestResolveCrossCategory_ExactPlusSubstringFallThrough(t *testing.T) {
 	t.Parallel()
 
@@ -186,14 +173,12 @@ func TestResolveCrossCategory_ExactPlusSubstringFallThrough(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_AmbiguousAcrossCategories verifies that short-name
-// ambiguity collected from multiple categories produces one combined list.
+// Short-name ambiguity collected from multiple categories produces one list.
 func TestResolveCrossCategory_AmbiguousAcrossCategories(t *testing.T) {
 	t.Parallel()
 
-	// "debug" is ambiguous within tasks (two review/* entries) AND within
-	// roles (two *-expert entries). Both categories contribute to the
-	// aggregated ambiguousMatches slice.
+	// "debug" is ambiguous within both tasks and roles; both contribute to
+	// the aggregated ambiguousMatches slice.
 	cfg := buildTestCfg(t, `{
 		tasks: {
 			"review/debug": {prompt: "Review debug"}
@@ -221,8 +206,6 @@ func TestResolveCrossCategory_AmbiguousAcrossCategories(t *testing.T) {
 	}
 }
 
-// TestInstallIfRegistry_InstalledIsNoop verifies the helper short-circuits
-// without touching the registry client for installed matches.
 func TestInstallIfRegistry_InstalledIsNoop(t *testing.T) {
 	t.Parallel()
 
@@ -237,9 +220,7 @@ func TestInstallIfRegistry_InstalledIsNoop(t *testing.T) {
 	}
 }
 
-// TestInstallIfRegistry_RegistryWithoutClient verifies the helper returns a
-// clear error when asked to install a registry match but no client is present.
-// This is the fail-fast guard for the "index loaded, client missing" state.
+// Fail-fast guard for the "index loaded, client missing" state.
 func TestInstallIfRegistry_RegistryWithoutClient(t *testing.T) {
 	t.Parallel()
 
@@ -259,17 +240,14 @@ func TestInstallIfRegistry_RegistryWithoutClient(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_ExactRegistryBranchInstalls verifies the exact
-// registry match branch is reached and installIfRegistry is invoked.
-// Install fails deterministically because r.client is nil; that failure
-// confirms the code path executed as intended.
+// The exact-registry branch reaches installIfRegistry; install fails
+// deterministically (r.client is nil), confirming the path executed.
 func TestResolveCrossCategory_ExactRegistryBranchInstalls(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{roles: {}}`)
 	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	// Inject index with a registry entry whose short name matches the query;
-	// mark didFetch so ensureIndex short-circuits and returns (index, nil, nil).
+	// didFetch makes ensureIndex short-circuit and return the injected index.
 	r.didFetch = true
 	r.index = &registry.Index{
 		Roles: map[string]registry.IndexEntry{
@@ -292,11 +270,8 @@ func TestResolveCrossCategory_ExactRegistryBranchInstalls(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_CombinedSingleRegistryBranchInstalls verifies the
-// combined-search single-registry match branch is reached and triggers
-// installIfRegistry. The query is a substring that does not match via
-// findExactInRegistry (full name nor short name) but matches via
-// searchRegistryCategory, forcing execution into the combined-search path.
+// A query that misses findExactInRegistry but matches searchRegistryCategory
+// forces the combined-search single-registry branch into installIfRegistry.
 func TestResolveCrossCategory_CombinedSingleRegistryBranchInstalls(t *testing.T) {
 	t.Parallel()
 
@@ -313,9 +288,8 @@ func TestResolveCrossCategory_CombinedSingleRegistryBranchInstalls(t *testing.T)
 		},
 	}
 
-	// "golang" is not a full key and not a short name ("assistant" is), so
-	// the exact-registry branch misses. Substring search against the key
-	// and tags must find it, leading to the single-match combined-search path.
+	// "golang" is neither a full key nor a short name, so the exact-registry
+	// branch misses and only substring search against key/tags finds it.
 	_, err := resolveCrossCategory("golang", r)
 	if err == nil {
 		t.Fatal("expected error from install attempt in combined-search branch")
@@ -328,9 +302,8 @@ func TestResolveCrossCategory_CombinedSingleRegistryBranchInstalls(t *testing.T)
 	}
 }
 
-// TestResolveCrossCategory_CombinedMultipleRegistryNonTTY verifies that
-// multiple combined-search registry matches surface as an ambiguity error
-// in non-TTY mode without attempting to install.
+// Multiple combined-search registry matches surface as a non-TTY ambiguity
+// error without attempting to install.
 func TestResolveCrossCategory_CombinedMultipleRegistryNonTTY(t *testing.T) {
 	t.Parallel()
 
@@ -364,10 +337,8 @@ func TestResolveCrossCategory_CombinedMultipleRegistryNonTTY(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_MultipleExactAcrossCategoriesNonTTY verifies that a
-// query matching an exact top-level key in more than one category reaches the
-// `len(exactMatches) > 1` branch and surfaces an ambiguity error in non-TTY
-// mode listing every category-qualified match.
+// A query matching an exact key in more than one category reaches the
+// len(exactMatches) > 1 branch and surfaces a non-TTY ambiguity error.
 func TestResolveCrossCategory_MultipleExactAcrossCategoriesNonTTY(t *testing.T) {
 	t.Parallel()
 
@@ -404,12 +375,8 @@ func TestResolveCrossCategory_MultipleExactAcrossCategoriesNonTTY(t *testing.T) 
 	}
 }
 
-// TestResolveCrossCategory_ExactPlusCrossCategorySubstring verifies the bug
-// fix: when a single exact match coexists with a single substring match in a
-// *different* category, the resolver must surface a selection rather than
-// silently picking the exact match. Pre-fix, the per-category ambiguity gate
-// only triggered selection when one category had >1 substring hit, missing
-// cross-category neighbours entirely.
+// An exact match coexisting with a substring match in a *different* category
+// must surface a selection rather than silently picking the exact match.
 func TestResolveCrossCategory_ExactPlusCrossCategorySubstring(t *testing.T) {
 	t.Parallel()
 
@@ -443,9 +410,8 @@ func TestResolveCrossCategory_ExactPlusCrossCategorySubstring(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_PrefixMatching verifies a matching category prefix
-// scopes the search to that category and resolves to one match without
-// prompting, even when the bare name exists in another category.
+// A matching category prefix scopes the search even when the bare name exists
+// in another category.
 func TestResolveCrossCategory_PrefixMatching(t *testing.T) {
 	t.Parallel()
 
@@ -476,9 +442,8 @@ func TestResolveCrossCategory_PrefixMatching(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_PrefixScopesAbsence verifies a category prefix with
-// a bare name that exists only in a *different* category returns a
-// "no matches" error rather than silently falling back.
+// A prefix with a name that exists only in a different category returns "no
+// matches" rather than silently falling back.
 func TestResolveCrossCategory_PrefixScopesAbsence(t *testing.T) {
 	t.Parallel()
 
@@ -500,8 +465,6 @@ func TestResolveCrossCategory_PrefixScopesAbsence(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_UnknownPrefix verifies an unknown category prefix
-// returns an error naming the unknown category and listing the four valid ones.
 func TestResolveCrossCategory_UnknownPrefix(t *testing.T) {
 	t.Parallel()
 
@@ -521,9 +484,8 @@ func TestResolveCrossCategory_UnknownPrefix(t *testing.T) {
 	}
 }
 
-// TestResolveCrossCategory_AmbiguityRoundTrip verifies that a non-TTY
-// ambiguity-error candidate, fed back as the resolver input, resolves to one
-// match — the round-trip property required by address-scheme.md.
+// A non-TTY ambiguity-error candidate, fed back as input, resolves to one
+// match — the round-trip property required by the address scheme.
 func TestResolveCrossCategory_AmbiguityRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -546,7 +508,6 @@ func TestResolveCrossCategory_AmbiguityRoundTrip(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected ambiguity error for cross-category exact matches")
 	}
-	// The non-TTY error lists candidates as "agents:foo" and "roles:foo".
 	for _, candidate := range []string{"agents:foo", "roles:foo"} {
 		r2 := newTestResolver(cfg)
 		match, err := resolveCrossCategory(candidate, r2)
@@ -559,7 +520,6 @@ func TestResolveCrossCategory_AmbiguityRoundTrip(t *testing.T) {
 	}
 }
 
-// TestParseAddress verifies the colon-prefix parser at the unit level.
 func TestParseAddress(t *testing.T) {
 	t.Parallel()
 

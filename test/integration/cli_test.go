@@ -28,7 +28,7 @@ func loadedContexts(ctxs []orchestration.Context) []orchestration.Context {
 	return out
 }
 
-// chdir changes to the given directory and registers a cleanup to restore the original.
+// chdir changes to dir and restores the original working directory on cleanup.
 func chdir(t *testing.T, dir string) {
 	t.Helper()
 	origDir, err := os.Getwd()
@@ -118,19 +118,16 @@ func TestIntegration_CUELoaderWithComposer(t *testing.T) {
 
 	chdir(t, tmpDir)
 
-	// Load CUE configuration
 	loader := internalcue.NewLoader()
 	result, err := loader.Load([]string{filepath.Join(tmpDir, ".start")})
 	if err != nil {
 		t.Fatalf("loading CUE config: %v", err)
 	}
 
-	// Create composer with shell runner
 	shellRunner := shell.NewRunner()
 	processor := orchestration.NewTemplateProcessor(nil, shellRunner, tmpDir)
 	composer := orchestration.NewComposer(processor, tmpDir)
 
-	// Test composing with required contexts
 	selection := orchestration.ContextSelection{
 		IncludeRequired: true,
 		IncludeDefaults: false,
@@ -141,7 +138,6 @@ func TestIntegration_CUELoaderWithComposer(t *testing.T) {
 		t.Fatalf("composing: %v", err)
 	}
 
-	// Should have required context
 	loaded := loadedContexts(composeResult.Contexts)
 	if len(loaded) != 1 {
 		t.Errorf("expected 1 context, got %d", len(loaded))
@@ -150,7 +146,6 @@ func TestIntegration_CUELoaderWithComposer(t *testing.T) {
 		t.Errorf("expected 'env' context, got %q", loaded[0].Name)
 	}
 
-	// Prompt should contain context content
 	if !strings.Contains(composeResult.Prompt, "Environment context") {
 		t.Errorf("prompt should contain 'Environment context'")
 	}
@@ -171,7 +166,6 @@ func TestIntegration_CUELoaderWithComposer_DefaultContexts(t *testing.T) {
 	processor := orchestration.NewTemplateProcessor(nil, shellRunner, tmpDir)
 	composer := orchestration.NewComposer(processor, tmpDir)
 
-	// Test composing with required and default contexts
 	selection := orchestration.ContextSelection{
 		IncludeRequired: true,
 		IncludeDefaults: true,
@@ -182,13 +176,11 @@ func TestIntegration_CUELoaderWithComposer_DefaultContexts(t *testing.T) {
 		t.Fatalf("composing: %v", err)
 	}
 
-	// Should have both required and default contexts
 	loaded := loadedContexts(composeResult.Contexts)
 	if len(loaded) != 2 {
 		t.Errorf("expected 2 contexts, got %d", len(loaded))
 	}
 
-	// Check both contexts are present
 	var hasEnv, hasProject bool
 	for _, ctx := range loaded {
 		if ctx.Name == "env" {
@@ -221,7 +213,6 @@ func TestIntegration_CUELoaderWithComposer_TaggedContexts(t *testing.T) {
 	processor := orchestration.NewTemplateProcessor(nil, shellRunner, tmpDir)
 	composer := orchestration.NewComposer(processor, tmpDir)
 
-	// Test composing with tagged contexts
 	selection := orchestration.ContextSelection{
 		IncludeRequired: true,
 		Tags:            []string{"debug"},
@@ -232,7 +223,6 @@ func TestIntegration_CUELoaderWithComposer_TaggedContexts(t *testing.T) {
 		t.Fatalf("composing: %v", err)
 	}
 
-	// Should have required + debug tagged context
 	loaded := loadedContexts(composeResult.Contexts)
 	if len(loaded) != 2 {
 		t.Errorf("expected 2 contexts, got %d", len(loaded))
@@ -268,7 +258,6 @@ func TestIntegration_ComposeWithRole(t *testing.T) {
 		IncludeRequired: true,
 	}
 
-	// Test with specific role
 	composeResult, err := composer.ComposeWithRole(result.Value, selection, "reviewer", "")
 	if err != nil {
 		t.Fatalf("composing with role: %v", err)
@@ -297,7 +286,6 @@ func TestIntegration_ResolveTask(t *testing.T) {
 	processor := orchestration.NewTemplateProcessor(nil, shellRunner, tmpDir)
 	composer := orchestration.NewComposer(processor, tmpDir)
 
-	// Test resolving task with instructions
 	taskResult, err := composer.ResolveTask(result.Value, "code-review", "focus on security")
 	if err != nil {
 		t.Fatalf("resolving task: %v", err)
@@ -310,7 +298,6 @@ func TestIntegration_ResolveTask(t *testing.T) {
 		t.Errorf("task content should contain instructions 'focus on security'")
 	}
 
-	// Test simple task
 	simpleResult, err := composer.ResolveTask(result.Value, "simple-task", "")
 	if err != nil {
 		t.Fatalf("resolving simple task: %v", err)
@@ -332,7 +319,6 @@ func TestIntegration_ExecutorBuildCommand(t *testing.T) {
 		t.Fatalf("loading CUE config: %v", err)
 	}
 
-	// Extract agent
 	agent, err := orchestration.ExtractAgent(result.Value, "echo")
 	if err != nil {
 		t.Fatalf("extracting agent: %v", err)
@@ -369,13 +355,11 @@ func TestIntegration_GetTaskRole(t *testing.T) {
 		t.Fatalf("loading CUE config: %v", err)
 	}
 
-	// Task with role
 	role := orchestration.GetTaskRole(result.Value, "code-review")
 	if role != "reviewer" {
 		t.Errorf("expected role 'reviewer', got %q", role)
 	}
 
-	// Task without role
 	role = orchestration.GetTaskRole(result.Value, "simple-task")
 	if role != "" {
 		t.Errorf("expected empty role, got %q", role)
