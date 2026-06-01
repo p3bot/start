@@ -216,6 +216,8 @@ start describe golang/assistant
 
 The `--global` and `--local` flags restrict output to a single config scope; omitting both shows the effective merged configuration.
 
+On an interactive terminal, `start get` and `start describe` render Markdown content (rendered prompts and `.md`/`.markdown` file bodies) with terminal styling. Piped or redirected output, `--color=never`, and `NO_COLOR` keep the content raw, so `start get` stays pipe-clean for scripting.
+
 ### Dry Run
 
 Run the full composition pipeline without launching the agent:

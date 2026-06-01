@@ -144,7 +144,7 @@ func TestSnapshot_DescribeAgent(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 
 	want := fmt.Sprintf(`Agent: claude
 %[1]s
@@ -188,7 +188,7 @@ func TestSnapshot_DescribeRole(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 
 	want := fmt.Sprintf(`Role: code-reviewer
 %[1]s
@@ -219,7 +219,7 @@ func TestSnapshot_DescribeContext(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 
 	want := fmt.Sprintf(`Context: environment
 %[1]s
@@ -254,7 +254,7 @@ func TestSnapshot_DescribeTask(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 
 	want := fmt.Sprintf(`Task: myreview
 %[1]s
@@ -367,7 +367,7 @@ func TestSnapshot_DescribeAgentObjectForm(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 
 	want := fmt.Sprintf(`Agent: objform
 %[1]s

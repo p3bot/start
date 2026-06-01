@@ -55,3 +55,27 @@ func TestResolveColorMode(t *testing.T) {
 		})
 	}
 }
+
+// TestSettleMarkdownStyle covers the default-to-dark branches. The "light"
+// result requires a raw-mode background probe against a TTY stdout; the test
+// process's os.Stdout is not a terminal, so settle must skip the probe entirely
+// and default to dark — both when not decorating and when decorating to a
+// non-TTY. This pins that settle never probes (and never hangs) off-TTY.
+func TestSettleMarkdownStyle(t *testing.T) {
+	tests := []struct {
+		name      string
+		decorated bool
+		want      string
+	}{
+		{name: "not decorating defaults to dark", decorated: false, want: markdownStyleDark},
+		{name: "decorating to non-tty stdout defaults to dark", decorated: true, want: markdownStyleDark},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := settleMarkdownStyle(tt.decorated); got != tt.want {
+				t.Errorf("settleMarkdownStyle(%v) = %q, want %q", tt.decorated, got, tt.want)
+			}
+		})
+	}
+}

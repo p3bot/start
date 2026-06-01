@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -45,6 +46,11 @@ func setupGetTestConfig(t *testing.T) string {
 	mixedFile := filepath.Join(dir, "mixed.md")
 	if err := os.WriteFile(mixedFile, []byte("MIXED FILE CONTENT"), 0o644); err != nil {
 		t.Fatalf("writing mixed file: %v", err)
+	}
+
+	txtFile := filepath.Join(dir, "role.txt")
+	if err := os.WriteFile(txtFile, []byte("Plain text body.\n"), 0o644); err != nil {
+		t.Fatalf("writing txt file: %v", err)
 	}
 
 	// Referenced as "~/tilde-role.md" in CUE; lives at $HOME (== dir) so
@@ -101,6 +107,10 @@ roles: {
 	"role-prompt": {
 		description: "Prompt-source role"
 		prompt:      "Hello {{.user}}"
+	}
+	"role-plain": {
+		description: "Non-markdown file source"
+		file:        "` + txtFile + `"
 	}
 	"role-mixed": {
 		description: "File and prompt; file should win"
@@ -173,6 +183,19 @@ tasks: {
 	return dir
 }
 
+// restoreNoColor captures color.NoColor and restores it after the test. A
+// --color=always command flips this process-global to decorate; without
+// restoration the false value leaks into later tests that read color.NoColor
+// directly (e.g. printVerboseDump snapshots that bypass PersistentPreRunE).
+func restoreNoColor(t *testing.T) {
+	t.Helper()
+	prev := color.NoColor
+	t.Cleanup(func() { color.NoColor = prev })
+}
+
+// hasANSI reports whether s contains an ANSI escape sequence.
+func hasANSI(s string) bool { return strings.Contains(s, "\x1b[") }
+
 // runGetCmd runs `start get` with the given args and a non-TTY stdin.
 func runGetCmd(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
@@ -244,6 +267,84 @@ func TestGetUTDCommandSourceWithShellTimeout(t *testing.T) {
 
 	if stdout != "cmd-output\n" {
 		t.Errorf("stdout = %q, want %q", stdout, "cmd-output\n")
+	}
+}
+
+// The styling integration tests force decoration via --color=always so the
+// styled branch runs through a non-TTY buffer; they assert the predicate is
+// actually wired into getUTD, not merely correct in isolation.
+
+func TestGetStylesPromptUnderForcedColor(t *testing.T) {
+	setupGetTestConfig(t)
+	restoreNoColor(t)
+
+	stdout, stderr, err := runGetCmd(t, "role-prompt", "--color=always")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if !hasANSI(stdout) {
+		t.Errorf("prompt source should be styled under --color=always, got raw: %q", stdout)
+	}
+	if !strings.Contains(stdout, "Hello") {
+		t.Errorf("styled output should still contain the prompt text, got: %q", stdout)
+	}
+}
+
+func TestGetStylesMarkdownFileUnderForcedColor(t *testing.T) {
+	setupGetTestConfig(t)
+	restoreNoColor(t)
+
+	stdout, stderr, err := runGetCmd(t, "role-file", "--color=always")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if !hasANSI(stdout) {
+		t.Errorf(".md file source should be styled under --color=always, got raw: %q", stdout)
+	}
+}
+
+func TestGetDoesNotStyleNonMarkdownFile(t *testing.T) {
+	setupGetTestConfig(t)
+	restoreNoColor(t)
+
+	stdout, stderr, err := runGetCmd(t, "role-plain", "--color=always")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if hasANSI(stdout) {
+		t.Errorf(".txt file source must not be styled, got: %q", stdout)
+	}
+	if stdout != "Plain text body.\n" {
+		t.Errorf("non-markdown body must be emitted raw, got: %q", stdout)
+	}
+}
+
+func TestGetDoesNotStyleCommandSource(t *testing.T) {
+	setupGetTestConfig(t)
+	restoreNoColor(t)
+
+	stdout, stderr, err := runGetCmd(t, "ctx-cmd", "--color=always")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if hasANSI(stdout) {
+		t.Errorf("command source must not be styled, got: %q", stdout)
+	}
+	if stdout != "cmd-output\n" {
+		t.Errorf("command output must be emitted raw, got: %q", stdout)
+	}
+}
+
+func TestGetDoesNotStyleAgentTemplate(t *testing.T) {
+	setupGetTestConfig(t)
+	restoreNoColor(t)
+
+	stdout, stderr, err := runGetCmd(t, "claude", "--color=always")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if hasANSI(stdout) {
+		t.Errorf("agent command template must not be styled, got: %q", stdout)
 	}
 }
 

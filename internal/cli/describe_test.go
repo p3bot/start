@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fatih/color"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 )
@@ -671,7 +672,7 @@ func TestVerboseDumpCUEDefinition(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	wantStrings := []string{
@@ -699,7 +700,7 @@ func TestVerboseDumpAgentCommand(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	if !strings.Contains(output, "Command: claude --model claude-sonnet-4-20250514") {
@@ -720,7 +721,7 @@ func TestVerboseDumpConfigSource(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	expectedPath := filepath.Join(dir, ".start", "settings.cue")
@@ -742,7 +743,7 @@ func TestVerboseDumpOriginCache(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	if !strings.Contains(output, "github.com/start-cli/library/roles/golang@v1.0.0") {
@@ -763,11 +764,37 @@ func TestVerboseDumpFileContent(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	if !strings.Contains(output, "You are a Go expert.") {
 		t.Errorf("output missing file content\ngot:\n%s", output)
+	}
+}
+
+func TestVerboseDumpStylesMarkdownFileBody(t *testing.T) {
+	setupTestConfigWithFiles(t)
+	restoreNoColor(t)
+	color.NoColor = false // force decoration so the styled branch runs
+
+	result, err := prepareDescribe("go-expert", config.ScopeMerged, internalcue.KeyRoles, "Role")
+	if err != nil {
+		t.Fatalf("prepareDescribe: %v", err)
+	}
+
+	var buf bytes.Buffer
+	printVerboseDump(&buf, result, &Flags{})
+	output := buf.String()
+
+	// glamour's dark style emits 256-colour sequences (ESC[38;5;Nm); the fatih
+	// label colours do not. Their presence isolates the file body as styled,
+	// distinct from the metadata/label colouring.
+	if !strings.Contains(output, "\x1b[38;5;") {
+		t.Errorf("expected styled .md file body (256-colour sequence), got:\n%s", output)
+	}
+	// The CUE definition dump stays literal — its file: field is never rendered.
+	if !strings.Contains(output, "file:") {
+		t.Errorf("CUE definition dump should remain literal with a file: field, got:\n%s", output)
 	}
 }
 
@@ -800,7 +827,7 @@ roles: {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	if !strings.Contains(output, "[error:") {
@@ -817,7 +844,7 @@ func TestVerboseDumpCommand(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	if !strings.Contains(output, "git diff --staged") {
@@ -834,7 +861,7 @@ func TestVerboseDumpSeparators(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	separator := strings.Repeat("─", 79)
@@ -1495,7 +1522,7 @@ func TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	cacheIdx := strings.Index(output, "Cache:")
@@ -1544,7 +1571,7 @@ agents: {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result)
+	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
 	// Inspect the window from just after the separator line to the CUE

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/shell"
+	"github.com/start-cli/start/internal/tui"
 )
 
 func addGetCommand(parent *cobra.Command, flags *Flags) {
@@ -40,7 +41,9 @@ prompt.
 
 Stdout receives only the module content. Selection menus, registry progress,
 auto-install notices, and --verbose metadata are written to stderr so the
-output remains pipe-clean.
+output remains pipe-clean. On an interactive terminal, Markdown content
+(rendered prompts and .md/.markdown file bodies) is styled; piped, redirected,
+or --color=never output stays raw and byte-identical.
 
 Use --global to restrict resolution to the global config (~/.config/start/) or
 --local to restrict to the local config (./.start/). These flags are mutually
@@ -248,8 +251,28 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 		return err
 	}
 
-	fmt.Fprint(stdout, ensureTrailingNewline(result.Content))
+	// Feed the trailing-newline-normalised content to both paths so the styled
+	// and raw outputs share one source: when decoration is off RenderMarkdown
+	// passes content through byte-for-byte, keeping get pipe-clean.
+	content := ensureTrailingNewline(result.Content)
+	if shouldStyleMarkdown(utdSource(fields), fields.File) {
+		return tui.RenderMarkdown(stdout, content, flags.MarkdownStyle())
+	}
+	fmt.Fprint(stdout, content)
 	return nil
+}
+
+// utdSource reports the winning UTD source from post-trim fields, mirroring the
+// file > prompt > command priority the trim block in getUTD enforces.
+func utdSource(fields orchestration.UTDFields) markdownSource {
+	switch {
+	case fields.File != "":
+		return sourceFile
+	case fields.Prompt != "":
+		return sourcePrompt
+	default:
+		return sourceCommand
+	}
 }
 
 // printGetVerbose writes module metadata to stderr ahead of the content.

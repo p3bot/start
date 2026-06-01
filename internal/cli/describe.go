@@ -292,15 +292,15 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	if cat == nil {
 		return fmt.Errorf("unknown category %q", match.Category)
 	}
-	return describeVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType)
+	return describeVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType, flags)
 }
 
-func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string) error {
+func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string, flags *Flags) error {
 	result, err := prepareDescribe(name, scope, cueKey, itemType)
 	if err != nil {
 		return err
 	}
-	printVerboseDump(w, result)
+	printVerboseDump(w, result, flags)
 	return nil
 }
 
@@ -431,7 +431,7 @@ func loadConfig(scope config.Scope) (internalcue.LoadResult, error) {
 	return result, err
 }
 
-func printVerboseDump(w io.Writer, r DescribeResult) {
+func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags) {
 	cat := r.Category
 	label := tui.ColorDim.Sprint
 
@@ -477,9 +477,17 @@ func printVerboseDump(w io.Writer, r DescribeResult) {
 			fmt.Fprintf(w, "[error: %s]\n", readErr)
 		} else if content != "" {
 			fmt.Fprintln(w)
-			fmt.Fprint(w, content)
-			if !strings.HasSuffix(content, "\n") {
-				fmt.Fprintln(w)
+			// Only the file body is eligible for styling; every other section
+			// stays literal. ensureTrailingNewline keeps the raw (non-decorated)
+			// output identical to the prior write-then-newline behaviour.
+			body := ensureTrailingNewline(content)
+			if shouldStyleMarkdown(sourceFile, fields.File) {
+				// Best-effort like the rest of the dump: a write error here is
+				// not worth aborting the diagnostic. get propagates its render
+				// error instead because its stdout is pipe-clean data.
+				_ = tui.RenderMarkdown(w, body, flags.MarkdownStyle())
+			} else {
+				fmt.Fprint(w, body)
 			}
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/registry"
@@ -98,6 +99,11 @@ Examples:
 				return err
 			}
 			color.NoColor = !decorated
+
+			// The Markdown style is settled lazily by Flags.MarkdownStyle on
+			// first use, so only get/describe probe the terminal background, and
+			// only when content is actually about to be styled. Settling here
+			// would impose that raw-mode/stdin probe on every command.
 
 			// Debug implies verbose
 			if flags.Debug {
@@ -250,6 +256,22 @@ func resolveColorMode(mode string, stdoutTTY bool) (decorated bool, err error) {
 		force := envTruthy("FORCE_COLOR") || envTruthy("CLICOLOR_FORCE")
 		return stdoutTTY || force, nil
 	}
+}
+
+// settleMarkdownStyle picks the glamour style for this invocation. It probes
+// the terminal background (a raw-mode OSC query) only when decorating to a TTY
+// stdout, returning "dark" or "light"; it defaults to "dark" when not
+// decorating, when stdout is not a TTY (the --color=always | pipe case), or
+// when detection fails. lipgloss.HasDarkBackground returns dark on any error or
+// non-TTY, so the default holds without extra guarding.
+func settleMarkdownStyle(decorated bool) string {
+	if decorated && isTerminalWriter(os.Stdout) {
+		if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
+			return markdownStyleDark
+		}
+		return markdownStyleLight
+	}
+	return markdownStyleDark
 }
 
 // envTruthy reports whether a boolean env var is on, matching the de facto

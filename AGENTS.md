@@ -42,8 +42,8 @@ start                           # Start interactive session with default role
 start --role go-expert          # Start with specific role
 start task pre-commit-review    # Run a specific task
 start describe                  # List all installed modules grouped by category
-start describe <name>           # Inspect a module; auto-installs from registry if needed
-start get <name>                # Output module content to stdout (pipe-clean)
+start describe <name>           # Inspect a module; auto-installs if needed (TTY: Markdown file body styled)
+start get <name>                # Output module content to stdout (pipe-clean; TTY: Markdown styled)
 start install <pkg>             # Install a module from the library
 start list                      # List installed modules
 start library                   # Show the available module library

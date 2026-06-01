@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cuelang.org/go/cue"
@@ -47,6 +48,26 @@ type Flags struct {
 	// "--context none,foo" yields just foo.
 	NoRole             bool
 	NoImplicitContexts bool
+
+	// markdownStyle holds the glamour style ("dark" or "light"), settled lazily
+	// on first use via MarkdownStyle. markdownStyleOnce confines the terminal
+	// background probe to a single fire per invocation. Flags is always handled
+	// by pointer, so the sync.Once is never copied.
+	markdownStyleOnce  sync.Once
+	markdownStyleValue string
+}
+
+// MarkdownStyle returns the glamour style for this invocation, probing the
+// terminal background at most once and only on first use. Commands that never
+// render Markdown never call it, so they never probe; the probe fires only when
+// content is actually about to be styled. Decoration is derived from the
+// already-settled color.NoColor, so the result is "dark" whenever decoration is
+// off, when stdout is not a TTY, or when detection fails.
+func (f *Flags) MarkdownStyle() string {
+	f.markdownStyleOnce.Do(func() {
+		f.markdownStyleValue = settleMarkdownStyle(!color.NoColor)
+	})
+	return f.markdownStyleValue
 }
 
 // getFlags retrieves Flags from the command context.
