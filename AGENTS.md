@@ -12,6 +12,12 @@ When an active project is set, continue by reading it. `none` means no project i
 
 Active Project: 01-prompt-arg-feature.md
 
+Planned sequence (each depends on the one before where noted):
+
+1. `01-prompt-arg-feature.md` — multi-segment `prompt`; introduces the shared `ComposeSegments`/`joinSegments` helper.
+2. `02-task-arg-feature.md` — multi-segment `task` instructions; reuses the `01` helper and adds append-when-no-placeholder.
+3. `03-user-alias-feature.md` — local user aliases; prompt-valued aliases depend on `01`. Independent of `02`.
+
 When a project is complete, update this file to point to the next active project (or `none` if nothing is queued)
 
 ## Build & Test
