@@ -711,6 +711,99 @@ func TestLoader_LoadWithPackage(t *testing.T) {
 	})
 }
 
+// TestLoader_SubdirectoryNotRecursed pins the load-bearing resilience guarantee
+// the alias store relies on (stored at <global>/aliases/aliases.cue): the
+// directory loader builds only the .cue files directly in a scope directory and
+// never descends into subdirectories. A managed store in a subdirectory must
+// therefore neither fail a sibling load when malformed nor leak its fields into
+// the merged value when valid, and a scope dir whose only .cue content lives in
+// a subdirectory must load as empty. If a future CUE upgrade changed this, the
+// alias store would start breaking the main config load — this test catches that.
+func TestLoader_SubdirectoryNotRecursed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("malformed file in subdirectory does not break sibling load", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeCUEFile(t, dir, "agents.cue", `agents: claude: command: "claude"`)
+
+		sub := filepath.Join(dir, "aliases")
+		if err := os.Mkdir(sub, 0o755); err != nil {
+			t.Fatalf("Mkdir(%s) error = %v", sub, err)
+		}
+		writeCUEFile(t, sub, "aliases.cue", `aliases: this is not valid cue {{{`)
+
+		l := NewLoader()
+		v, err := l.LoadSingle(dir)
+		if err != nil {
+			t.Fatalf("LoadSingle() error = %v (malformed subdir file must not break the load)", err)
+		}
+		if !v.LookupPath(parsePath("agents.claude.command")).Exists() {
+			t.Error("agents.claude.command should exist (sibling file must still load)")
+		}
+		if v.LookupPath(parsePath("aliases")).Exists() {
+			t.Error("aliases field leaked from subdirectory into the build")
+		}
+	})
+
+	t.Run("valid file in subdirectory does not leak into load", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeCUEFile(t, dir, "settings.cue", `name: "test"`)
+
+		sub := filepath.Join(dir, "aliases")
+		if err := os.Mkdir(sub, 0o755); err != nil {
+			t.Fatalf("Mkdir(%s) error = %v", sub, err)
+		}
+		writeCUEFile(t, sub, "aliases.cue", `aliases: pc: ["task", "review/pre-commit"]`)
+
+		l := NewLoader()
+		v, err := l.LoadSingle(dir)
+		if err != nil {
+			t.Fatalf("LoadSingle() error = %v", err)
+		}
+		if v.LookupPath(parsePath("aliases")).Exists() {
+			t.Error("aliases field from subdirectory must not appear in the merged value")
+		}
+	})
+
+	t.Run("directory whose only cue content is in a subdirectory loads as empty", func(t *testing.T) {
+		t.Parallel()
+		globalDir := t.TempDir()
+		sub := filepath.Join(globalDir, "aliases")
+		if err := os.Mkdir(sub, 0o755); err != nil {
+			t.Fatalf("Mkdir(%s) error = %v", sub, err)
+		}
+		writeCUEFile(t, sub, "aliases.cue", `aliases: pc: ["task", "review/pre-commit"]`)
+
+		// HasCUEFiles is the gate Load uses to decide a directory is empty; a
+		// subdirectory must not count as top-level CUE content.
+		has, err := HasCUEFiles(globalDir)
+		if err != nil {
+			t.Fatalf("HasCUEFiles() error = %v", err)
+		}
+		if has {
+			t.Error("HasCUEFiles() = true, want false (a subdirectory must not count)")
+		}
+
+		// At the Load level, such a directory is skipped, not loaded as global.
+		localDir := t.TempDir()
+		writeCUEFile(t, localDir, "settings.cue", `name: "local"`)
+
+		l := NewLoader()
+		result, err := l.Load([]string{globalDir, localDir})
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if result.GlobalLoaded {
+			t.Error("GlobalLoaded = true, want false (global dir holds only a subdirectory)")
+		}
+		if !result.LocalLoaded {
+			t.Error("LocalLoaded = false, want true")
+		}
+	})
+}
+
 func TestIdentifyBrokenFiles(t *testing.T) {
 	t.Parallel()
 
