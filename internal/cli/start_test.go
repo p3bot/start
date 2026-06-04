@@ -1094,6 +1094,186 @@ func TestExecuteTask_FilePathMissing(t *testing.T) {
 	}
 }
 
+func TestTaskCommand_Metadata(t *testing.T) {
+	cmd := NewRootCmd()
+
+	taskCmd, _, err := cmd.Find([]string{"task"})
+	if err != nil {
+		t.Fatalf("task command not found: %v", err)
+	}
+
+	if taskCmd.Use != "task [name] [instructions ...]" {
+		t.Errorf("Use = %q, want %q", taskCmd.Use, "task [name] [instructions ...]")
+	}
+
+	if taskCmd.Short == "" {
+		t.Error("Short description should not be empty")
+	}
+
+	if !strings.Contains(taskCmd.Long, "{{.instructions}}") {
+		t.Error("Long description should mention the {{.instructions}} placeholder")
+	}
+}
+
+// runTaskDryRun runs `start task ...` with --dry-run through the root command and
+// returns combined stdout. ./ paths resolve against the caller's chdir'd tmpDir.
+func runTaskDryRun(t *testing.T, in string, args ...string) string {
+	t.Helper()
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader(in))
+	cmd.SetArgs(append([]string{"task"}, append(args, "--dry-run")...))
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("task command error: %v", err)
+	}
+	return stdout.String()
+}
+
+// TestRunTask_MultipleInstructionSegments verifies trailing positionals after
+// the task name are resolved as instruction segments and seam-joined with one
+// blank line, mixing file paths and literals in order.
+func TestRunTask_MultipleInstructionSegments(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	// First file ends in a newline, second does not; the seam must still
+	// collapse to exactly one blank line between segments.
+	if err := os.WriteFile(filepath.Join(tmpDir, "intro.md"), []byte("checklist intro\n"), 0600); err != nil {
+		t.Fatalf("writing intro.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "body.md"), []byte("checklist body"), 0600); err != nil {
+		t.Fatalf("writing body.md: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "two files and a literal",
+			args: []string{"test-task", "./intro.md", "./body.md", "follow it exactly"},
+			want: "checklist intro\n\nchecklist body\n\nfollow it exactly",
+		},
+		{
+			name: "literal before file",
+			args: []string{"test-task", "lead in", "./body.md"},
+			want: "lead in\n\nchecklist body",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := runTaskDryRun(t, "", tt.args...)
+			// test-task's body is "Instructions: {{.instructions}}"; assert the
+			// composed segments substituted into the prompt body itself, not
+			// merely the informational "Instructions:" summary section.
+			body := dryRunPromptBody(t, output)
+			want := "Instructions: " + tt.want
+			if !strings.Contains(body, want) {
+				t.Errorf("prompt body should contain substituted instructions %q, got:\n%s", want, body)
+			}
+		})
+	}
+}
+
+// TestRunTask_FilePathTaskWithInstructionSegments verifies a file-path task name
+// is read as the body while trailing positionals compose the instructions.
+func TestRunTask_FilePathTaskWithInstructionSegments(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	taskBody := "Review this code.\nInstructions: {{.instructions}}"
+	if err := os.WriteFile(filepath.Join(tmpDir, "review-task.md"), []byte(taskBody), 0600); err != nil {
+		t.Fatalf("writing review-task.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "extra.md"), []byte("extra detail"), 0600); err != nil {
+		t.Fatalf("writing extra.md: %v", err)
+	}
+
+	output := runTaskDryRun(t, "", "./review-task.md", "be thorough", "./extra.md")
+
+	if !strings.Contains(output, "be thorough\n\nextra detail") {
+		t.Errorf("output should contain composed instructions, got:\n%s", output)
+	}
+	if strings.Contains(output, "{{.instructions}}") {
+		t.Errorf("task placeholder should be substituted, got:\n%s", output)
+	}
+}
+
+// TestRunTask_AppendsInstructionsWhenNoPlaceholder verifies the end-to-end
+// append path: a task body with no {{.instructions}} placeholder gets the
+// composed instructions appended after the body with one blank line. Previously
+// such instructions were silently dropped. Asserted on the exact prompt body so
+// the seam spacing is pinned, not just substring presence.
+func TestRunTask_AppendsInstructionsWhenNoPlaceholder(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "plain-task.md"), []byte("Plain task body with no placeholder."), 0600); err != nil {
+		t.Fatalf("writing plain-task.md: %v", err)
+	}
+
+	output := runTaskDryRun(t, "", "./plain-task.md", "do the thing", "and the other thing")
+
+	body := dryRunPromptBody(t, output)
+	const want = "Plain task body with no placeholder.\n\ndo the thing\n\nand the other thing"
+	if !strings.Contains(body, want) {
+		t.Errorf("prompt body should append instructions after a placeholder-less task body, want substring %q, got:\n%s", want, body)
+	}
+}
+
+// TestRunTask_UnreadableInstructionsFile verifies an unreadable instruction
+// segment aborts with the reading-instructions-file error and launches nothing.
+func TestRunTask_UnreadableInstructionsFile(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"task", "test-task", "ok text", "./nonexistent-instr.md", "--dry-run"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unreadable instructions file")
+	}
+	if !strings.Contains(err.Error(), `reading instructions file "./nonexistent-instr.md"`) {
+		t.Errorf("error = %q, want it to name the unreadable file", err.Error())
+	}
+	if strings.Contains(stdout.String(), "Dry Run") {
+		t.Errorf("nothing should launch on a read failure, got:\n%s", stdout.String())
+	}
+}
+
+// TestRunTask_StdinPrecedence pins that piped stdin supplies instructions only
+// when the name is the sole positional; any instruction positional overrides it.
+func TestRunTask_StdinPrecedence(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	t.Run("piped stdin used when only the name is given", func(t *testing.T) {
+		output := runTaskDryRun(t, "instructions from stdin\n", "test-task")
+		if !strings.Contains(output, "instructions from stdin") {
+			t.Errorf("expected piped stdin as instructions, got:\n%s", output)
+		}
+	})
+
+	t.Run("instruction positional overrides piped stdin", func(t *testing.T) {
+		output := runTaskDryRun(t, "STDIN_SHOULD_NOT_APPEAR", "test-task", "arg instructions win")
+		if !strings.Contains(output, "arg instructions win") {
+			t.Errorf("expected positional instructions, got:\n%s", output)
+		}
+		if strings.Contains(output, "STDIN_SHOULD_NOT_APPEAR") {
+			t.Errorf("piped stdin should be ignored when an instruction positional is given, got:\n%s", output)
+		}
+	})
+}
+
 func TestExecuteStart_FilePathContextMissing(t *testing.T) {
 	tmpDir := setupStartTestConfig(t)
 	chdir(t, tmpDir)

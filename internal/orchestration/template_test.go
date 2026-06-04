@@ -484,3 +484,75 @@ func TestIsUTDValid(t *testing.T) {
 		})
 	}
 }
+
+// TestTemplateProcessor_Instructions covers the instructions placeholder
+// contract: a bare {{.instructions}} reference (including whitespace and
+// trim-marker variants) substitutes inline and is not also appended; a body
+// without the placeholder gets the instructions appended under the one-blank-line
+// seam; and empty instructions are a no-op so the body renders byte-identically.
+func TestTemplateProcessor_Instructions(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		prompt       string
+		instructions string
+		want         string
+	}{
+		{
+			name:         "append when no placeholder, body without trailing newline",
+			prompt:       "Review the code.",
+			instructions: "focus on security",
+			want:         "Review the code.\n\nfocus on security",
+		},
+		{
+			name:         "append when no placeholder, body with trailing newline",
+			prompt:       "Review the code.\n",
+			instructions: "focus on security",
+			want:         "Review the code.\n\nfocus on security",
+		},
+		{
+			name:         "append when no placeholder, empty body yields instructions only",
+			prompt:       "\n",
+			instructions: "focus on security",
+			want:         "focus on security",
+		},
+		{
+			name:         "substitute when placeholder present, no append",
+			prompt:       "Focus: {{.instructions}}",
+			instructions: "security",
+			want:         "Focus: security",
+		},
+		{
+			name:         "substitute with spaced placeholder variant",
+			prompt:       "Focus: {{.instructions }}",
+			instructions: "security",
+			want:         "Focus: security",
+		},
+		{
+			name:         "substitute with trim-marker placeholder variant",
+			prompt:       "{{- .instructions}}",
+			instructions: "security",
+			want:         "security",
+		},
+		{
+			name:         "empty instructions is a no-op for a placeholder-less body",
+			prompt:       "Just content.",
+			instructions: "",
+			want:         "Just content.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			processor := NewTemplateProcessor(nil, nil, t.TempDir())
+			result, err := processor.Process(UTDFields{Prompt: tt.prompt}, tt.instructions)
+			if err != nil {
+				t.Fatalf("Process() error: %v", err)
+			}
+			if result.Content != tt.want {
+				t.Errorf("Content = %q, want %q", result.Content, tt.want)
+			}
+		})
+	}
+}

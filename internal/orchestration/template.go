@@ -8,11 +8,25 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"text/template"
 	"time"
 )
+
+// instructionsRef matches a bare {{.instructions}} reference, tolerating the
+// internal whitespace and trim markers text/template accepts. Unlike
+// file_contents/command_output, data["instructions"] is always populated, so
+// text/template substitutes any valid bare reference inline regardless of
+// spacing. This gates the append decision only: a detection miss would both
+// substitute inline and append, duplicating the instructions. Pipelines,
+// function calls, and non-emitting constructs around .instructions are out of
+// scope by design (they would need template AST inspection). The inverse also
+// holds: a placeholder buried in a {{/* ... */}} comment matches here yet emits
+// nothing, suppressing the append — accepted under the same bare-reference-only
+// scope, as commented-out placeholders do not occur in real task templates.
+var instructionsRef = regexp.MustCompile(`{{-?\s*\.instructions\s*-?}}`)
 
 // TemplateData holds the data available for UTD template substitution.
 // Keys are lowercase to match documented placeholder names (e.g., {{.file}}).
@@ -107,6 +121,7 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 		strings.Contains(templateStr, "{{ .file_contents }}")
 	needsCommandOutput := strings.Contains(templateStr, "{{.command_output}}") ||
 		strings.Contains(templateStr, "{{ .command_output }}")
+	hasInstructions := instructionsRef.MatchString(templateStr)
 
 	data := envTemplateData(p.workingDir)
 	data["file"] = fields.File
@@ -150,6 +165,15 @@ func (p *TemplateProcessor) Process(fields UTDFields, instructions string) (Proc
 	}
 
 	result.Content = buf.String()
+
+	// A task body without a {{.instructions}} placeholder would otherwise drop
+	// the instructions silently; append them under the same one-blank-line seam
+	// as the segment composer. Gated on non-empty instructions so context and
+	// role processing (which pass "") are unaffected.
+	if instructions != "" && !hasInstructions {
+		result.Content = joinSegments([]string{result.Content, instructions})
+	}
+
 	return result, nil
 }
 

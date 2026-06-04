@@ -1798,10 +1798,10 @@ func TestComposer_ProcessContent(t *testing.T) {
 			wantContains: "security issues",
 		},
 		{
-			name:         "content with no matching placeholders",
+			name:         "content with no placeholder appends instructions",
 			content:      "Simple content with no templates.",
-			instructions: "ignored instructions",
-			wantContains: "Simple content with no templates.",
+			instructions: "appended instructions",
+			wantContains: "Simple content with no templates.\n\nappended instructions",
 		},
 	}
 

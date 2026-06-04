@@ -40,7 +40,7 @@ const maxTaskResults = 20
 // addTaskCommand adds the task command to the parent command.
 func addTaskCommand(parent *cobra.Command) {
 	taskCmd := &cobra.Command{
-		Use:     "task [name] [instructions]",
+		Use:     "task [name] [instructions ...]",
 		Aliases: []string{"tasks"},
 		GroupID: "workflow",
 		Short:   "List or run a predefined task",
@@ -50,12 +50,21 @@ Without arguments, lists all tasks from global and local configuration.
 With a name, searches for and runs the matching task.
 
 The name can be a config task name, a "tasks:name" fully-qualified address
-(the prefix must be "tasks"), or a file path (starting with ./, /, or ~).
+(the prefix must be "tasks"), or a file path (starting with ./, /, ~, or ~/).
 Tasks are reusable workflows defined in configuration.
-Instructions are passed to the task template via the {{.instructions}} placeholder.
-If no instructions arg is given and stdin is piped, the piped content is used
-as the instructions.`,
-		Args: cobra.RangeArgs(0, 2),
+
+The first argument is the task name; every argument after it is an instruction
+segment. Each segment is independently treated as inline text or a file path
+(starting with ./, /, ~, or ~/); file paths are read and inline text is used
+verbatim. Resolved segments are joined with exactly one blank line between them.
+
+Instructions fill the task template's {{.instructions}} placeholder. When the
+task has no {{.instructions}} placeholder, the instructions are appended after
+the rendered body with one blank line between them.
+
+If only a name is given and stdin is piped, the piped content is used as the
+instructions.`,
+		Args: cobra.ArbitraryArgs,
 		RunE: runTask,
 	}
 	taskCmd.Flags().StringSlice("tag", nil, "Filter task selection by tags (comma-separated)")
@@ -79,10 +88,14 @@ func runTask(cmd *cobra.Command, args []string) error {
 	taskName := args[0]
 	instructions := ""
 	if len(args) > 1 {
-		instructions = args[1]
+		composed, err := orchestration.ComposeSegments(args[1:], "instructions file")
+		if err != nil {
+			return err
+		}
+		instructions = composed
 	} else {
-		// Accept piped stdin as instructions. The positional arg wins; empty
-		// pipes are accepted (templates may not require {{.instructions}}).
+		// Accept piped stdin as instructions. An instruction positional wins;
+		// empty pipes are accepted (templates may not require {{.instructions}}).
 		pipedText, piped, err := readPipedStdin(cmd.InOrStdin())
 		if err != nil {
 			return err
