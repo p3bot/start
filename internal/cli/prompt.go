@@ -1,24 +1,26 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/orchestration"
 )
 
 func addPromptCommand(parent *cobra.Command) {
 	promptCmd := &cobra.Command{
-		Use:     "prompt [text]",
+		Use:     "prompt [text|file ...]",
 		GroupID: "workflow",
 		Short:   "Launch AI agent with a custom prompt",
 		Long: `Launch AI agent with a custom prompt and only required contexts.
 
-The argument can be inline text or a file path (starting with ./, /, or ~).
+Accepts any number of arguments. Each argument is independently treated as
+inline text or a file path (starting with ./, /, ~, or ~/); file paths are read
+and inline text is used verbatim. Resolved segments are joined with exactly one
+blank line between them.
+
 If no argument is given and stdin is piped, the piped content is used as the
 prompt text. Default contexts are excluded to keep the prompt focused.
 Use -c default to include contexts configured with default: true.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cobra.ArbitraryArgs,
 		RunE: runPrompt,
 	}
 	parent.AddCommand(promptCmd)
@@ -27,16 +29,11 @@ Use -c default to include contexts configured with default: true.`,
 func runPrompt(cmd *cobra.Command, args []string) error {
 	customText := ""
 	if len(args) > 0 {
-		arg := args[0]
-		if orchestration.IsFilePath(arg) {
-			content, err := orchestration.ReadFilePath(arg)
-			if err != nil {
-				return fmt.Errorf("reading prompt file %q: %w", arg, err)
-			}
-			customText = content
-		} else {
-			customText = arg
+		composed, err := orchestration.ComposeSegments(args, "prompt file")
+		if err != nil {
+			return err
 		}
+		customText = composed
 	} else {
 		stdin := cmd.InOrStdin()
 		pipedText, piped, err := readPipedStdin(stdin)

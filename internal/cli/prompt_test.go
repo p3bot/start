@@ -16,8 +16,8 @@ func TestPromptCommand_Metadata(t *testing.T) {
 		t.Fatalf("prompt command not found: %v", err)
 	}
 
-	if promptCmd.Use != "prompt [text]" {
-		t.Errorf("Use = %q, want %q", promptCmd.Use, "prompt [text]")
+	if promptCmd.Use != "prompt [text|file ...]" {
+		t.Errorf("Use = %q, want %q", promptCmd.Use, "prompt [text|file ...]")
 	}
 
 	if promptCmd.Short == "" {
@@ -339,6 +339,173 @@ func TestRunPrompt_ArgWinsOverPipedStdin(t *testing.T) {
 	}
 	if strings.Contains(output, "PIPED_TEXT_SHOULD_NOT_APPEAR") {
 		t.Errorf("piped stdin should be ignored when a positional arg is given, got:\n%s", output)
+	}
+}
+
+// dryRunPromptBody extracts the composed prompt body from a --dry-run run by
+// reading prompt.md from the dry-run directory named in the summary's "Files:"
+// line. This asserts the exact body, including seam spacing, which the
+// truncated/indented stdout preview cannot show reliably.
+func dryRunPromptBody(t *testing.T, output string) string {
+	t.Helper()
+	// The Files: block is the summary's last labelled section; the prompt-body
+	// preview is printed earlier, so search from the end to avoid matching a
+	// marker that happens to appear inside the previewed body.
+	const marker = "Files: "
+	idx := strings.LastIndex(output, marker)
+	if idx < 0 {
+		t.Fatalf("dry-run output missing %q marker:\n%s", marker, output)
+	}
+	rest := output[idx+len(marker):]
+	if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
+		rest = rest[:nl]
+	}
+	dir := strings.TrimSpace(rest)
+	data, err := os.ReadFile(filepath.Join(dir, "prompt.md"))
+	if err != nil {
+		t.Fatalf("reading prompt.md from %q: %v", dir, err)
+	}
+	return string(data)
+}
+
+func writePromptFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+func runPromptDryRun(t *testing.T, args ...string) string {
+	t.Helper()
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs(append([]string{"prompt"}, append(args, "--dry-run")...))
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prompt command error: %v", err)
+	}
+	return dryRunPromptBody(t, stdout.String())
+}
+
+// TestRunPrompt_MultipleSegments covers multi-argument composition: files and
+// literals resolved in order and seam-joined with exactly one blank line,
+// regardless of each file's trailing newline. tmpDir is the working directory
+// (setupPromptTestConfig chdirs into it) so ./ paths resolve there.
+func TestRunPrompt_MultipleSegments(t *testing.T) {
+	tmpDir := setupPromptTestConfig(t)
+
+	// First file ends in a newline, second does not; the seam must still
+	// collapse to one blank line.
+	writePromptFile(t, filepath.Join(tmpDir, "intro.md"), "intro line\n")
+	writePromptFile(t, filepath.Join(tmpDir, "body.md"), "body line")
+	writePromptFile(t, filepath.Join(tmpDir, "tilde.md"), "tilde contents\n")
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "two files and a literal",
+			args: []string{"./intro.md", "./body.md", "wrap up please"},
+			want: "intro line\n\nbody line\n\nwrap up please",
+		},
+		{
+			name: "literal before file",
+			args: []string{"lead in", "./body.md"},
+			want: "lead in\n\nbody line",
+		},
+		{
+			name: "tilde path resolves to file contents",
+			args: []string{"~/tilde.md", "trailer"},
+			want: "tilde contents\n\ntrailer",
+		},
+		{
+			name: "empty literal between segments is dropped",
+			args: []string{"./body.md", "", "wrap up please"},
+			want: "body line\n\nwrap up please",
+		},
+		{
+			name: "three literals",
+			args: []string{"a", "b", "c"},
+			want: "a\n\nb\n\nc",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := runPromptDryRun(t, tt.args...); got != tt.want {
+				t.Errorf("composed body = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunPrompt_SingleArgumentParity pins that a lone literal or a lone file
+// path resolves byte-identically to the previous single-argument handling: no
+// drop-empty, no seam normalisation. The composer trims trailing newlines of
+// the whole body, matching today's behaviour for both arg shapes.
+func TestRunPrompt_SingleArgumentParity(t *testing.T) {
+	tmpDir := setupPromptTestConfig(t)
+	writePromptFile(t, filepath.Join(tmpDir, "only.md"), "only file body\n")
+
+	if got := runPromptDryRun(t, "just literal"); got != "just literal" {
+		t.Errorf("single literal body = %q, want %q", got, "just literal")
+	}
+	if got := runPromptDryRun(t, "./only.md"); got != "only file body" {
+		t.Errorf("single file body = %q, want %q", got, "only file body")
+	}
+}
+
+// TestRunPrompt_EmptyArgsOverridePipedStdin pins Requirement 6's edge: when
+// arguments are present but all resolve to empty, piped stdin is still ignored
+// and the body is empty. The stdin/interactive fallback is gated solely on
+// len(args) == 0, not on whether the composed body is empty.
+func TestRunPrompt_EmptyArgsOverridePipedStdin(t *testing.T) {
+	setupPromptTestConfig(t)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader("PIPED_TEXT_SHOULD_NOT_APPEAR"))
+	cmd.SetArgs([]string{"prompt", "", "", "--dry-run"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prompt command error: %v", err)
+	}
+
+	if body := dryRunPromptBody(t, stdout.String()); body != "" {
+		t.Errorf("composed body = %q, want empty", body)
+	}
+	if strings.Contains(stdout.String(), "PIPED_TEXT_SHOULD_NOT_APPEAR") {
+		t.Errorf("piped stdin must be ignored when args are present, got:\n%s", stdout.String())
+	}
+}
+
+// TestRunPrompt_UnreadableFileArg verifies the first unreadable file-path
+// argument aborts with the reading-prompt-file error and launches nothing.
+func TestRunPrompt_UnreadableFileArg(t *testing.T) {
+	setupPromptTestConfig(t)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"prompt", "ok text", "./nonexistent-file-xyz.md", "--dry-run"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unreadable file-path argument")
+	}
+	if !strings.Contains(err.Error(), `reading prompt file "./nonexistent-file-xyz.md"`) {
+		t.Errorf("error = %q, want it to name the unreadable file", err.Error())
+	}
+	if strings.Contains(stdout.String(), "Dry Run") {
+		t.Errorf("nothing should launch on a read failure, got:\n%s", stdout.String())
 	}
 }
 

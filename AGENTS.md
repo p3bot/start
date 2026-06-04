@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: 01-prompt-arg-feature.md
+Active Project: 02-task-arg-feature.md
 
 Planned sequence (each depends on the one before where noted):
 
