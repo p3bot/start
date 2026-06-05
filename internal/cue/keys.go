@@ -7,6 +7,10 @@ const (
 	KeyContexts = "contexts"
 	KeyTasks    = "tasks"
 	KeySettings = "settings"
+
+	// Agent sub-field keys for the `models` alias map.
+	KeyModels = "models"
+	KeyID     = "id"
 )
 
 // ConfigFiles maps each category key to its CUE config filename.

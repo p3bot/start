@@ -349,29 +349,7 @@ func extractAgentFields(agentVal cue.Value, name string) Agent {
 		agent.Description, _ = desc.String()
 	}
 
-	if models := agentVal.LookupPath(cue.ParsePath("models")); models.Exists() {
-		agent.Models = make(map[string]string)
-		iter, err := models.Fields()
-		if err == nil {
-			for iter.Next() {
-				modelName := iter.Selector().Unquoted()
-				modelVal := iter.Value()
-
-				// Try direct string first (simple format: models: { sonnet: "model-id" })
-				if s, err := modelVal.String(); err == nil {
-					agent.Models[modelName] = s
-					continue
-				}
-
-				// Try nested id field (object format: models: { sonnet: { id: "model-id" } })
-				if idVal := modelVal.LookupPath(cue.ParsePath("id")); idVal.Exists() {
-					if s, err := idVal.String(); err == nil {
-						agent.Models[modelName] = s
-					}
-				}
-			}
-		}
-	}
+	agent.Models = internalcue.AgentModels(agentVal)
 
 	return agent
 }

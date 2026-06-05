@@ -26,8 +26,7 @@ type AgentConfig struct {
 }
 
 // decodeAgentValue populates an AgentConfig from a per-item CUE value (Name and
-// Source are left for the caller). Accepts both simple- and object-form `models`
-// entries; the same walk runs in executor.go and partialFillAgentCommand.
+// Source are left for the caller).
 func decodeAgentValue(val cue.Value) AgentConfig {
 	var agent AgentConfig
 
@@ -46,24 +45,7 @@ func decodeAgentValue(val cue.Value) AgentConfig {
 
 	agent.Tags = extractTags(val)
 
-	if modelsVal := val.LookupPath(cue.ParsePath("models")); modelsVal.Exists() {
-		agent.Models = make(map[string]string)
-		if modelIter, err := modelsVal.Fields(); err == nil {
-			for modelIter.Next() {
-				alias := modelIter.Selector().Unquoted()
-				entry := modelIter.Value()
-				if s, err := entry.String(); err == nil {
-					agent.Models[alias] = s
-					continue
-				}
-				if idVal := entry.LookupPath(cue.ParsePath("id")); idVal.Exists() {
-					if s, err := idVal.String(); err == nil {
-						agent.Models[alias] = s
-					}
-				}
-			}
-		}
-	}
+	agent.Models = internalcue.AgentModels(val)
 
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		agent.Origin, _ = v.String()

@@ -628,17 +628,8 @@ func partialFillAgentCommand(command string, v cue.Value, modelOverride string) 
 		}
 	}
 	if model != "" {
-		if models := v.LookupPath(cue.ParsePath("models")); models.Exists() {
-			entry := models.LookupPath(cue.MakePath(cue.Str(model)))
-			if entry.Exists() {
-				if s, err := entry.String(); err == nil {
-					model = s
-				} else if idVal := entry.LookupPath(cue.ParsePath("id")); idVal.Exists() {
-					if s, err := idVal.String(); err == nil {
-						model = s
-					}
-				}
-			}
+		if id, ok := internalcue.AgentModels(v)[model]; ok {
+			model = id
 		}
 	}
 
