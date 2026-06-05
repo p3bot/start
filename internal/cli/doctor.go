@@ -49,7 +49,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	if shown, err := checkHelpArg(cmd, args); shown || err != nil {
 		return err
 	}
-	report, err := prepareDoctor(getProvider(cmd))
+	report, err := prepareDoctor(getProvider(cmd), reservedCommandNames(cmd.Root()))
 	if err != nil {
 		return err
 	}
@@ -91,8 +91,9 @@ func (e *doctorError) Error() string { return "issues found" }
 func (e *doctorError) Silent() bool  { return true }
 
 // prepareDoctor runs all checks and builds the report. The provider supplies the
-// registry client so tests can run doctor offline against a stub.
-func prepareDoctor(provider clientProvider) (doctor.Report, error) {
+// registry client so tests can run doctor offline against a stub. reserved is the
+// live command-name set, so the alias check can flag a name a command shadows.
+func prepareDoctor(provider clientProvider, reserved map[string]bool) (doctor.Report, error) {
 	var report doctor.Report
 
 	report.Sections = append(report.Sections, doctor.CheckIntro())
@@ -183,6 +184,8 @@ func prepareDoctor(provider clientProvider) (doctor.Report, error) {
 			},
 		})
 	}
+
+	report.Sections = append(report.Sections, doctor.CheckAliases(config.AliasStorePath(paths), reserved))
 
 	report.Sections = append(report.Sections, doctor.CheckEnvironment(paths))
 

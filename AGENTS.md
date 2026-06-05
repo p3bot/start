@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: 03-user-alias-feature.md
+Active Project: none
 
 Planned sequence (each depends on the one before where noted):
 
@@ -55,6 +55,9 @@ start list                      # List installed modules
 start library                   # Show the available module library
 start update                    # Update installed modules
 start config list               # List configuration entries
+start alias                     # List personal command aliases
+start alias set pc task review  # Save an alias (value is the command without 'start')
+start <alias>                   # Run a saved alias (e.g. 'start pc')
 start search <term>             # Search installed config and the module registry
 start doctor                    # Diagnose installation and configuration
 start doctor validate           # Maintainer check: index/registry/tag consistency
@@ -63,6 +66,25 @@ start prompt                    # Compose and preview a prompt
 echo "summarise" | start        # Pipe text as a one-shot prompt (required contexts only)
 echo "..." | start prompt       # Pipe text to fill prompt's [text] arg
 echo "..." | start task review  # Pipe text to fill task's [instructions] arg
+```
+
+### Aliases
+
+Personal, global-only shortcuts that expand a leading token into a saved `start`
+command. An alias value is the saved argv minus the leading `start`, captured
+verbatim and spliced back in before cobra dispatch (single-pass, never re-parsed
+by a shell). The store is a managed file at `aliases/aliases.cue` under the
+global config dir; its subdirectory keeps it out of every directory package
+build, so a malformed store never breaks the main config load.
+
+```bash
+start alias                       # List all aliases (same as 'start alias list')
+start alias set <name> <token>... # Create or update one alias (value captured verbatim)
+start alias get <name>            # Show one alias as its expanded command
+start alias delete <name>...      # Delete one or more aliases (alias: rm)
+start alias open                  # Edit aliases/aliases.cue in $EDITOR
+start alias export                # Print the store to stdout
+start alias import [file]         # Merge aliases from stdin or a file (--replace to overwrite)
 ```
 
 ### Persistent Flags

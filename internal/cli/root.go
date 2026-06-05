@@ -161,6 +161,7 @@ Examples:
 	addUpdateCommand(cmd)
 	addLibraryCommand(cmd)
 	addConfigCommand(cmd, flags)
+	addAliasCommand(cmd)
 	addSearchCommand(cmd)
 	addDoctorCommand(cmd)
 	addCompletionCommand(cmd)
@@ -201,13 +202,17 @@ func Execute() error {
 	if runtime.GOOS == "windows" {
 		return fmt.Errorf("start does not support Windows")
 	}
-	return NewRootCmd().Execute()
+	return runRoot(NewRootCmd(), os.Args[1:])
 }
 
-// checkHelpArg reports whether the first arg is "help" and shows help if so.
-// Call at the top of RunE on commands using noArgsOrHelp.
+// checkHelpArg reports whether the first arg requests help and shows it if so.
+// Call at the top of RunE on commands using noArgsOrHelp. It recognises a
+// leading "help", "-h", or "--help": the flag forms matter only for commands
+// with DisableFlagParsing (alias set), where cobra never intercepts --help and
+// the token would otherwise be treated as data. For flag-parsing commands cobra
+// catches --help ahead of RunE, so accepting it here is a harmless no-op.
 func checkHelpArg(cmd *cobra.Command, args []string) (bool, error) {
-	if len(args) > 0 && args[0] == "help" {
+	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		return true, cmd.Help()
 	}
 	return false, nil
