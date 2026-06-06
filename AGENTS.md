@@ -105,11 +105,14 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | cli | `internal/cli/` | Command implementations (cobra) |
 | orchestration | `internal/orchestration/` | Prompt composition and agent execution |
 | modules | `internal/modules/` | Module search and installation |
+| detection | `internal/detection/` | Detect installed AI CLI tools on PATH |
 | cue | `internal/cue/` | CUE configuration loading and validation |
 | registry | `internal/registry/` | CUE Central Registry client |
 | config | `internal/config/` | Configuration path and settings management |
 | doctor | `internal/doctor/` | Diagnostic checks and reporting |
+| fault | `internal/fault/` | Cross-cutting error sentinels for exit-code mapping |
 | cache | `internal/cache/` | Registry index caching |
+| temp | `internal/temp/` | Temporary file and directory management |
 | shell | `internal/shell/` | Shell detection and command execution |
 | tui | `internal/tui/` | Terminal UI colour and formatting |
 
@@ -123,6 +126,7 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | `internal/cli/task.go` | Task execution command |
 | `internal/orchestration/composer.go` | Prompt composition with context injection |
 | `internal/orchestration/executor.go` | Agent command execution |
+| `internal/cli/exitcodes.go` | Maps `fault` sentinels to semantic exit codes (see `start help schemas`) |
 | `internal/cue/keys.go` | Centralized CUE config key constants |
 
 ### Resolution Logic
