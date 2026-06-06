@@ -7,8 +7,6 @@
 
 Context-aware AI agent launcher powered by CUE.
 
-A future project will flatten the command tree.
-
 ## Why start?
 
 **Stop re-explaining yourself to every AI session.**
@@ -169,6 +167,36 @@ start install review/git-diff
 start install jira/item/research
 ```
 
+### Aliases
+
+An alias is a personal, global-only shortcut that expands a leading token into a saved `start` command. The alias value is the command without the leading `start`, captured verbatim and spliced back in before dispatch.
+
+```bash
+# Save an alias (value is everything after 'start')
+start alias set pc task review/pre-commit
+
+# Run it — expands to: start task review/pre-commit
+start pc
+
+# Trailing arguments pass through to the expanded command
+start pc "fix the lint errors"
+
+# Aliases can capture flags too
+start alias set dev --role go-expert --context cwd/agents-md
+start dev
+```
+
+Manage the alias store with the `alias` subcommands:
+
+```bash
+start alias                       # List all aliases
+start alias get pc                # Show one alias as its expanded command
+start alias delete pc dev         # Delete one or more aliases (alias: rm)
+start alias open                  # Edit the store in $EDITOR
+start alias export                # Print the store to stdout
+start alias import aliases.cue    # Merge aliases from a file (--replace to overwrite)
+```
+
 ### Configuration
 
 Configuration is stored in CUE format in `~/.config/start/` (global) and `./.start/` (project-local). Each directory can contain one or more `.cue` files. The `--local` flag targets project config instead of global.
@@ -260,6 +288,10 @@ start describe
 
 # Inspect a specific resource by name (searches all categories)
 start describe <name>
+
+# Output a module's resolved content to stdout (pipe-clean)
+start get <name>
+start get contexts:cwd/agents-md
 ```
 
 ### Modules Management
@@ -282,7 +314,7 @@ start list
 start update
 
 # Validate index and module version consistency (maintainer tool)
-start doctor validate --force
+start doctor validate
 ```
 
 ### Configuration
@@ -332,6 +364,24 @@ start config export
 start config settings default_agent claude
 ```
 
+### Aliases
+
+```bash
+# List personal command aliases
+start alias
+
+# Save an alias (value is the command without 'start')
+start alias set pc task review/pre-commit
+
+# Run a saved alias
+start pc
+
+# Inspect, remove, or edit aliases
+start alias get pc
+start alias delete pc
+start alias open
+```
+
 ### Search and Discovery
 
 ```bash
@@ -344,6 +394,9 @@ start search go
 ```bash
 # Diagnose setup, validate configuration, suggest fixes
 start doctor
+
+# Show the --json output shapes and exit-code reference
+start help schemas
 ```
 
 ### Shell Completions
