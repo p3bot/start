@@ -39,17 +39,17 @@ Two real failures are hidden behind the mask. Both are stale assertions left ove
 - `TestConfigRole_FullWorkflow/get_role_details` (`internal/cli/config_integration_test.go`) asserts the output contains `roles/reviewer`. The current and correct output is `roles:reviewer` (see `printRoleGet` in `internal/cli/config_get.go` and `formatAddress` in `internal/cli/describe.go`).
 - `TestConfigContext_FullWorkflow/get_context_details` asserts `contexts/project`; the correct output is `contexts:project`.
 
-Both tests also under-isolate. They set only `XDG_CONFIG_HOME` and call `chdir`, unlike the shared helper `setupStartTestConfig` (`internal/cli/start_test.go`), which isolates `HOME`, `XDG_CONFIG_HOME`, and `XDG_CACHE_HOME`. They fail deterministically when run alone; they appeared green only because the mask suppressed the package exit code.
+Both tests also under-isolate. They set only `XDG_CONFIG_HOME` and call `chdir`, unlike `setupStartTestConfig` (`internal/cli/start_test.go`), which isolates `HOME`, `XDG_CONFIG_HOME`, and `XDG_CACHE_HOME`. `setupStartTestConfig` bundles that isolation with a full seed config, so it is not a drop-in for these from-scratch workflow tests; only its isolation half is shared (see requirement 3). They fail deterministically when run alone; they appeared green only because the mask suppressed the package exit code.
 
-A seam pattern already exists in the codebase and is the model for the execution seam. The registry client is injected through a per-command provider stored on the command context (`WithProvider`/`getProvider`, exercised in `internal/cli/seam_coverage_test.go` and `internal/cli/json_capture_test.go`). The principle, stated in AGENTS.md, is to inject dependencies through construction or context rather than reaching for globals.
+A seam pattern already exists in the codebase. The registry client is injected through a per-command provider stored on the command context (`WithProvider`/`getProvider`, exercised in `internal/cli/seam_coverage_test.go` and `internal/cli/json_capture_test.go`). It demonstrates the AGENTS.md principle of injecting dependencies through construction or context rather than reaching for globals. It is not the model for the execution seam, however: that provider rides on the cobra command context, which the execution path does not carry (see Implementation Guidance). The execution seam applies the same inject-not-globals principle through construction-time injection instead.
 
 ## Requirements
 
-1. Add an execution seam to `Executor` so process replacement is an injectable dependency. The production default performs the current `syscall.Exec` behaviour unchanged. Tests inject a non-replacing implementation that records the command and arguments and returns normally. After this change, no test path calls `syscall.Exec`.
+1. Add an execution seam to `Executor` so process replacement is an injectable dependency. Give `Executor` a process-replacement function field, populated by `NewExecutor` from an unexported package-level default that performs the current `syscall.Exec` behaviour. Production compiles only this default, so real behaviour is unchanged. The default is swappable in test builds via `TestMain` (requirement 2), never through a runtime environment check. After this change, no test path calls `syscall.Exec`.
 
-2. Add a regression guard so the masking class of bug cannot recur silently. In the test builds of the packages that can reach execution (`internal/cli` and `internal/orchestration`), the default seam used when a test has not injected one must fail the test loudly rather than replace the process or exit 0. A test that reaches the execution path without injecting a recorder must produce a visible failure.
+2. Add a regression guard so the masking class of bug cannot recur silently. In the test builds of the packages that can reach execution (`internal/cli` and `internal/orchestration`), the default replacer must fail the test loudly rather than replace the process or exit 0. Install it in each package's `TestMain`: `internal/orchestration` swaps its own package default, and `internal/cli` installs the guard into orchestration's seam through an exported setter — because `TestMain` runs only for the package under test, the `cli` test binary compiles `internal/orchestration` in non-test mode with its production default otherwise intact. The guard is the deliverable of this requirement. Once requirement 5 skips the one execution-reaching test, no remaining test exercises real execution, so a non-replacing recorder that captures the command and returns is added only if the requirement 6 audit surfaces a test that must execute and return.
 
-3. Standardise environment isolation. Route the config-workflow tests, and any other test found setting only a subset of the isolation variables, through one shared setup helper that isolates `HOME`, `XDG_CONFIG_HOME`, and `XDG_CACHE_HOME` together. A test must produce the same result run alone as it does in the full suite.
+3. Standardise environment isolation. Extract a shared isolation-only helper that sets `HOME`, `XDG_CONFIG_HOME`, and `XDG_CACHE_HOME` together and registers the read-only-cache cleanup, without writing any seed config. Route the config-workflow tests, and any other test found setting only a subset of the isolation variables, through it, and have `setupStartTestConfig` compose the same helper so a single definition of isolation is shared by both the from-scratch and the seeded tests. A test must produce the same result run alone as it does in the full suite.
 
 4. Correct the two stale assertions to the current `category:name` address scheme so `get_role_details` and `get_context_details` pass in isolation and in the suite.
 
@@ -61,19 +61,19 @@ A seam pattern already exists in the codebase and is the model for the execution
 
 - Production behaviour is unchanged. A real interactive `start` or `start task` invocation must still replace the process with the agent via `syscall.Exec`. The seam alters only what tests run.
 - Do not modify module-resolution logic. This project only defers the test that depends on the project 04 fix.
-- Use injection, not a package-level global toggled by an environment check. The seam must follow the existing registry-provider philosophy: a dependency supplied through construction or context, defaulting to production behaviour.
+- Use injection, not a package-level global toggled by an environment check. Supply the replacer through construction (`NewExecutor`), defaulting to production behaviour, and swap the default in test builds via `TestMain` — never via a runtime environment check.
 - Keep `ExecuteWithoutReplace` available; the new seam is the mechanism for the interactive (replacing) path, not a replacement for the output-capturing path.
 - Follow the repository testing approach (AGENTS.md): real CUE validation, real files via `t.TempDir()`, table-driven cases, dependencies passed as parameters or interfaces.
 
 ## Implementation Plan
 
-1. Add the execution seam to `Executor` in `internal/orchestration/executor.go`. Give the executor an injectable process-replacement dependency that defaults to the current `syscall.Exec` behaviour, and route `ExecuteCommand` through it. The directory change and shell lookup stay as they are; only the final replacement call goes through the seam.
+1. Add the execution seam to `Executor` in `internal/orchestration/executor.go`. Give the executor a process-replacement function field, populated by `NewExecutor` from an unexported package-level default that wraps the current `syscall.Exec` call, and route `ExecuteCommand` through the field. Export a setter so a sibling package's `TestMain` can swap the default. The directory change and shell lookup stay as they are; only the final replacement call goes through the seam.
 
-2. Provide a test seam and guard for the packages that can reach execution. Supply a recorder implementation that captures the command and returns, for tests that legitimately exercise the execution path. Make the default-in-tests behaviour a guard that fails loudly, so a test reaching execution without injecting fails visibly instead of replacing the process. A `TestMain` is an acceptable place to install the guard if a per-test default is not cleaner.
+2. Install the guard in both execution-reaching packages. Add a `TestMain` to `internal/orchestration` that swaps the package default to a guard that fails loudly, and a `TestMain` to `internal/cli` that calls orchestration's exported setter to install the same guard (the `cli` test binary does not run orchestration's `TestMain`). Defer the recorder implementation until the requirement 6 audit confirms a test must execute and return; if none does, the guard alone satisfies the seam.
 
-3. Migrate `TestTaskResolution_ExactMatchFallsThrough` and any other execution-reaching test onto the recorder seam, then apply the requirement 5 skip to the resolution assertion.
+3. Apply the requirement 5 skip to `TestTaskResolution_ExactMatchFallsThrough`. If the audit surfaces another test that must execute and return, migrate it onto a recorder seam; otherwise the guard alone covers the execution path.
 
-4. Standardise isolation. Move the config-workflow tests in `internal/cli/config_integration_test.go` onto the shared full-isolation helper, and apply it to any other partially-isolated test found during the audit.
+4. Standardise isolation. Extract the env-var isolation and read-only-cache cleanup from `setupStartTestConfig` into a shared isolation-only helper, have `setupStartTestConfig` call it, and move the config-workflow tests in `internal/cli/config_integration_test.go` onto that helper. Apply it to any other partially-isolated test found during the audit.
 
 5. Fix the two stale assertions to the `category:name` form.
 
@@ -81,7 +81,7 @@ A seam pattern already exists in the codebase and is the model for the execution
 
 ## Implementation Guidance
 
-- The registry-client provider seam (`WithProvider`/`getProvider`, used in `seam_coverage_test.go` and `json_capture_test.go`) is the reference for injecting a dependency that defaults to production and is overridden in tests. Mirror its shape for the execution seam.
+- Do not mirror the registry-client provider seam (`WithProvider`/`getProvider`) for execution. That seam rides on the cobra command context, but the execution path (`executeStart`/`executeTask` → `buildExecutionEnv` → `NewExecutor`) carries no context, and the execution-reaching tests call `executeTask` directly, bypassing cobra. Inject at construction instead: `NewExecutor` reads an unexported package default that `TestMain` swaps in test builds. This is construction-time injection, not an environment-toggled global, so it satisfies the injection constraint without threading a context through three signatures and every direct test call site.
 - The blast radius of tests that reach real execution is expected to be small, because dry-run is the normal test path. The audit confirms the exact set; do not assume it is only the one known test until the suite runs honestly end to end.
 - The address scheme is `category:name`. The slash form in the two failing assertions predates that migration and is the defect, not the code.
 
@@ -90,7 +90,7 @@ A seam pattern already exists in the codebase and is the model for the execution
 1. A full verbose run of the unit suite prints a PASS, FAIL, or SKIP result line for every `=== RUN` line. The number of reported results equals the number of declared tests; no test silently drops out.
 2. Running the `internal/cli` tests via the compiled test binary directly and via `go test -count=1 ./internal/cli` produces identical pass/fail results.
 3. Introducing a deliberate failing assertion in any `internal/cli` test causes `go test ./internal/cli` to exit nonzero. Removing it restores a clean run.
-4. A test that reaches the execution path without injecting the seam fails loudly; it does not replace the process and does not yield exit code 0.
+4. A test that reaches the execution path under the default (guard) replacer fails loudly; it does not replace the process and does not yield exit code 0.
 5. `get_role_details` asserts `roles:reviewer` and `get_context_details` asserts `contexts:project`; both pass run in isolation and in the full suite.
 6. `go test -count=1 -shuffle=on ./...` reports a result for every test, and the `integration`, `e2e`, and `registry` tagged suites do the same. The only deferred test is `TestTaskResolution_ExactMatchFallsThrough`, reported as skipped with a comment naming project 04.
 7. A real (non-dry-run) `start` invocation still replaces the process with the agent command, confirming the seam left production behaviour intact.
