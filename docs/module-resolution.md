@@ -2,7 +2,7 @@
 
 Reference for how `start` turns a user-supplied identifier into a module to act
 on. This procedure is uniform across tasks, roles, contexts, and agents. The
-guiding principle is KISS: search the installed config and the registry index
+guiding principle is simple: search the installed config and the registry index
 for matches, apply one match rule, and act on the result.
 
 ## Where it applies
@@ -19,9 +19,27 @@ for matches, apply one match rule, and act on the result.
 Model resolution (`--model`) is out of scope. A model is resolved against the
 selected agent's `models` map, not against config and registry modules.
 
-## The hit rule
+## The match rule
 
-Every resolution reduces to a set of matches and one decision:
+Resolution checks for an exact whole-name match first, then falls back to a
+substring query.
+
+### Exact match
+
+An exact match is unambiguous by definition: the identifier equals the full name
+of exactly one module. It resolves to that module directly — even when the name
+is also a substring of longer names, and even without a TTY. An exact match that
+exists only in the registry is installed first, then used.
+
+On cross-category surfaces (`start <id>`, `get`, `describe`) the same name can in
+principle name one module in two categories. That is two exact matches, so it is
+ambiguous and falls to the menu below. Within a single category names are unique,
+so an exact match is always one module.
+
+### Substring fallback
+
+When there is no exact match, the identifier is a substring query that reduces to
+a set of matches and one decision:
 
 | Match count | Behaviour |
 | ----------- | --------- |
@@ -29,11 +47,17 @@ Every resolution reduces to a set of matches and one decision:
 | 1 | Use it. If the match is registry-only, install it first, then use it. |
 | more than 1 | On a TTY, present a selection menu. Without a TTY, error and list the matches. |
 
-There is no priority tier. An exact whole-name match does not win over other
-matches. If a name matches exactly and is also a substring of other names, the
-result is multiple matches and the hit rule applies (menu or ambiguity error).
-This is the defining property of the procedure: resolution never silently runs
-one module when the identifier also matched others.
+The defining property is that resolution never silently runs one module when the
+identifier is a *partial* match for several. The menu is reserved for partial
+input; an exact whole-name match is not partial input and is never subject to it,
+so a module's complete canonical name always reaches that module, in scripts and
+pipes as well as interactively.
+
+The naming standard forbids any name from being an ancestor of another within a
+category, and the registry index is validated to enforce this (see the naming
+standard, Leaf-Only Names). The only way an exact name can overlap longer names
+is therefore a substring sibling such as `jira/item/read` inside
+`jira/item/read-only`; the exact-match tier resolves it.
 
 ## Search sources
 
@@ -119,8 +143,22 @@ Assume installed and indexed tasks include `cwd/project/review`,
 | Command | Matches | Result |
 | ------- | ------- | ------ |
 | `start task review` | all four (substring `review`) | menu on TTY, ambiguity error otherwise |
-| `start task jira/item/review` | one (substring) | run it |
+| `start task jira/item/review` | exact match | run it |
+| `start task pipeline` | one (substring) | run it |
 | `start task tasks:jira` | the two `jira/...` tasks (prefix) | menu or error |
 | `start task tasks:gitlab` | one (prefix) | run it |
 | `start task ./my-task.md` | n/a | read the file, no search |
 | `start task nonsense` | none | not-found error |
+
+Exact match takes precedence over substring siblings. With installed tasks
+`jira/item/read` and `jira/item/read-only`:
+
+| Command | Matches | Result |
+| ------- | ------- | ------ |
+| `start task jira/item/read` | exact `jira/item/read`; substring sibling `jira/item/read-only` | run `jira/item/read` directly, including without a TTY |
+| `start task read` | substring: both | menu on TTY, ambiguity error otherwise |
+
+The first command never menus: the identifier is the complete name of one module.
+The naming standard forbids a name that is an ancestor of another, so substring
+siblings like these — neither an ancestor of the other — are the only way an
+exactly-typed name overlaps longer names.
