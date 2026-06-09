@@ -51,14 +51,46 @@ type ExecuteConfig struct {
 // Keys are lowercase to match CUE field naming conventions.
 type CommandData map[string]string
 
+// processReplacer replaces the current process image with the given command,
+// matching syscall.Exec semantics: on success it never returns, so callers
+// cannot resume after a successful replacement.
+type processReplacer func(argv0 string, argv []string, envv []string) error
+
+// defaultProcessReplacer performs the real process replacement via syscall.Exec.
+// Production builds compile only this default, so interactive launches replace
+// the running process with the agent exactly as before. Test builds swap it
+// through SetDefaultProcessReplacer (from a package's TestMain) so that no test
+// ever replaces its own process and masks the suite's failure tally.
+var defaultProcessReplacer processReplacer = func(argv0 string, argv []string, envv []string) error {
+	// Unix-only: syscall.Exec replaces the current process with the agent.
+	// This is intentional - no wrapper overhead, clean process model.
+	return syscall.Exec(argv0, argv, envv)
+}
+
+// SetDefaultProcessReplacer swaps the package-level process replacer that
+// NewExecutor injects into every Executor, returning the previous value. It
+// exists so a sibling package's TestMain — which never runs this package's
+// TestMain, and so otherwise links the production default — can install a
+// guard that fails loudly instead of replacing the test process. It must not
+// be called from production code.
+func SetDefaultProcessReplacer(r processReplacer) processReplacer {
+	prev := defaultProcessReplacer
+	defaultProcessReplacer = r
+	return prev
+}
+
 // Executor handles agent command execution.
 type Executor struct {
 	workingDir string
+	// replaceProcess is the injected process-replacement seam. It is captured
+	// at construction from defaultProcessReplacer so production keeps the real
+	// syscall.Exec behaviour while tests run with a non-replacing guard.
+	replaceProcess processReplacer
 }
 
 // NewExecutor creates a new agent executor.
 func NewExecutor(workingDir string) *Executor {
-	return &Executor{workingDir: workingDir}
+	return &Executor{workingDir: workingDir, replaceProcess: defaultProcessReplacer}
 }
 
 // ValidateCommandTemplate checks for common template errors.
@@ -264,12 +296,13 @@ func (e *Executor) ExecuteCommand(cmdStr string, cfg ExecuteConfig) error {
 		}
 	}
 
-	// Unix-only: syscall.Exec replaces the current process with the agent.
-	// This is intentional - no wrapper overhead, clean process model.
+	// Replacement goes through the injected seam so production replaces the
+	// process via syscall.Exec while test builds substitute a guard. The
+	// argument shape mirrors syscall.Exec: shell, [shell, -c, cmd], env.
 	args := []string{shell, "-c", cmdStr}
 	env := os.Environ()
 
-	return syscall.Exec(shell, args, env)
+	return e.replaceProcess(shell, args, env)
 }
 
 // ExecuteWithoutReplace runs the agent command without process replacement.

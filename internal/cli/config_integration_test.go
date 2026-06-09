@@ -179,8 +179,7 @@ func TestConfigAgent_FullWorkflow(t *testing.T) {
 }
 
 func TestConfigRole_FullWorkflow(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	tmpDir := isolateConfigEnv(t)
 
 	chdir(t, tmpDir)
 
@@ -241,7 +240,7 @@ func TestConfigRole_FullWorkflow(t *testing.T) {
 		}
 
 		output := stdout.String()
-		if !strings.Contains(output, "roles/reviewer") {
+		if !strings.Contains(output, "roles:reviewer") {
 			t.Errorf("get missing role name: %s", output)
 		}
 		if !strings.Contains(output, "Prompt:") {
@@ -271,8 +270,7 @@ func TestConfigRole_FullWorkflow(t *testing.T) {
 }
 
 func TestConfigContext_FullWorkflow(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	tmpDir := isolateConfigEnv(t)
 
 	chdir(t, tmpDir)
 
@@ -337,7 +335,7 @@ func TestConfigContext_FullWorkflow(t *testing.T) {
 		}
 
 		output := stdout.String()
-		if !strings.Contains(output, "contexts/project") {
+		if !strings.Contains(output, "contexts:project") {
 			t.Errorf("get missing context name: %s", output)
 		}
 		if !strings.Contains(output, "Required: true") {

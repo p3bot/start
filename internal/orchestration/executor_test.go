@@ -3,6 +3,7 @@ package orchestration
 import (
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -545,6 +546,47 @@ func TestExecutor_ExecuteWithoutReplace(t *testing.T) {
 			t.Errorf("output = %q, want containing %q", output, dir)
 		}
 	})
+}
+
+// TestExecuteCommand_ForwardsToReplacer asserts the positive contract of the
+// process-replacement seam: ExecuteCommand hands the replacer exactly the
+// arguments production hands syscall.Exec — argv0 == shell, argv ==
+// [shell, "-c", cmdStr], env == os.Environ() — and returns whatever the
+// replacer returns. The package guard (installed in TestMain) only covers the
+// negative path; this overrides e.replaceProcess with an in-package recorder to
+// pin the argument shape against future drift. WorkingDir is left empty so the
+// call does not mutate the test process's working directory.
+func TestExecuteCommand_ForwardsToReplacer(t *testing.T) {
+	t.Parallel()
+
+	var gotArgv0 string
+	var gotArgv, gotEnv []string
+	sentinel := errors.New("replacer reached")
+
+	executor := NewExecutor("")
+	executor.replaceProcess = func(argv0 string, argv []string, envv []string) error {
+		gotArgv0 = argv0
+		gotArgv = argv
+		gotEnv = envv
+		return sentinel
+	}
+
+	const cmdStr = "echo forwarded"
+	err := executor.ExecuteCommand(cmdStr, ExecuteConfig{})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("ExecuteCommand() error = %v, want the replacer's returned error", err)
+	}
+
+	if gotArgv0 == "" {
+		t.Fatal("replacer received empty shell path")
+	}
+	wantArgv := []string{gotArgv0, "-c", cmdStr}
+	if !slices.Equal(gotArgv, wantArgv) {
+		t.Errorf("argv = %v, want %v", gotArgv, wantArgv)
+	}
+	if !slices.Equal(gotEnv, os.Environ()) {
+		t.Errorf("env = %v, want os.Environ()", gotEnv)
+	}
 }
 
 func TestIsValidEnvVarName(t *testing.T) {
