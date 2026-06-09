@@ -27,6 +27,12 @@ In scope:
 - Per-term, single-match context resolution (replacing multi-select-above-
   threshold), with a not-found error when an explicit term matches nothing.
 - Removal of the duplicated task-specific and context-specific resolution paths.
+- Removal of the `--tag` filter from `start task`. Tag (and description) matching
+  is a discovery concern that belongs to `start search`: you search to find a
+  module, then use it by name. The name-only resolver has no tag dimension, so
+  `start task --tag` is removed along with the task-specific search helpers it
+  depends on, and the exact tier is no longer suppressed when a tag filter is
+  present. `start search --tag` is unchanged.
 - Rewriting the resolution test suite to assert the documented behaviour,
   including inverting the exact-match tests that project 03 deferred here.
 - Updating the resolution description in AGENTS.md to match the new model.
