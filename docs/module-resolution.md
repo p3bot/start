@@ -34,11 +34,27 @@ the name is also a substring of longer names, and even without a TTY. An exact
 match that exists only in the registry is installed first, then used.
 
 On cross-category surfaces (`get`, `describe`) the same name can in
-principle name one module in two categories. That is two exact matches, so it is
-ambiguous and falls to the menu below; either match may be installed or
-registry-only, and a registry-only entry installs when chosen. Within a single
+principle name one module in two categories — two exact matches. The exact tier
+here spans both sources across every scoped category, so a same-name exact in
+another category is detected whether it is installed or registry-only. A single
+exact match is the canonical result and resolves directly (a registry-only one
+installs first). When the name is an exact match in more than one category —
+two installed, an installed one alongside a registry-only one in another category,
+or two registry-only ones when nothing is installed — it is a genuine ambiguity
+that falls to the menu below, resolved by category-qualifying the name. This
+behaves the same way with or without a TTY: a terminal shows the menu (installing
+a chosen registry-only entry), a pipe returns the ambiguity error. Within a single
 category names are unique — the naming standard's lowercase kebab-case keeps them
 unique case-insensitively — so an exact match is always one module.
+
+Note: because the cross-category exact tier consults the registry, a bare name on
+`get`/`describe` depends on registry contents as well as installed config. A
+script that resolves a bare name today, as the sole exact match, can begin
+returning an ambiguity error later if a same-name module is published in another
+category. Category-qualify the name (`category:name`) in scripts and pipes to pin
+resolution to one category and stay immune to new registry twins. The
+category-specific surfaces (`--role`, `--agent`, `start task`) are not affected:
+their exact tier is scoped to one category, so no twin can arise.
 
 ### Fallback query
 
@@ -48,7 +64,7 @@ substring query for a bare term, a prefix query for a category-qualified term
 
 | Match count | Behaviour |
 | ----------- | --------- |
-| 0 | Error: not found. |
+| 0 | Error: not found — or, when the registry index was unreachable, the retry-able error described under Search sources. |
 | 1 | Use it. If the match is registry-only, install it first, then use it. |
 | more than 1 | On a TTY, present a selection menu. Without a TTY, error and list the matches. |
 
@@ -70,9 +86,12 @@ input; an exact whole-name match is not partial input and is never subject to it
 so within its category a module's complete canonical name always reaches that
 module, in scripts and pipes as well as interactively (a registry-only name
 additionally needs a reachable index; see Search sources). The one exception is a
-cross-category surface (`get`, `describe`) where the same name is an
-exact match in two categories: the bare name is then ambiguous and must be
-category-qualified (`tasks:<name>`) to resolve without a menu.
+cross-category surface (`get`, `describe`) where the same name is an exact match
+in two *installed* categories: the bare name is then ambiguous and must be
+category-qualified (`tasks:<name>`) to resolve without a menu. This covers a
+registry-only same-name exact in another category too: the exact tier consults
+the registry, detects the twin, and treats it as the same kind of ambiguity —
+the same in a pipe (ambiguity error) as on a terminal (menu).
 
 The naming standard forbids any name from being an ancestor of another within a
 category, and the registry index is validated to enforce this (see the naming
@@ -100,9 +119,15 @@ The registry index is fetched lazily and its absence is non-fatal: when the inde
 cannot be reached, resolution proceeds against installed config alone. The
 guarantees above about registry-only modules — exact-match install-then-use and
 registry entries in the menu — are therefore conditional on a reachable index.
-Installed modules resolve unconditionally; a registry-only identifier that cannot
-be fetched falls through to a not-found error. Scripts and pipes that must resolve
-a registry module should install it ahead of time.
+Installed modules resolve unconditionally. An uninstalled identifier is a
+different matter: with the index reachable and the name found in neither source it
+is genuinely not found (a not-found error), but with the index unreachable its
+absence cannot be confirmed — the name may well exist in the registry — so the
+failure is reported as a transient, retry-able error rather than not-found. This
+matches how the rest of `start` treats an unreachable registry (`install`,
+`update`, and `search` with no local match all report the same transient error).
+Scripts and pipes that must resolve a registry module should install it ahead of
+time.
 
 ## Input forms
 
@@ -138,12 +163,23 @@ Notes:
 
 ## Category prefix
 
-A `category:name` identifier names one of the four categories: `agents`, `roles`,
-`contexts`, `tasks`. The prefix does two things: it scopes the search to that one
-category, and it switches the fallback name match from substring to prefix (the
-name must start with the supplied term). The exact-whole-name tier still runs
-first, so a qualified complete name resolves directly; prefix matching applies
-only when no exact match exists.
+A `category:name` identifier names one of the four categories — `agents`, `roles`,
+`contexts`, `tasks` — and navigates that category's namespace from its root. Names
+within a category are paths (`jira/item/review`), so the qualifier scopes the
+search to the named category and descends from `name`: the fallback matches names
+that begin with the supplied term (a prefix), where a bare term matches the term
+anywhere in the name (a substring). The exact-whole-name tier still runs first, so
+a qualified complete name resolves directly; prefix matching applies only when no
+exact match exists.
+
+The two fallback modes are the two ways you reach for a module. A bare term is a
+fuzzy "find it anywhere" search. A category-qualified term is precise namespace
+navigation: you name the category and the start of the path. `start task review`
+finds any task whose name contains `review`; `start task tasks:review` finds only
+tasks whose name begins with `review`. The qualified form is therefore not a
+scoped synonym for the bare form — it asks a different question, and on a
+category-specific surface (where the category is already fixed) that different
+question is the only reason to add the prefix.
 
 Prefix rules by surface:
 
@@ -156,26 +192,27 @@ Prefix rules by surface:
 Examples:
 
 - `tasks:jira` matches `jira/item/review` and `jira/item/backlog/review` (both
-  start with `jira`), scoped to tasks.
+  begin with `jira`), scoped to tasks.
 - `tasks:review` matches only names beginning with `review`. It does not match
-  `jira/item/review`, because that name does not start with `review`.
-
-Note: on a category-specific surface, adding the surface's own prefix is not a
-no-op. It switches the fallback from substring to prefix, so `start task review`
-(substring, matches any name containing `review`) and `start task tasks:review`
-(prefix, matches only names beginning with `review`) can return different sets.
+  `jira/item/review`, because that name does not begin with `review`; use the bare
+  term `review` for the anywhere-in-the-name search.
 
 ## Selection
 
 When more than one match is found and a TTY is present, list the matches and
-prompt for a choice. Each entry is shown as `category:name` with its source
-(installed or registry). Accept either the entry number or a typed name. A typed
-name that uniquely identifies one shown entry selects it.
+prompt for a choice. Each entry is shown with its source (installed or registry).
+On the category-specific surfaces (`start task`, `--role`, `--context`,
+`--agent`) the entry is its bare name, since every match shares the surface's one
+category; on the cross-category surfaces (`get`, `describe`) it is shown as
+`category:name`, because the category is what distinguishes the matches. Accept
+either the entry number or a typed name. A typed name that uniquely identifies one
+shown entry selects it.
 
-Without a TTY, return an error that lists the matches as `category:name` and
-instructs the user to specify an exact name, category-qualify it (`category:name`)
-when the collision spans categories, or run interactively. The listed forms are
-valid command arguments that round-trip back to the same entry.
+Without a TTY, return an error that lists the matches in the same form — bare
+names on a category-specific surface, `category:name` on a cross-category one —
+and instructs the user to specify an exact name, category-qualify it
+(`category:name`) when the collision spans categories, or run interactively. The
+listed forms are valid command arguments that round-trip back to the same entry.
 
 ## Per-category behaviour
 
