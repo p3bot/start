@@ -218,7 +218,12 @@ deferral by rewriting that test to assert exact-wins, not by un-skipping it.
    names are unique within a category, so no same-name twin can exist, and the
    resolution stays fast and offline regardless of the index cache state.
    The cross-category surfaces (`get`, `describe`) do not skip the index; their
-   exact tier and its ambiguity resolution follow Requirement 3.
+   exact tier and its ambiguity resolution follow Requirement 3. The certainty
+   split applies to them on the same terms: with the index reachable and no match
+   in either source the failure is not-found, while an uninstalled name whose
+   absence cannot be confirmed because the index is unreachable is transient. No
+   resolution surface is exempt; `get`/`describe` must not preserve the current
+   path's behaviour of discarding the index error and always reporting not-found.
 
 6. Reduce the fallback match set to one decision: zero matches is a not-found
    error; one match is used (installed first if a registry-only match is
@@ -278,8 +283,9 @@ deferral by rewriting that test to assert exact-wins, not by un-skipping it.
    - Add exit-code certainty cases: an uninstalled name with the index reachable
      and no match is not-found; the same name with the index unreachable is
      transient (retry), not not-found; an installed name resolves regardless. Assert
-     this across `start task`, `--role`, and `--agent` so the previously divergent
-     paths agree.
+     this across `start task`, `--role`, `--agent`, and the cross-category
+     `get`/`describe` so the previously divergent paths — including `get`/`describe`,
+     which today discards the index error and always reports not-found — all agree.
    - Tests that reach `executeTask`'s execution path use project 03's execution
      recorder seam; prefer asserting the resolver unit directly where possible.
 
@@ -443,7 +449,8 @@ deferral by rewriting that test to assert exact-wins, not by un-skipping it.
    same identifier is reported as a transient (retry) error — not not-found,
    since its absence cannot be confirmed — while installed modules still resolve.
    A name that matches in neither source with the index reachable is a not-found
-   error. This holds uniformly across `start task`, `--role`, and `--agent`.
+   error. This holds uniformly across every resolution surface: `start task`,
+   `--role`, `--agent`, and the cross-category `get`/`describe`.
 6. On `get`/`describe`, a bare name that is an exact match in two installed
    categories produces a selection menu on a TTY and a non-TTY error listing both
    as `category:name`; category-qualifying the name resolves it without a menu.
