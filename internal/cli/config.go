@@ -80,7 +80,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintln(w)
 	tui.ColorSettings.Fprint(w, "settings")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprint(w, tui.Annotate("%s", scopeLabel))
 	tui.ColorDim.Fprintf(w, ": %d\n", len(entries))
 	if len(entries) > 0 {
@@ -94,7 +94,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	sort.Strings(agentOrder)
 	fmt.Fprintln(w)
 	tui.ColorAgents.Fprint(w, "agents")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprint(w, tui.Annotate("%s", scopeLabel))
 	tui.ColorDim.Fprintf(w, ": %d\n", len(agents))
 	if len(agents) > 0 {
@@ -119,7 +119,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintln(w)
 	tui.ColorRoles.Fprint(w, "roles")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprint(w, tui.Annotate("injection order"))
 	fmt.Fprint(w, " ")
 	fmt.Fprint(w, tui.Annotate("%s", scopeLabel))
@@ -138,7 +138,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintln(w)
 	tui.ColorContexts.Fprint(w, "contexts")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprint(w, tui.Annotate("injection order"))
 	fmt.Fprint(w, " ")
 	fmt.Fprint(w, tui.Annotate("%s", scopeLabel))
@@ -170,7 +170,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	sort.Strings(taskOrder)
 	fmt.Fprintln(w)
 	tui.ColorTasks.Fprint(w, "tasks")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprint(w, tui.Annotate("%s", scopeLabel))
 	tui.ColorDim.Fprintf(w, ": %d\n", len(tasks))
 	if len(tasks) > 0 {

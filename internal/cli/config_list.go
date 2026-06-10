@@ -274,7 +274,7 @@ func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	sort.Strings(order)
 
 	tui.ColorAgents.Fprint(w, "agents")
-	fmt.Fprintln(w, "/")
+	fmt.Fprintln(w, ":")
 
 	if len(agents) == 0 {
 		tui.ColorDim.Fprintln(w, "  none")
@@ -315,7 +315,7 @@ func listRoles(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	}
 
 	tui.ColorRoles.Fprint(w, "roles")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprintln(w, tui.Annotate("injection order"))
 
 	if len(roles) == 0 {
@@ -348,7 +348,7 @@ func listContexts(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	}
 
 	tui.ColorContexts.Fprint(w, "contexts")
-	fmt.Fprint(w, "/ ")
+	fmt.Fprint(w, ": ")
 	fmt.Fprintln(w, tui.Annotate("injection order"))
 
 	if len(contexts) == 0 {
@@ -400,7 +400,7 @@ func listTasks(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	sort.Strings(order)
 
 	tui.ColorTasks.Fprint(w, "tasks")
-	fmt.Fprintln(w, "/")
+	fmt.Fprintln(w, ":")
 
 	if len(tasks) == 0 {
 		tui.ColorDim.Fprintln(w, "  none")

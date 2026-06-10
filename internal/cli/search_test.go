@@ -35,10 +35,10 @@ func TestPrintSearchSections(t *testing.T) {
 		if !strings.Contains(out, "./.start") {
 			t.Error("missing section path")
 		}
-		if !strings.Contains(out, "roles/") {
+		if !strings.Contains(out, "roles:") {
 			t.Error("missing roles category")
 		}
-		if !strings.Contains(out, "tasks/") {
+		if !strings.Contains(out, "tasks:") {
 			t.Error("missing tasks category")
 		}
 		if !strings.Contains(out, "golang") {
@@ -189,10 +189,10 @@ func TestPrintSearchSections(t *testing.T) {
 		printSearchSections(&buf, sections, false, nil)
 		out := buf.String()
 
-		agentsIdx := strings.Index(out, "agents/")
-		rolesIdx := strings.Index(out, "roles/")
-		tasksIdx := strings.Index(out, "tasks/")
-		contextsIdx := strings.Index(out, "contexts/")
+		agentsIdx := strings.Index(out, "agents:")
+		rolesIdx := strings.Index(out, "roles:")
+		tasksIdx := strings.Index(out, "tasks:")
+		contextsIdx := strings.Index(out, "contexts:")
 
 		if agentsIdx > rolesIdx || rolesIdx > contextsIdx || contextsIdx > tasksIdx {
 			t.Errorf("categories in wrong order: agents=%d roles=%d contexts=%d tasks=%d",
@@ -217,7 +217,7 @@ func TestPrintSearchSections(t *testing.T) {
 					t.Errorf("item should be indented with 4 spaces, got: %q", line)
 				}
 			}
-			if strings.Contains(line, "roles/") {
+			if strings.Contains(line, "roles:") {
 				if !strings.HasPrefix(line, "  ") {
 					t.Errorf("category should be indented with 2 spaces, got: %q", line)
 				}

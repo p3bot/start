@@ -43,10 +43,10 @@ func TestPrintIndex(t *testing.T) {
 		if !strings.Contains(output, "Index: v0.2.3 (3 modules)") {
 			t.Errorf("output missing header, got: %s", output)
 		}
-		if !strings.Contains(output, "agents/") {
+		if !strings.Contains(output, "agents:") {
 			t.Errorf("output missing agents category, got: %s", output)
 		}
-		if !strings.Contains(output, "roles/") {
+		if !strings.Contains(output, "roles:") {
 			t.Errorf("output missing roles category, got: %s", output)
 		}
 		if !strings.Contains(output, "ai/claude") {
@@ -109,10 +109,10 @@ func TestPrintIndex(t *testing.T) {
 		printIndex(&buf, index, "v0.2.3", false, nil, "agents")
 		output := buf.String()
 
-		if !strings.Contains(output, "agents/") {
+		if !strings.Contains(output, "agents:") {
 			t.Errorf("output missing agents category, got: %s", output)
 		}
-		if strings.Contains(output, "roles/") {
+		if strings.Contains(output, "roles:") {
 			t.Errorf("output should not contain roles when filtered to agents, got: %s", output)
 		}
 		if !strings.Contains(output, "ai/claude") {

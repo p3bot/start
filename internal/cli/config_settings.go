@@ -116,7 +116,7 @@ func listSettings(w io.Writer, scope config.Scope) error {
 	}
 
 	tui.ColorSettings.Fprint(w, "settings")
-	fmt.Fprintln(w, "/")
+	fmt.Fprintln(w, ":")
 	printSettingsEntries(w, entries)
 	return nil
 }

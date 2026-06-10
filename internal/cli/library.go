@@ -183,7 +183,7 @@ func printIndex(w io.Writer, index *registry.Index, version string, verbose bool
 		sort.Strings(names)
 
 		tui.CategoryColor(cat.name).Fprint(w, cat.name)
-		fmt.Fprintf(w, "/ %s\n", tui.Annotate("%d", len(cat.entries)))
+		fmt.Fprintf(w, ": %s\n", tui.Annotate("%d", len(cat.entries)))
 
 		for _, name := range names {
 			entry := cat.entries[name]

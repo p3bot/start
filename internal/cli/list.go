@@ -324,7 +324,7 @@ func printInstalledModules(w io.Writer, installed []InstalledModule, verbose boo
 		}
 
 		tui.CategoryColor(cat).Fprint(w, cat)
-		fmt.Fprintln(w, "/")
+		fmt.Fprintln(w, ":")
 		for _, a := range modules {
 			if verbose && a.LatestVer != "" {
 				fmt.Fprintf(w, "  %-25s ", a.Name)

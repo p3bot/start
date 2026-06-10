@@ -274,7 +274,7 @@ func printSearchSections(w io.Writer, sections []searchSection, verbose bool, in
 
 			fmt.Fprint(w, "  ")
 			tui.CategoryColor(cat).Fprint(w, cat)
-			fmt.Fprintln(w, "/")
+			fmt.Fprintln(w, ":")
 
 			for _, r := range catResults {
 				marker := "  "

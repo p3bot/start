@@ -651,7 +651,7 @@ settings: {
 // header to the next blank line, "" if absent. Anchoring on "\n<header>/\n"
 // avoids collisions with filesystem paths in the Configuration Paths block.
 func extractDescribeSection(output, header string) string {
-	anchor := "\n" + header + "/\n"
+	anchor := "\n" + header + ":\n"
 	idx := strings.Index(output, anchor)
 	if idx == -1 {
 		return ""
@@ -886,17 +886,17 @@ func TestDescribeListingDescriptions(t *testing.T) {
 
 	output := buf.String()
 
-	if !strings.Contains(output, "agents/") {
-		t.Error("output missing agents/ header")
+	if !strings.Contains(output, "agents:") {
+		t.Error("output missing agents: header")
 	}
-	if !strings.Contains(output, "roles/") {
-		t.Error("output missing roles/ header")
+	if !strings.Contains(output, "roles:") {
+		t.Error("output missing roles: header")
 	}
-	if !strings.Contains(output, "contexts/") {
-		t.Error("output missing contexts/ header")
+	if !strings.Contains(output, "contexts:") {
+		t.Error("output missing contexts: header")
 	}
-	if !strings.Contains(output, "tasks/") {
-		t.Error("output missing tasks/ header")
+	if !strings.Contains(output, "tasks:") {
+		t.Error("output missing tasks: header")
 	}
 
 	if !strings.Contains(output, "claude") {
@@ -1064,7 +1064,7 @@ func TestDescribeCommandIntegration(t *testing.T) {
 		{
 			name:       "describe no args lists all items",
 			args:       []string{"describe"},
-			wantOutput: []string{"agents/", "roles/", "contexts/", "tasks/", "claude", "assistant"},
+			wantOutput: []string{"agents:", "roles:", "contexts:", "tasks:", "claude", "assistant"},
 		},
 		{
 			name:       "describe cross-category search single match",
@@ -1074,7 +1074,7 @@ func TestDescribeCommandIntegration(t *testing.T) {
 		{
 			name:       "describe --local lists only local items",
 			args:       []string{"describe", "--local"},
-			wantOutput: []string{"agents/", "claude"},
+			wantOutput: []string{"agents:", "claude"},
 		},
 		{
 			name:    "describe --global errors when no global config",

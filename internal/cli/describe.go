@@ -183,7 +183,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 		return err
 	}
 	tui.ColorSettings.Fprint(w, "settings")
-	fmt.Fprintln(w, "/")
+	fmt.Fprintln(w, ":")
 	printSettingsEntries(w, entries)
 	fmt.Fprintln(w)
 
@@ -227,7 +227,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 		}
 
 		tui.CategoryColor(cat.category).Fprint(w, cat.category)
-		fmt.Fprintln(w, "/")
+		fmt.Fprintln(w, ":")
 
 		for _, e := range catEntries {
 			if e.desc != "" {
