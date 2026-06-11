@@ -370,6 +370,66 @@ func TestComposer_ComposeWithRole(t *testing.T) {
 	})
 }
 
+// TestComposeWithRole_RoleOutcome verifies the choke-point stamp: a resolvable
+// role yields SectionListed, a config with no roles yields SectionNone, and a
+// role failure carrying an error row stays SectionListed so the diagnostic
+// table survives — never collapsing to SectionNone.
+func TestComposeWithRole_RoleOutcome(t *testing.T) {
+	t.Parallel()
+	ctx := cuecontext.New()
+
+	processor := NewTemplateProcessor(nil, nil, "")
+	composer := NewComposer(processor, "")
+
+	t.Run("resolvable role is SectionListed", func(t *testing.T) {
+		cfg := ctx.CompileString(`roles: { assistant: { prompt: "You are a helpful assistant." } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.ComposeWithRole(cfg, ContextSelection{}, "", "")
+		if err != nil {
+			t.Fatalf("ComposeWithRole() error = %v", err)
+		}
+		if result.RoleOutcome.State != SectionListed {
+			t.Errorf("RoleOutcome.State = %v, want SectionListed", result.RoleOutcome.State)
+		}
+	})
+
+	t.Run("no roles is SectionNone", func(t *testing.T) {
+		cfg := ctx.CompileString(`contexts: { env: { required: true, prompt: "Environment" } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.ComposeWithRole(cfg, ContextSelection{IncludeRequired: true}, "", "")
+		if err != nil {
+			t.Fatalf("ComposeWithRole() error = %v", err)
+		}
+		if result.RoleOutcome.State != SectionNone {
+			t.Errorf("RoleOutcome.State = %v, want SectionNone", result.RoleOutcome.State)
+		}
+		if len(result.RoleResolutions) != 0 {
+			t.Errorf("RoleResolutions = %v, want empty", result.RoleResolutions)
+		}
+	})
+
+	t.Run("required-role failure stays SectionListed", func(t *testing.T) {
+		cfg := ctx.CompileString(`roles: { broken: { file: "./does-not-exist.md" } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.ComposeWithRole(cfg, ContextSelection{}, "", "")
+		if err == nil {
+			t.Fatal("expected error for required role with missing file")
+		}
+		if result.RoleOutcome.State != SectionListed {
+			t.Errorf("RoleOutcome.State = %v, want SectionListed (error row must survive)", result.RoleOutcome.State)
+		}
+		if len(result.RoleResolutions) == 0 {
+			t.Fatal("expected an error resolution row")
+		}
+	})
+}
+
 func TestComposer_ResolveTask(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()

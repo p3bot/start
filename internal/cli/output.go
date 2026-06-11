@@ -147,14 +147,26 @@ func printAgentModel(w io.Writer, agent orchestration.Agent, model, modelSource 
 	fmt.Fprintln(w)
 }
 
-func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
-	if len(resolutions) == 0 {
-		return
-	}
-
+// printRoleTable renders the role header section. It is a pure switch over
+// outcome.State set by the producer; it must not re-derive the section state
+// from len(resolutions) or any CLI flag. resolutions is rendered only for
+// SectionListed.
+func printRoleTable(w io.Writer, outcome orchestration.SectionOutcome, resolutions []orchestration.RoleResolution) {
 	tui.ColorRoles.Fprint(w, "Role:")
+	switch outcome.State {
+	case orchestration.SectionListed:
+		fmt.Fprintln(w)
+		printRoleRows(w, resolutions)
+	case orchestration.SectionSkipped:
+		fmt.Fprintf(w, " skipped %s\n", tui.Annotate("via %s", outcome.Reason))
+	default: // SectionNone and any unstamped state degrade to the neutral line.
+		fmt.Fprintln(w, " none")
+	}
 	fmt.Fprintln(w)
+}
 
+// printRoleRows renders the role resolution table body for SectionListed.
+func printRoleRows(w io.Writer, resolutions []orchestration.RoleResolution) {
 	nameWidth := 4 // "Name" header
 	for _, r := range resolutions {
 		if len(r.Name) > nameWidth {
@@ -164,7 +176,6 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 
 	tui.ColorDim.Fprintf(w, "  %-*s  %s  %s\n", nameWidth, "Name", "Status", "File")
 
-	// Print rows
 	for _, r := range resolutions {
 		status := "○"
 		if r.Status == "loaded" {
@@ -196,5 +207,4 @@ func printRoleTable(w io.Writer, resolutions []orchestration.RoleResolution) {
 		}
 		fmt.Fprintf(w, "       %s\n", file)
 	}
-	fmt.Fprintln(w)
 }

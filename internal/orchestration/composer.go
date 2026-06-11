@@ -97,6 +97,23 @@ func (c *Composer) isCwdPath(filePath string) bool {
 	return strings.HasPrefix(cleanPath, cleanWorkDir+string(filepath.Separator))
 }
 
+// SectionState classifies how a header section resolved so the render layer
+// can report it without re-deriving intent from list length or CLI flags.
+type SectionState int
+
+const (
+	SectionNone    SectionState = iota // nothing available; render "<label>: none"
+	SectionListed                      // entries resolved; render the table
+	SectionSkipped                     // deliberate opt-out; render "<label>: skipped via <reason>"
+)
+
+// SectionOutcome is the producer-set result for one header section. Whichever
+// layer makes the decision sets it; the render layer only switches over it.
+type SectionOutcome struct {
+	State  SectionState
+	Reason string // opt-out flag (e.g. "--role none"); set only for SectionSkipped
+}
+
 // ComposeResult contains the result of prompt composition.
 type ComposeResult struct {
 	// Prompt is the fully composed prompt.
@@ -113,6 +130,10 @@ type ComposeResult struct {
 	RoleName string
 	// RoleResolutions tracks all roles checked during resolution for UI display.
 	RoleResolutions []RoleResolution
+	// RoleOutcome classifies how the role section resolved so the render layer
+	// reports it with a pure switch. ComposeWithRole stamps SectionListed or
+	// SectionNone; the --role none caller stamps SectionSkipped.
+	RoleOutcome SectionOutcome
 	// Warnings contains any non-fatal issues.
 	Warnings []string
 }
@@ -241,8 +262,22 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 // ComposeWithRole composes prompt and resolves role.
 // When roleName is provided (explicit --role), errors are fatal.
 // When using default selection, optional roles are skipped gracefully.
-func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, roleName, customText string) (ComposeResult, error) {
-	result, err := c.Compose(cfg, selection, customText)
+func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, roleName, customText string) (result ComposeResult, err error) {
+	// Stamp the role outcome from one choke point so every exit — the normal
+	// return and both error early-returns — agrees with the final resolutions
+	// slice: a row is appended iff roles are configured, so SectionListed and
+	// SectionNone are an exact partition. The render layer discards
+	// RoleResolutions unless the state is SectionListed, so a missed stamp on an
+	// error return would render "Role: none" while error rows exist.
+	defer func() {
+		if len(result.RoleResolutions) > 0 {
+			result.RoleOutcome = SectionOutcome{State: SectionListed}
+		} else {
+			result.RoleOutcome = SectionOutcome{State: SectionNone}
+		}
+	}()
+
+	result, err = c.Compose(cfg, selection, customText)
 	if err != nil {
 		return result, err
 	}

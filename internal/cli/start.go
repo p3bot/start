@@ -79,6 +79,17 @@ func getFlags(cmd *cobra.Command) *Flags {
 	return &Flags{}
 }
 
+// roleSkipReason is the opt-out reason stamped on RoleOutcome when --role none
+// routes execution through Compose, which performs no role logic.
+const roleSkipReason = "--role none"
+
+// roleSkipOutcome is the role section outcome for a deliberate --role none
+// opt-out. Compose performs no role logic and cannot know why it was called, so
+// the CLI branch that routes there owns this outcome.
+func roleSkipOutcome() orchestration.SectionOutcome {
+	return orchestration.SectionOutcome{State: orchestration.SectionSkipped, Reason: roleSkipReason}
+}
+
 // Debug log categories.
 const (
 	dbgConfig  = "config"
@@ -408,6 +419,7 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 	if flags.NoRole {
 		debugf(stderr, flags, dbgRole, "Skipping role (--role none)")
 		result, composeErr = env.Composer.Compose(env.Cfg.Value, selection, customText)
+		result.RoleOutcome = roleSkipOutcome()
 	} else {
 		result, composeErr = env.Composer.ComposeWithRole(env.Cfg.Value, selection, roleName, customText)
 	}
@@ -519,7 +531,7 @@ func printExecutionInfo(w io.Writer, agent orchestration.Agent, model, modelSour
 
 	printAgentModel(w, agent, model, modelSource)
 	printContextTable(w, result.Contexts, result.Selection)
-	printRoleTable(w, result.RoleResolutions)
+	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	fmt.Fprintf(w, "Starting %s - awaiting response...\n", agent.Name)
 }
@@ -531,7 +543,7 @@ func printDryRunSummary(w io.Writer, agent orchestration.Agent, model, modelSour
 
 	printAgentModel(w, agent, model, modelSource)
 	printContextTable(w, result.Contexts, result.Selection)
-	printRoleTable(w, result.RoleResolutions)
+	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	if result.Role != "" {
 		printContentPreview(w, "Role", tui.ColorRoles, result.Role, 5)
@@ -562,7 +574,7 @@ func printComposeError(w io.Writer, agent orchestration.Agent, result orchestrat
 
 	printContextTable(w, result.Contexts, result.Selection)
 
-	printRoleTable(w, result.RoleResolutions)
+	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 }
 
 // printContentPreview prints content, showing all lines when total <= 2*maxLines

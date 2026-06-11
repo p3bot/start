@@ -200,6 +200,11 @@ func TestExecuteStart_NoRole(t *testing.T) {
 	if strings.Contains(output, "assistant") {
 		t.Errorf("Expected no role name 'assistant' in output, got:\n%s", output)
 	}
+
+	// The opt-out must be explicit: a skipped line naming the flag that caused it.
+	if !strings.Contains(output, "skipped") || !strings.Contains(output, roleSkipReason) {
+		t.Errorf("Expected skipped role line naming %q, got:\n%s", roleSkipReason, output)
+	}
 }
 
 func TestExecuteTask_NoRole(t *testing.T) {
@@ -229,6 +234,11 @@ func TestExecuteTask_NoRole(t *testing.T) {
 	// Task has role: "assistant" configured, which the role-skip state must suppress.
 	if strings.Contains(output, "You are a helpful assistant") {
 		t.Errorf("Expected no role content with role skip, got:\n%s", output)
+	}
+
+	// The opt-out must be explicit: a skipped line naming the flag that caused it.
+	if !strings.Contains(output, "skipped") || !strings.Contains(output, roleSkipReason) {
+		t.Errorf("Expected skipped role line naming %q, got:\n%s", roleSkipReason, output)
 	}
 }
 
@@ -285,6 +295,137 @@ settings: {
 	// The resolver should have been invoked and failed (no registry in tests).
 	if !strings.Contains(err.Error(), "missing-role") {
 		t.Errorf("Expected error to mention %q, got: %v", "missing-role", err)
+	}
+}
+
+// writeNoRolesConfig writes a config with no roles defined and chdirs into it,
+// for exercising the SectionNone role-header path end to end.
+func writeNoRolesConfig(t *testing.T) {
+	t.Helper()
+	tmpDir := isolateConfigEnv(t)
+	configDir := filepath.Join(tmpDir, ".start")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	config := `
+agents: {
+	echo: {
+		bin: "echo"
+		command: "{{.bin}} 'Agent executed'"
+		default_model: "default"
+		models: { default: "echo-model" }
+	}
+}
+
+contexts: {
+	env: { required: true, prompt: "Environment context" }
+}
+
+tasks: {
+	"test-task": { prompt: "Test task prompt." }
+}
+
+settings: { default_agent: "echo" }
+`
+	configFile := filepath.Join(configDir, "settings.cue")
+	if err := os.WriteFile(configFile, []byte(config), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, tmpDir)
+}
+
+// TestExecuteStart_NoRolesConfig asserts the start header reports "Role: none"
+// when no roles are configured, guarding the call site against silent rendering.
+func TestExecuteStart_NoRolesConfig(t *testing.T) {
+	writeNoRolesConfig(t)
+
+	flags := &Flags{DryRun: true}
+	selection := orchestration.ContextSelection{IncludeRequired: true, IncludeDefaults: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	if err := executeStart(stdout, stderr, strings.NewReader(""), flags, selection, ""); err != nil {
+		t.Fatalf("executeStart() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Role: none") {
+		t.Errorf("Expected 'Role: none' in output, got:\n%s", output)
+	}
+	if strings.Contains(output, "skipped") {
+		t.Errorf("no-role state must not read as a skip, got:\n%s", output)
+	}
+}
+
+// TestExecuteTask_NoRolesConfig mirrors the start case for the task header.
+func TestExecuteTask_NoRolesConfig(t *testing.T) {
+	writeNoRolesConfig(t)
+
+	flags := &Flags{DryRun: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	if err := executeTask(stdout, stderr, strings.NewReader(""), flags, "test-task", ""); err != nil {
+		t.Fatalf("executeTask() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Role: none") {
+		t.Errorf("Expected 'Role: none' in output, got:\n%s", output)
+	}
+}
+
+// TestExecuteStart_RoleFailureRendersTable drives a required-role failure through
+// printComposeError and asserts the diagnostic role row still renders — the
+// section is SectionListed, not collapsed to "Role: none".
+func TestExecuteStart_RoleFailureRendersTable(t *testing.T) {
+	tmpDir := isolateConfigEnv(t)
+	configDir := filepath.Join(tmpDir, ".start")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	// A required (non-optional) role referencing a missing file fails resolution.
+	config := `
+agents: {
+	echo: {
+		bin: "echo"
+		command: "{{.bin}} 'Agent executed'"
+		default_model: "default"
+		models: { default: "echo-model" }
+	}
+}
+
+roles: {
+	broken: { file: "./does-not-exist.md" }
+}
+
+settings: { default_agent: "echo" }
+`
+	configFile := filepath.Join(configDir, "settings.cue")
+	if err := os.WriteFile(configFile, []byte(config), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, tmpDir)
+
+	flags := &Flags{DryRun: true}
+	selection := orchestration.ContextSelection{IncludeRequired: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	err := executeStart(stdout, stderr, strings.NewReader(""), flags, selection, "")
+	if err == nil {
+		t.Fatal("Expected error for missing required role, got nil")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "broken") {
+		t.Errorf("Expected failing role 'broken' in diagnostic table, got:\n%s", output)
+	}
+	if strings.Contains(output, "Role: none") {
+		t.Errorf("Role failure must not collapse to 'Role: none', got:\n%s", output)
 	}
 }
 
@@ -506,6 +647,7 @@ func TestPrintDryRunSummary(t *testing.T) {
 		RoleResolutions: []orchestration.RoleResolution{
 			{Name: "test-role", Status: "loaded", File: "test-role.md"},
 		},
+		RoleOutcome: orchestration.SectionOutcome{State: orchestration.SectionListed},
 	}
 
 	printDryRunSummary(buf, agent, "", "", result, "/tmp/test-dir")

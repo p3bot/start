@@ -229,6 +229,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	if flags.NoRole {
 		debugf(stderr, flags, dbgRole, "Skipping role (--role none)")
 		composeResult, composeErr = env.Composer.Compose(env.Cfg.Value, selection, taskResult.Content)
+		composeResult.RoleOutcome = roleSkipOutcome()
 	} else {
 		composeResult, composeErr = env.Composer.ComposeWithRole(env.Cfg.Value, selection, roleName, taskResult.Content)
 	}
@@ -318,7 +319,7 @@ func printTaskExecutionInfo(w io.Writer, agent orchestration.Agent, model, model
 
 	printAgentModel(w, agent, model, modelSource)
 	printContextTable(w, result.Contexts, result.Selection)
-	printRoleTable(w, result.RoleResolutions)
+	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	if taskResult.CommandExecuted {
 		fmt.Fprintln(w, "Command: executed")
@@ -339,7 +340,7 @@ func printTaskDryRunSummary(w io.Writer, agent orchestration.Agent, model, model
 
 	printAgentModel(w, agent, model, modelSource)
 	printContextTable(w, result.Contexts, result.Selection)
-	printRoleTable(w, result.RoleResolutions)
+	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	if instructions != "" {
 		fmt.Fprintf(w, "Instructions:\n%s\n", instructions)
