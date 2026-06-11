@@ -79,13 +79,13 @@ tasks: {
 	if !strings.Contains(output, "Installed modules") {
 		t.Errorf("output should mention installed modules, got: %s", output)
 	}
-	if !strings.Contains(output, "agents/") {
+	if !strings.Contains(output, "agents:") {
 		t.Errorf("output should show agents category, got: %s", output)
 	}
 	if !strings.Contains(output, "claude") {
 		t.Errorf("output should show claude agent, got: %s", output)
 	}
-	if !strings.Contains(output, "roles/") {
+	if !strings.Contains(output, "roles:") {
 		t.Errorf("output should show roles category, got: %s", output)
 	}
 	if !strings.Contains(output, "assistant") {
@@ -228,13 +228,13 @@ roles: {
 		}
 
 		output := buf.String()
-		if !strings.Contains(output, "agents/") {
+		if !strings.Contains(output, "agents:") {
 			t.Errorf("output should show agents category, got: %s", output)
 		}
 		if !strings.Contains(output, "claude") {
 			t.Errorf("output should show claude, got: %s", output)
 		}
-		if strings.Contains(output, "roles/") {
+		if strings.Contains(output, "roles:") {
 			t.Errorf("output should not show roles when filtered to agents, got: %s", output)
 		}
 	})
@@ -251,13 +251,13 @@ roles: {
 		}
 
 		output := buf.String()
-		if !strings.Contains(output, "roles/") {
+		if !strings.Contains(output, "roles:") {
 			t.Errorf("output should show roles category, got: %s", output)
 		}
 		if !strings.Contains(output, "assistant") {
 			t.Errorf("output should show assistant, got: %s", output)
 		}
-		if strings.Contains(output, "agents/") {
+		if strings.Contains(output, "agents:") {
 			t.Errorf("output should not show agents when filtered to roles, got: %s", output)
 		}
 	})

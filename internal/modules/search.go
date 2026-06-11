@@ -211,32 +211,8 @@ func matchScorePatterns(name string, entry registry.IndexEntry, patterns []*rege
 	return totalScore
 }
 
-// SearchCategoryEntries searches a single category's entries, returning scored results
-// sorted by score desc then name asc. Query terms are regex patterns with AND semantics.
-func SearchCategoryEntries(category string, entries map[string]registry.IndexEntry, query string, tags []string) ([]SearchResult, error) {
-	terms := ParseSearchPatterns(query)
-	if len(terms) == 0 && len(tags) == 0 {
-		return nil, nil
-	}
-
-	var patterns []*regexp.Regexp
-	if len(terms) > 0 {
-		var err error
-		patterns, err = CompileSearchTerms(terms)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	results := searchCategory(category, entries, patterns, tags)
-
-	sortResults(results)
-
-	return results, nil
-}
-
 // SearchInstalledConfig searches installed config entries under cueKey (e.g. "agents"),
-// scoring them like SearchCategoryEntries.
+// scoring them the same way as the registry index search.
 func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags []string) ([]SearchResult, error) {
 	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {

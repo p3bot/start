@@ -21,6 +21,11 @@ import (
 // syscall.Exec.
 func TestMain(m *testing.M) {
 	orchestration.SetDefaultProcessReplacer(guardProcessReplacer)
+	// Keep resolver-backed surfaces (get, describe, start, task) offline by
+	// default: the cross-category exact tier now consults the registry, which
+	// would otherwise pull the real index over the network in every content and
+	// scope test. Tests that need an index inject one directly (didFetch).
+	offlineRegistryForTests = true
 	os.Exit(m.Run())
 }
 

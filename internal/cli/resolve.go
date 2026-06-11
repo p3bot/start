@@ -1,23 +1,19 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"cuelang.org/go/cue"
 	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/orchestration"
 	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/tui"
 )
 
 // ModuleSource indicates where a module was found.
@@ -34,17 +30,29 @@ type ModuleMatch struct {
 	Category string
 	Source   ModuleSource
 	Entry    registry.IndexEntry
-	Score    int
 }
-
-// contextScoreThreshold is the minimum match score for context inclusion.
-const contextScoreThreshold = 2
 
 // maxModuleResults is the maximum number of results to display in interactive selection.
 const maxModuleResults = 20
 
-// resolver performs two-phase resolution for module-selecting flags.
-// It lazily fetches the registry index and tracks whether any installs occurred.
+// offlineRegistryForTests makes every newResolver skip the registry fetch. The
+// cross-category surfaces (get, describe) now consult the registry through a
+// resolver they build internally, which the provider seam cannot stub, so the
+// cli test binary sets this in TestMain to keep content and scope tests offline.
+// Production never sets it; resolvers that inject an index (didFetch) are
+// honoured regardless, since ensureIndex checks didFetch first.
+var offlineRegistryForTests bool
+
+// resolver performs name-only resolution for module-selecting surfaces. It
+// lazily fetches the registry index and tracks whether any installs occurred.
+//
+// Two install-tracking fields with distinct lifetimes: didInstall is sticky for
+// the resolver's life (an install happened at all — drives the --local scope-
+// widening notice), while cfgStale flips true on each install and clears on each
+// reloadConfig (r.cfg no longer matches disk — drives reload decisions). A
+// surface that installs across multiple stages (task: flags → task → task-role)
+// must gate every reload on cfgStale, never on the sticky didInstall, or a later
+// stage's install is missed once an earlier one already set didInstall.
 type resolver struct {
 	cfg          internalcue.LoadResult
 	flags        *Flags
@@ -56,108 +64,49 @@ type resolver struct {
 	indexErr     error
 	didFetch     bool
 	didInstall   bool
+	cfgStale     bool
 	skipRegistry bool // skip registry fetch (for testing)
 }
 
 func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) *resolver {
 	return &resolver{
-		cfg:    cfg,
-		flags:  flags,
-		stderr: stderr,
-		stdout: stdout,
-		stdin:  stdin,
+		cfg:          cfg,
+		flags:        flags,
+		stderr:       stderr,
+		stdout:       stdout,
+		stdin:        stdin,
+		skipRegistry: offlineRegistryForTests,
 	}
 }
 
+// resolveAgent resolves the --agent identifier to an installed agent name. An
+// agent is a structured configuration, not a document body, so a filesystem
+// path is rejected.
 func (r *resolver) resolveAgent(name string) (string, error) {
-	return r.resolveModule(name, internalcue.KeyAgents, "agents", "Agent", false)
+	return r.resolveSingle(name, singleCategoryScope("agents", "agent", false))
 }
 
+// resolveRole resolves the --role identifier to an installed role name or a
+// filesystem path.
 func (r *resolver) resolveRole(name string) (string, error) {
-	return r.resolveModule(name, internalcue.KeyRoles, "roles", "Role", true)
+	return r.resolveSingle(name, singleCategoryScope("roles", "role", true))
 }
 
-// resolveModule resolves a module in two phases: exact installed-config match
-// (no registry needed), else merge installed + registry candidates and select.
-// A "category:name" prefix matching category is stripped; a mismatched prefix
-// errors. allowFilePath lets file paths bypass resolution.
-func (r *resolver) resolveModule(name, cueKey, category, displayType string, allowFilePath bool) (string, error) {
+// resolveSingle resolves a category-specific identifier, returning either the
+// resolved module name or the filesystem path it bypassed to. An empty
+// identifier passes through unchanged (the caller's "use the default" signal).
+func (r *resolver) resolveSingle(name string, scope resolveScope) (string, error) {
 	if name == "" {
 		return "", nil
 	}
-
-	if allowFilePath && orchestration.IsFilePath(name) {
-		debugf(r.stderr, r.flags, dbgResolve, "%s %q: file path bypass", displayType, name)
-		return name, nil
-	}
-
-	addr, err := parseAddress(name)
+	outcome, err := r.resolve(name, scope)
 	if err != nil {
 		return "", err
 	}
-	if addr.HasPrefix && addr.Category != category {
-		return "", usageError(fmt.Errorf("%s expects category %q, got %q in %q", displayType, category, addr.Category, name))
+	if outcome.filePath != "" {
+		return outcome.filePath, nil
 	}
-	name = addr.Name
-
-	searchType := strings.ToLower(displayType)
-
-	// Phase 1: exact installed match is unambiguous, no registry needed.
-	if isExactInstalledKey(r.cfg.Value, cueKey, name) {
-		debugf(r.stderr, r.flags, dbgResolve, "%s %q: exact installed match", displayType, name)
-		return name, nil
-	}
-
-	// Phase 2: merge installed + registry candidates, then select.
-	installedMatches, err := searchInstalled(r.cfg.Value, cueKey, category, name)
-	if err != nil {
-		return "", err
-	}
-
-	if len(installedMatches) == 0 && !r.flags.Quiet {
-		fmt.Fprintf(r.stdout, "%s %q not found in configuration\n", displayType, name)
-	}
-
-	// ensureIndex returns nil error; failures land in r.indexErr (graceful fallback).
-	index, client, _ := r.ensureIndex()
-	var registryMatches []ModuleMatch
-	if index != nil {
-		entries := registryEntries(index, category)
-		registryMatches, err = searchRegistryCategory(entries, category, name)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	allMatches := mergeModuleMatches(installedMatches, registryMatches)
-	debugf(r.stderr, r.flags, dbgResolve, "%s %q: %d installed, %d registry, %d total matches",
-		displayType, name, len(installedMatches), len(registryMatches), len(allMatches))
-
-	selected, err := r.selectSingleMatch(allMatches, searchType, name)
-	if err != nil {
-		return "", err
-	}
-
-	if selected.Source == ModuleSourceRegistry {
-		if err := r.autoInstall(client, modules.SearchResult{
-			Category: selected.Category,
-			Name:     selected.Name,
-			Entry:    selected.Entry,
-		}); err != nil {
-			return "", err
-		}
-	}
-
-	return selected.Name, nil
-}
-
-// isExactInstalledKey returns true if name is a verbatim key in the config category.
-func isExactInstalledKey(cfg cue.Value, cueKey, name string) bool {
-	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
-	if !catVal.Exists() {
-		return false
-	}
-	return catVal.LookupPath(cue.MakePath(cue.Str(name))).Exists()
+	return outcome.match.Name, nil
 }
 
 func registryEntries(index *registry.Index, category string) map[string]registry.IndexEntry {
@@ -176,7 +125,9 @@ func registryEntries(index *registry.Index, category string) map[string]registry
 }
 
 // resolveModelName resolves a model name against agent.Models: exact match,
-// then multi-term AND substring match, then passthrough.
+// then multi-term AND substring match, then passthrough. Model resolution is
+// deliberately outside the unified module match rule — its target is an agent's
+// model map, not the module sources — so it keeps the search-style match.
 func (r *resolver) resolveModelName(name string, agent orchestration.Agent) string {
 	if name == "" {
 		return ""
@@ -222,373 +173,37 @@ func (r *resolver) resolveModelName(name string, agent orchestration.Agent) stri
 	return name
 }
 
-// resolveContexts resolves context flag values per-term: file path bypass ->
-// "default" passthrough -> exact name -> search (all above threshold).
+// resolveContexts resolves each --context term independently through the unified
+// match rule. A filesystem path is read directly; the "default" sentinel passes
+// through unsearched ("none" is consumed upstream and never reaches here). Every
+// other term resolves to exactly one context, erroring when it matches nothing.
 func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 	if len(terms) == 0 {
 		return nil, nil
 	}
 
+	scope := singleCategoryScope("contexts", "context", true)
+
 	var resolved []string
 	for _, term := range terms {
-		if orchestration.IsFilePath(term) {
-			debugf(r.stderr, r.flags, dbgResolve, "Context %q: file path bypass", term)
-			resolved = append(resolved, term)
-			continue
-		}
-
 		if term == "default" {
 			debugf(r.stderr, r.flags, dbgResolve, "Context %q: default passthrough", term)
 			resolved = append(resolved, term)
 			continue
 		}
 
-		addr, err := parseAddress(term)
+		outcome, err := r.resolve(term, scope)
 		if err != nil {
 			return nil, err
 		}
-		if addr.HasPrefix && addr.Category != "contexts" {
-			return nil, usageError(fmt.Errorf("context expects category %q, got %q in %q", "contexts", addr.Category, term))
-		}
-		term = addr.Name
-
-		if resolvedCtx, err := findExactInstalledName(r.cfg.Value, internalcue.KeyContexts, term); err != nil {
-			// Ambiguous short name: fall through to substring search.
-			debugf(r.stderr, r.flags, dbgResolve, "Context %q: short name ambiguous, falling through: %v", term, err)
-		} else if resolvedCtx != "" {
-			debugf(r.stderr, r.flags, dbgResolve, "Context %q: installed match -> %q", term, resolvedCtx)
-			resolved = append(resolved, resolvedCtx)
+		if outcome.filePath != "" {
+			resolved = append(resolved, outcome.filePath)
 			continue
 		}
-
-		installedMatches, err := searchInstalled(r.cfg.Value, internalcue.KeyContexts, "contexts", term)
-		if err != nil {
-			// Invalid regex: pass through as-is.
-			debugf(r.stderr, r.flags, dbgResolve, "Context %q: invalid pattern, passing through", term)
-			resolved = append(resolved, term)
-			continue
-		}
-		hasInstalledMatches := len(installedMatches) > 0
-
-		if !hasInstalledMatches {
-			if !r.flags.Quiet {
-				fmt.Fprintf(r.stdout, "Context %q not found in configuration\n", term)
-			}
-		}
-
-		// Exact registry match only when no installed matches.
-		index, client, indexErr := r.ensureIndex()
-		if indexErr != nil {
-			debugf(r.stderr, r.flags, dbgResolve, "Registry unavailable for context search: %v", indexErr)
-		}
-		if !hasInstalledMatches && index != nil {
-			result, err := findExactInRegistry(index.Contexts, "contexts", term)
-			if err != nil {
-				if !r.flags.Quiet {
-					printWarning(r.stdout, "%s", err)
-				}
-				resolved = append(resolved, term)
-				continue
-			}
-			if result != nil {
-				debugf(r.stderr, r.flags, dbgResolve, "Context %q: exact registry match %q", term, result.Name)
-				if err := r.autoInstall(client, *result); err != nil {
-					if !r.flags.Quiet {
-						printWarning(r.stdout, "context %q: auto-install failed: %s", term, err)
-					}
-				} else {
-					resolved = append(resolved, result.Name)
-					continue
-				}
-			}
-		}
-
-		// Combined search across installed + registry (matches above threshold).
-		var registryMatches []ModuleMatch
-		if index != nil {
-			registryMatches, err = searchRegistryCategory(index.Contexts, "contexts", term)
-			if err != nil {
-				debugf(r.stderr, r.flags, dbgResolve, "Context %q: invalid pattern, passing through", term)
-				resolved = append(resolved, term)
-				continue
-			}
-		}
-		allMatches := mergeModuleMatches(installedMatches, registryMatches)
-
-		var qualified []ModuleMatch
-		for _, m := range allMatches {
-			if m.Score >= contextScoreThreshold {
-				qualified = append(qualified, m)
-			}
-		}
-
-		debugf(r.stderr, r.flags, dbgResolve, "Context %q: %d matches above threshold", term, len(qualified))
-
-		if len(qualified) == 0 {
-			// Composer will warn on the unresolved term.
-			debugf(r.stderr, r.flags, dbgResolve, "Context %q: no matches, passing through", term)
-			resolved = append(resolved, term)
-			continue
-		}
-
-		for _, m := range qualified {
-			if m.Source == ModuleSourceRegistry && client != nil {
-				if err := r.autoInstall(client, modules.SearchResult{
-					Category: m.Category,
-					Name:     m.Name,
-					Entry:    m.Entry,
-				}); err != nil {
-					if !r.flags.Quiet {
-						printWarning(r.stdout, "context %q: auto-install failed: %s", m.Name, err)
-					}
-					continue
-				}
-			}
-			resolved = append(resolved, m.Name)
-		}
+		resolved = append(resolved, outcome.match.Name)
 	}
 
 	return resolved, nil
-}
-
-// findExactInstalledName matches a module by full or short name in installed
-// config, returning the full name (empty if none) or an error if ambiguous.
-func findExactInstalledName(cfg cue.Value, cueKey, name string) (string, error) {
-	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
-	if !catVal.Exists() {
-		return "", nil
-	}
-
-	// Full name match is always unambiguous.
-	if catVal.LookupPath(cue.MakePath(cue.Str(name))).Exists() {
-		return name, nil
-	}
-
-	// Short name: collect all matches to detect ambiguity.
-	iter, err := catVal.Fields()
-	if err != nil {
-		return "", nil
-	}
-	var matches []string
-	for iter.Next() {
-		entryName := iter.Selector().Unquoted()
-		if idx := strings.LastIndex(entryName, "/"); idx != -1 {
-			if entryName[idx+1:] == name {
-				matches = append(matches, entryName)
-			}
-		}
-	}
-
-	switch len(matches) {
-	case 0:
-		return "", nil
-	case 1:
-		return matches[0], nil
-	default:
-		sort.Strings(matches)
-		return "", fmt.Errorf("ambiguous %s name %q matches multiple entries: %s",
-			cueKey, name, strings.Join(matches, ", "))
-	}
-}
-
-// findExactInRegistry matches a registry entry by full or short name, erroring
-// if multiple entries share the same short name.
-func findExactInRegistry(entries map[string]registry.IndexEntry, category, name string) (*modules.SearchResult, error) {
-	// Full name match is always unambiguous.
-	if entry, ok := entries[name]; ok {
-		return &modules.SearchResult{
-			Category: category,
-			Name:     name,
-			Entry:    entry,
-		}, nil
-	}
-
-	// Short name: collect all matches to detect ambiguity.
-	var matches []string
-	for entryName := range entries {
-		if idx := strings.LastIndex(entryName, "/"); idx != -1 {
-			if entryName[idx+1:] == name {
-				matches = append(matches, entryName)
-			}
-		}
-	}
-
-	switch len(matches) {
-	case 0:
-		return nil, nil
-	case 1:
-		return &modules.SearchResult{
-			Category: category,
-			Name:     matches[0],
-			Entry:    entries[matches[0]],
-		}, nil
-	default:
-		sort.Strings(matches)
-		return nil, fmt.Errorf("ambiguous %s name %q matches multiple entries: %s", category, name, strings.Join(matches, ", "))
-	}
-}
-
-func searchInstalled(cfg cue.Value, cueKey, category, query string) ([]ModuleMatch, error) {
-	results, err := modules.SearchInstalledConfig(cfg, cueKey, category, query, nil)
-	if err != nil {
-		return nil, err
-	}
-	var matches []ModuleMatch
-	for _, r := range results {
-		matches = append(matches, ModuleMatch{
-			Name:     r.Name,
-			Category: r.Category,
-			Source:   ModuleSourceInstalled,
-			Entry:    r.Entry,
-			Score:    r.MatchScore,
-		})
-	}
-	return matches, nil
-}
-
-func searchRegistryCategory(entries map[string]registry.IndexEntry, category, query string) ([]ModuleMatch, error) {
-	results, err := modules.SearchCategoryEntries(category, entries, query, nil)
-	if err != nil {
-		return nil, err
-	}
-	var matches []ModuleMatch
-	for _, r := range results {
-		matches = append(matches, ModuleMatch{
-			Name:     r.Name,
-			Category: r.Category,
-			Source:   ModuleSourceRegistry,
-			Entry:    r.Entry,
-			Score:    r.MatchScore,
-		})
-	}
-	return matches, nil
-}
-
-// mergeModuleMatches dedupes by name (installed wins) and sorts by score
-// descending, then name.
-func mergeModuleMatches(installed, reg []ModuleMatch) []ModuleMatch {
-	seen := make(map[string]bool)
-	var merged []ModuleMatch
-
-	for _, m := range installed {
-		seen[m.Name] = true
-		merged = append(merged, m)
-	}
-
-	for _, m := range reg {
-		if !seen[m.Name] {
-			merged = append(merged, m)
-		}
-	}
-
-	sort.Slice(merged, func(i, j int) bool {
-		if merged[i].Score != merged[j].Score {
-			return merged[i].Score > merged[j].Score
-		}
-		return merged[i].Name < merged[j].Name
-	})
-
-	return merged
-}
-
-// selectSingleMatch auto-selects one match, prompts on multiple (TTY), errors
-// on multiple (non-TTY), errors on zero.
-func (r *resolver) selectSingleMatch(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
-	switch len(matches) {
-	case 0:
-		return ModuleMatch{}, notFoundError(fmt.Errorf("%s %q not found", categoryType, query))
-	case 1:
-		return matches[0], nil
-	default:
-		return r.promptModuleSelection(matches, categoryType, query)
-	}
-}
-
-// promptModuleSelection prompts to select from multiple matches; in non-TTY
-// mode it returns an error listing the matches.
-func (r *resolver) promptModuleSelection(matches []ModuleMatch, categoryType, query string) (ModuleMatch, error) {
-	isTTY := isTerminal(r.stdin)
-
-	if !isTTY {
-		var names []string
-		for _, m := range matches {
-			names = append(names, m.Name)
-		}
-		return ModuleMatch{}, usageError(fmt.Errorf("ambiguous %s %q matches: %s\nSpecify exact name or run interactively",
-			categoryType, query, strings.Join(names, ", ")))
-	}
-
-	displayCount := len(matches)
-	truncated := false
-	if displayCount > maxModuleResults {
-		displayCount = maxModuleResults
-		truncated = true
-	}
-
-	fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), categoryType, query)
-
-	maxNameLen := 0
-	for i := 0; i < displayCount; i++ {
-		if len(matches[i].Name) > maxNameLen {
-			maxNameLen = len(matches[i].Name)
-		}
-	}
-
-	for i := 0; i < displayCount; i++ {
-		m := matches[i]
-		padding := strings.Repeat(" ", maxNameLen-len(m.Name)+2)
-		var sourceLabel string
-		if m.Source == ModuleSourceInstalled {
-			sourceLabel = tui.ColorInstalled.Sprint(m.Source)
-		} else {
-			sourceLabel = tui.ColorRegistry.Sprint(m.Source)
-		}
-		fmt.Fprintf(r.stdout, "  %2d. %s%s%s\n", i+1, m.Name, padding, sourceLabel)
-	}
-
-	if truncated {
-		fmt.Fprintf(r.stdout, "\nShowing %d of %d matches. Refine search for more specific results.\n",
-			displayCount, len(matches))
-	}
-
-	fmt.Fprintln(r.stdout)
-	fmt.Fprintf(r.stdout, "Select %s: ", tui.Annotate("1-%d", displayCount))
-
-	reader := bufio.NewReader(r.stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return ModuleMatch{}, fmt.Errorf("reading input: %w", err)
-	}
-	input = strings.TrimSpace(input)
-
-	if choice, err := strconv.Atoi(input); err == nil {
-		if choice >= 1 && choice <= displayCount {
-			fmt.Fprintln(r.stdout)
-			return matches[choice-1], nil
-		}
-		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
-	}
-
-	inputLower := strings.ToLower(input)
-	for i := 0; i < displayCount; i++ {
-		if strings.ToLower(matches[i].Name) == inputLower {
-			fmt.Fprintln(r.stdout)
-			return matches[i], nil
-		}
-	}
-
-	var subMatches []ModuleMatch
-	for i := 0; i < displayCount; i++ {
-		if strings.Contains(strings.ToLower(matches[i].Name), inputLower) {
-			subMatches = append(subMatches, matches[i])
-		}
-	}
-	if len(subMatches) == 1 {
-		fmt.Fprintln(r.stdout)
-		return subMatches[0], nil
-	}
-
-	return ModuleMatch{}, fmt.Errorf("invalid selection: %s", input)
 }
 
 func (r *resolver) autoInstall(client registry.Client, result modules.SearchResult) error {
@@ -624,21 +239,25 @@ func (r *resolver) autoInstall(client registry.Client, result modules.SearchResu
 
 	debugf(r.stderr, r.flags, dbgResolve, "Auto-installed %s", formatAddress(result.Category, result.Name))
 	r.didInstall = true
+	r.cfgStale = true
 	return nil
 }
 
 // ensureIndex lazily fetches the registry index, returning a nil index with nil
-// error when the registry is unavailable (graceful fallback). A fresh cache
-// (< 24h) supplies a canonical version that lets FetchIndex serve from CUE's
-// module cache without a network call; a stale or missing cache triggers a full
-// fetch and cache update.
+// error when the registry is unavailable (graceful fallback); the underlying
+// failure is recorded in r.indexErr so callers can apply the certainty split. A
+// fresh cache (< 24h) supplies a canonical version that lets FetchIndex serve
+// from CUE's module cache without a network call; a stale or missing cache
+// triggers a full fetch and cache update.
 func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
-	if r.skipRegistry {
-		return nil, nil, nil
-	}
-
+	// An injected index (didFetch set by a test) is honoured even under
+	// skipRegistry, so resolvers that pre-load an index resolve against it.
 	if r.didFetch {
 		return r.index, r.client, r.indexErr
+	}
+
+	if r.skipRegistry {
+		return nil, nil, nil
 	}
 	r.didFetch = true
 
@@ -716,5 +335,6 @@ func (r *resolver) reloadConfig(workingDir string) error {
 		return fmt.Errorf("reloading configuration: %w", err)
 	}
 	r.cfg = cfg
+	r.cfgStale = false
 	return nil
 }

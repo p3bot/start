@@ -75,7 +75,9 @@ func parseAddress(input string) (parsedAddress, error) {
 	cat := before
 	name := after
 	if describeCategoryFor(cat) == nil {
-		return parsedAddress{}, fmt.Errorf("unknown category %q (valid: %s)", cat, knownCategoriesList())
+		// A malformed category prefix is invalid input — usage (exit 2),
+		// uniform with the category-mismatch path and the list/library surfaces.
+		return parsedAddress{}, usageError(fmt.Errorf("unknown category %q (valid: %s)", cat, knownCategoriesList()))
 	}
 	return parsedAddress{Category: cat, Name: name, HasPrefix: true}, nil
 }
@@ -134,34 +136,9 @@ func runDescribe(cmd *cobra.Command, args []string) error {
 		return runDescribeListing(cmd)
 	}
 
-	query := args[0]
-	prompted := false
-	if len(query) < 3 {
-		w := cmd.OutOrStdout()
-		stdin := cmd.InOrStdin()
-		if !isTerminal(stdin) {
-			return usageError(fmt.Errorf("query must be at least 3 characters"))
-		}
-		fmt.Fprintln(w, "Query must be at least 3 characters")
-		input, err := promptSearchQuery(w, stdin)
-		if err != nil {
-			return err
-		}
-		if input == "" {
-			return nil
-		}
-		query = input
-		prompted = true
-	}
-
-	if err := runDescribeSearch(cmd, query); err != nil {
-		if prompted {
-			fmt.Fprintln(cmd.OutOrStdout(), capitalise(err.Error()))
-			return nil
-		}
-		return err
-	}
-	return nil
+	// The three-character floor lives in the resolver, exempting the exact tier;
+	// the raw argument passes straight through.
+	return runDescribeSearch(cmd, args[0])
 }
 
 func runDescribeListing(cmd *cobra.Command) error {
@@ -262,7 +239,6 @@ func runDescribeListing(cmd *cobra.Command) error {
 
 func runDescribeSearch(cmd *cobra.Command, name string) error {
 	w := cmd.OutOrStdout()
-	fmt.Fprintln(w)
 	stderr := cmd.ErrOrStderr()
 	flags := getFlags(cmd)
 	scope := scopeFromFlags(flags)
@@ -274,10 +250,17 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	}
 
 	r := newResolver(cfg, flags, w, stderr, stdin)
-	match, err := resolveCrossCategory(name, r)
+	outcome, err := r.resolveCross(name)
 	if err != nil {
 		return err
 	}
+	// Leading gap before the describe body, emitted only once resolution
+	// succeeds so a resolution error leaves no stray blank line on stdout.
+	fmt.Fprintln(w)
+	if outcome.filePath != "" {
+		return outputFileBody(w, flags, outcome.filePath)
+	}
+	match := outcome.match
 
 	// autoInstall always writes to global config, so after an install merged
 	// is the smallest scope guaranteed to see the new module. Widening is a

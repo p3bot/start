@@ -21,236 +21,154 @@ func buildTestCfg(t *testing.T, cueStr string) internalcue.LoadResult {
 	return internalcue.LoadResult{Value: v}
 }
 
-func TestFindExactInstalledName(t *testing.T) {
-	t.Parallel()
+// newTestResolver creates a resolver that skips registry access. With no index
+// fetched and no index error recorded, an unmatched name resolves to not-found
+// (the index-reachable certainty branch).
+func newTestResolver(cfg internalcue.LoadResult) *resolver {
+	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
+	r.skipRegistry = true
+	return r
+}
 
-	cfg := buildTestCfg(t, `{
-		agents: {
-			claude: {
-				bin: "claude"
-				command: "{{.bin}}"
-			}
-			"gemini-non-interactive": {
-				bin: "gemini"
-				command: "{{.bin}}"
-			}
-		}
-		roles: {
-			"golang/assistant": {
-				prompt: "You are a Go expert"
-			}
-		}
-		tasks: {
-			"review/git-diff": {
-				prompt: "Review the git diff"
-			}
-			"review/code": {
-				prompt: "Review code"
-			}
-			"standalone": {
-				prompt: "A standalone task"
-			}
-		}
-		contexts: {
-			env: {
-				required: true
-				prompt: "environment"
-			}
-		}
-	}`)
+// newResolverWithIndex injects a pre-fetched index so resolution runs offline
+// against installed config plus the supplied registry entries.
+func newResolverWithIndex(cfg internalcue.LoadResult, index *registry.Index) *resolver {
+	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
+	r.didFetch = true
+	r.index = index
+	return r
+}
+
+func TestNameMatches(t *testing.T) {
+	t.Parallel()
 
 	tests := []struct {
-		name      string
-		cueKey    string
-		moduleKey string
-		wantName  string
-		wantErr   bool
+		query, candidate string
+		mode             matchMode
+		want             bool
 	}{
-		{"exact agent match", internalcue.KeyAgents, "claude", "claude", false},
-		{"exact agent with hyphen", internalcue.KeyAgents, "gemini-non-interactive", "gemini-non-interactive", false},
-		{"partial agent no match", internalcue.KeyAgents, "clau", "", false},
-		{"nonexistent agent", internalcue.KeyAgents, "nonexistent", "", false},
-		{"exact role full name", internalcue.KeyRoles, "golang/assistant", "golang/assistant", false},
-		{"role short name match", internalcue.KeyRoles, "assistant", "golang/assistant", false},
-		{"partial role no match", internalcue.KeyRoles, "golang", "", false},
-		{"exact context match", internalcue.KeyContexts, "env", "env", false},
-		{"missing category", "missing", "anything", "", false},
-		{"task short name match", internalcue.KeyTasks, "git-diff", "review/git-diff", false},
-		{"task exact full name", internalcue.KeyTasks, "review/code", "review/code", false},
-		{"task standalone exact", internalcue.KeyTasks, "standalone", "standalone", false},
+		{"review", "review", modeExact, true},
+		{"Review", "review", modeExact, true}, // case-insensitive
+		{"review", "start/review", modeExact, false},
+		{"review", "start/review", modeSubstring, true},
+		{"foo/bar", "foofoo/barbar", modeSubstring, true}, // slash is literal
+		{"review", "jira/item/review", modePrefix, false},
+		{"jira", "jira/item/review", modePrefix, true},
+		{"jira", "JIRA/item/review", modePrefix, true},
 	}
-
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := findExactInstalledName(cfg.Value, tt.cueKey, tt.moduleKey)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("findExactInstalledName(%q, %q) expected error, got nil", tt.cueKey, tt.moduleKey)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("findExactInstalledName(%q, %q) unexpected error: %v", tt.cueKey, tt.moduleKey, err)
-			}
-			if got != tt.wantName {
-				t.Errorf("findExactInstalledName(%q, %q) = %q, want %q", tt.cueKey, tt.moduleKey, got, tt.wantName)
-			}
-		})
-	}
-}
-
-func TestFindExactInstalledName_Ambiguous(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		tasks: {
-			"review/debug": {
-				prompt: "Review debug"
-			}
-			"golang/debug": {
-				prompt: "Debug Go code"
-			}
+		if got := nameMatches(tt.query, tt.candidate, tt.mode); got != tt.want {
+			t.Errorf("nameMatches(%q, %q, %v) = %v, want %v", tt.query, tt.candidate, tt.mode, got, tt.want)
 		}
-	}`)
-
-	_, err := findExactInstalledName(cfg.Value, internalcue.KeyTasks, "debug")
-	if err == nil {
-		t.Error("expected ambiguity error, got nil")
-	}
-	if !strings.Contains(err.Error(), "ambiguous") {
-		t.Errorf("expected ambiguity error, got: %v", err)
 	}
 }
 
-func TestFindExactInRegistry(t *testing.T) {
-	t.Parallel()
-
-	entries := map[string]registry.IndexEntry{
-		"golang/assistant": {
-			Module:      "github.com/test/roles/golang/assistant@v0",
-			Description: "Go programming expert",
-		},
-		"python/debug": {
-			Module:      "github.com/test/roles/python/debug@v0",
-			Description: "Python debugger",
-		},
-	}
-
-	tests := []struct {
-		name     string
-		query    string
-		wantName string
-		wantNil  bool
-	}{
-		{"full name match", "golang/assistant", "golang/assistant", false},
-		{"short name match", "assistant", "golang/assistant", false},
-		{"no match", "nonexistent", "", true},
-		{"partial no match", "gol", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := findExactInRegistry(entries, "roles", tt.query)
-			if err != nil {
-				t.Fatalf("findExactInRegistry(%q) unexpected error: %v", tt.query, err)
-			}
-			if tt.wantNil {
-				if result != nil {
-					t.Errorf("findExactInRegistry(%q) = %v, want nil", tt.query, result)
-				}
-				return
-			}
-			if result == nil {
-				t.Fatalf("findExactInRegistry(%q) = nil, want %q", tt.query, tt.wantName)
-				return
-			}
-			if result.Name != tt.wantName {
-				t.Errorf("findExactInRegistry(%q).Name = %q, want %q", tt.query, result.Name, tt.wantName)
-			}
-		})
-	}
-}
-
-func TestFindExactInRegistryAmbiguous(t *testing.T) {
-	t.Parallel()
-
-	entries := map[string]registry.IndexEntry{
-		"golang/assistant": {
-			Module:      "github.com/test/roles/golang/assistant@v0",
-			Description: "Go programming expert",
-		},
-		"python/assistant": {
-			Module:      "github.com/test/roles/python/assistant@v0",
-			Description: "Python programming expert",
-		},
-	}
-
-	// Short name "assistant" matches both entries
-	result, err := findExactInRegistry(entries, "roles", "assistant")
-	if err == nil {
-		t.Fatal("findExactInRegistry(\"assistant\") expected ambiguity error, got nil")
-	}
-	if result != nil {
-		t.Errorf("findExactInRegistry(\"assistant\") result = %v, want nil", result)
-	}
-
-	// Full name is unambiguous
-	result, err = findExactInRegistry(entries, "roles", "golang/assistant")
-	if err != nil {
-		t.Fatalf("findExactInRegistry(\"golang/assistant\") unexpected error: %v", err)
-	}
-	if result == nil || result.Name != "golang/assistant" {
-		t.Errorf("findExactInRegistry(\"golang/assistant\") = %v, want golang/assistant", result)
-	}
-}
-
-func TestMergeModuleMatches(t *testing.T) {
+func TestMergeMatches(t *testing.T) {
 	t.Parallel()
 
 	installed := []ModuleMatch{
-		{Name: "claude", Category: "agents", Source: ModuleSourceInstalled, Score: 3},
-		{Name: "gemini", Category: "agents", Source: ModuleSourceInstalled, Score: 3},
+		{Name: "claude", Category: "agents", Source: ModuleSourceInstalled},
+		{Name: "gemini", Category: "agents", Source: ModuleSourceInstalled},
 	}
 	reg := []ModuleMatch{
-		{Name: "claude", Category: "agents", Source: ModuleSourceRegistry, Score: 5},
-		{Name: "openai", Category: "agents", Source: ModuleSourceRegistry, Score: 3},
-		{Name: "copilot", Category: "agents", Source: ModuleSourceRegistry, Score: 1},
+		{Name: "claude", Category: "agents", Source: ModuleSourceRegistry}, // dup, installed wins
+		{Name: "openai", Category: "agents", Source: ModuleSourceRegistry},
 	}
 
-	merged := mergeModuleMatches(installed, reg)
-
-	if len(merged) != 4 {
-		t.Fatalf("mergeModuleMatches returned %d results, want 4", len(merged))
+	merged := mergeMatches(installed, reg)
+	if len(merged) != 3 {
+		t.Fatalf("mergeMatches returned %d, want 3 (claude de-duplicated)", len(merged))
 	}
-
+	// Installed entries sort before registry entries.
+	if merged[0].Source != ModuleSourceInstalled || merged[1].Source != ModuleSourceInstalled {
+		t.Errorf("installed matches should sort first, got %+v", merged)
+	}
+	if merged[2].Name != "openai" || merged[2].Source != ModuleSourceRegistry {
+		t.Errorf("registry-only match should sort last, got %+v", merged[2])
+	}
 	for _, m := range merged {
 		if m.Name == "claude" && m.Source != ModuleSourceInstalled {
 			t.Errorf("claude should be from installed, got %q", m.Source)
 		}
 	}
-
-	for i := 1; i < len(merged); i++ {
-		if merged[i-1].Score < merged[i].Score {
-			t.Errorf("results not sorted by score: %d < %d at positions %d,%d",
-				merged[i-1].Score, merged[i].Score, i-1, i)
-		}
-	}
 }
 
-func TestMergeModuleMatches_Empty(t *testing.T) {
+func TestMergeMatches_Empty(t *testing.T) {
 	t.Parallel()
-
-	merged := mergeModuleMatches(nil, nil)
-	if len(merged) != 0 {
-		t.Errorf("expected 0 results for empty inputs, got %d", len(merged))
+	if got := mergeMatches(nil, nil); len(got) != 0 {
+		t.Errorf("expected 0 results for empty inputs, got %d", len(got))
 	}
 }
 
-// newTestResolver creates a resolver that skips registry access.
-func newTestResolver(cfg internalcue.LoadResult) *resolver {
-	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	r.skipRegistry = true
-	return r
+// TestMatchByTypedName_CrossCategoryTwin verifies the typed-selection precedence
+// on a cross-category menu: a full category:name label disambiguates twins,
+// while a bare name shared by two twins is rejected as ambiguous rather than
+// silently resolving the first.
+func TestMatchByTypedName_CrossCategoryTwin(t *testing.T) {
+	t.Parallel()
+	scope := crossCategoryScope()
+	shown := []ModuleMatch{
+		{Name: "claude", Category: "agents", Source: ModuleSourceInstalled},
+		{Name: "claude", Category: "roles", Source: ModuleSourceInstalled},
+	}
+
+	if _, err := matchByTypedName(shown, scope, "claude"); err == nil {
+		t.Error("bare name matching two cross-category twins should be ambiguous, not silently resolved")
+	}
+
+	m, err := matchByTypedName(shown, scope, "agents:claude")
+	if err != nil {
+		t.Fatalf("exact label should resolve, got: %v", err)
+	}
+	if m.Category != "agents" || m.Name != "claude" {
+		t.Errorf("matchByTypedName = %+v, want agents:claude", m)
+	}
+}
+
+// TestMatchByTypedName_UniqueBareNameWinsOverSubstring verifies an exact bare
+// name that is unique among the shown entries beats a substring match.
+func TestMatchByTypedName_UniqueBareNameWinsOverSubstring(t *testing.T) {
+	t.Parallel()
+	scope := crossCategoryScope()
+	shown := []ModuleMatch{
+		{Name: "claude", Category: "agents", Source: ModuleSourceInstalled},
+		{Name: "claude-expert", Category: "roles", Source: ModuleSourceInstalled},
+	}
+
+	m, err := matchByTypedName(shown, scope, "claude")
+	if err != nil {
+		t.Fatalf("unique exact bare name should win over substring, got: %v", err)
+	}
+	if m.Name != "claude" || m.Category != "agents" {
+		t.Errorf("matchByTypedName = %+v, want agents:claude", m)
+	}
+}
+
+// TestResolve_ShortNameFloorCertainty asserts the floor's certainty split: a
+// short, unmatched name is a usage error when the index is reachable (absence
+// confirmed), and a transient error when it is unreachable (absence cannot be
+// confirmed), mirroring the fallback tier.
+func TestResolve_ShortNameFloorCertainty(t *testing.T) {
+	t.Parallel()
+	cfg := buildTestCfg(t, `{ agents: { claude: { bin: "claude", command: "{{.bin}}" } } }`)
+
+	t.Run("reachable index -> usage", func(t *testing.T) {
+		r := newResolverWithIndex(cfg, &registry.Index{})
+		_, err := r.resolve("xy", crossCategoryScope())
+		if got := ExitCodeFromError(err); got != ExitUsage {
+			t.Errorf("exit code = %d, want %d (usage)", got, ExitUsage)
+		}
+	})
+
+	t.Run("unreachable index -> transient", func(t *testing.T) {
+		r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
+		r.didFetch = true
+		r.indexErr = &registry.FetchError{Kind: registry.FetchTransient, Op: "fetch", Path: "x", Err: io.EOF}
+		_, err := r.resolve("xy", crossCategoryScope())
+		if got := ExitCodeFromError(err); got != ExitTransient {
+			t.Errorf("exit code = %d, want %d (transient)", got, ExitTransient)
+		}
+	})
 }
 
 func TestResolveAgent_ExactMatch(t *testing.T) {
@@ -258,10 +176,7 @@ func TestResolveAgent_ExactMatch(t *testing.T) {
 
 	cfg := buildTestCfg(t, `{
 		agents: {
-			claude: {
-				bin: "claude"
-				command: "{{.bin}}"
-			}
+			claude: { bin: "claude", command: "{{.bin}}" }
 		}
 	}`)
 
@@ -280,11 +195,7 @@ func TestResolveAgent_SubstringMatch(t *testing.T) {
 
 	cfg := buildTestCfg(t, `{
 		agents: {
-			"gemini-non-interactive": {
-				description: "Google Gemini agent"
-				bin: "gemini"
-				command: "{{.bin}}"
-			}
+			"gemini-non-interactive": { description: "Google Gemini agent", bin: "gemini", command: "{{.bin}}" }
 		}
 	}`)
 
@@ -301,15 +212,7 @@ func TestResolveAgent_SubstringMatch(t *testing.T) {
 func TestResolveAgent_NoMatch(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{
-		agents: {
-			claude: {
-				bin: "claude"
-				command: "{{.bin}}"
-			}
-		}
-	}`)
-
+	cfg := buildTestCfg(t, `{ agents: { claude: { bin: "claude", command: "{{.bin}}" } } }`)
 	r := newTestResolver(cfg)
 	_, err := r.resolveAgent("nonexistent")
 	if err == nil {
@@ -318,6 +221,9 @@ func TestResolveAgent_NoMatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error = %q, want containing 'not found'", err.Error())
 	}
+	if got := ExitCodeFromError(err); got != ExitNotFound {
+		t.Errorf("exit code = %d, want %d (not-found)", got, ExitNotFound)
+	}
 }
 
 func TestResolveAgent_MultipleMatches_NonTTY(t *testing.T) {
@@ -325,16 +231,8 @@ func TestResolveAgent_MultipleMatches_NonTTY(t *testing.T) {
 
 	cfg := buildTestCfg(t, `{
 		agents: {
-			"claude-code": {
-				description: "Claude for coding"
-				bin: "claude"
-				command: "{{.bin}}"
-			}
-			"claude-chat": {
-				description: "Claude for chatting"
-				bin: "claude"
-				command: "{{.bin}}"
-			}
+			"claude-code": { description: "Claude for coding", bin: "claude", command: "{{.bin}}" }
+			"claude-chat": { description: "Claude for chatting", bin: "claude", command: "{{.bin}}" }
 		}
 	}`)
 
@@ -346,19 +244,20 @@ func TestResolveAgent_MultipleMatches_NonTTY(t *testing.T) {
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
 	}
-	if !strings.Contains(err.Error(), "claude-code") {
-		t.Errorf("error should list claude-code: %v", err)
+	for _, want := range []string{"claude-code", "claude-chat"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should list %q: %v", want, err)
+		}
 	}
-	if !strings.Contains(err.Error(), "claude-chat") {
-		t.Errorf("error should list claude-chat: %v", err)
+	if got := ExitCodeFromError(err); got != ExitUsage {
+		t.Errorf("exit code = %d, want %d (usage)", got, ExitUsage)
 	}
 }
 
 func TestResolveAgent_Empty(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{agents: {}}`)
-	r := newTestResolver(cfg)
+	r := newTestResolver(buildTestCfg(t, `{agents: {}}`))
 	name, err := r.resolveAgent("")
 	if err != nil {
 		t.Fatalf("resolveAgent('') error = %v", err)
@@ -368,17 +267,73 @@ func TestResolveAgent_Empty(t *testing.T) {
 	}
 }
 
+// TestResolveAgent_FilePathRejected verifies --agent rejects a filesystem path:
+// an agent is a structured configuration, not a document body.
+func TestResolveAgent_FilePathRejected(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{agents: {}}`))
+	for _, path := range []string{"./agent.cue", "/tmp/agent.cue", "~/agent.cue"} {
+		_, err := r.resolveAgent(path)
+		if err == nil {
+			t.Fatalf("resolveAgent(%q) expected error for file path", path)
+		}
+		if got := ExitCodeFromError(err); got != ExitUsage {
+			t.Errorf("resolveAgent(%q) exit code = %d, want %d (usage)", path, got, ExitUsage)
+		}
+	}
+}
+
+func TestResolveAgent_PrefixMatching(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{ agents: { claude: { bin: "claude", command: "{{.bin}}" } } }`)
+	r := newTestResolver(cfg)
+	got, err := r.resolveAgent("agents:claude")
+	if err != nil {
+		t.Fatalf("resolveAgent(agents:claude) error: %v", err)
+	}
+	if got != "claude" {
+		t.Errorf("resolveAgent = %q, want %q", got, "claude")
+	}
+}
+
+func TestResolveAgent_PrefixMismatchError(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{}`))
+	_, err := r.resolveAgent("roles:assistant")
+	if err == nil {
+		t.Fatal("expected mismatch error from --agent receiving a roles: address")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "agents") || !strings.Contains(msg, "roles") {
+		t.Errorf("error should name both expected and given category, got: %v", err)
+	}
+	if got := ExitCodeFromError(err); got != ExitUsage {
+		t.Errorf("exit code = %d, want %d (usage)", got, ExitUsage)
+	}
+}
+
+func TestResolveAgent_UnknownPrefixError(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(buildTestCfg(t, `{}`))
+	_, err := r.resolveAgent("foo:bar")
+	if err == nil {
+		t.Fatal("expected unknown-category error")
+	}
+	if !strings.Contains(err.Error(), "unknown category") {
+		t.Errorf("error should mention 'unknown category', got: %v", err)
+	}
+	if got := ExitCodeFromError(err); got != ExitUsage {
+		t.Errorf("exit code = %d, want %d (usage)", got, ExitUsage)
+	}
+}
+
 func TestResolveRole_ExactMatch(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{
-		roles: {
-			"golang/assistant": {
-				prompt: "You are a Go expert"
-			}
-		}
-	}`)
-
+	cfg := buildTestCfg(t, `{ roles: { "golang/assistant": { prompt: "You are a Go expert" } } }`)
 	r := newTestResolver(cfg)
 	name, err := r.resolveRole("golang/assistant")
 	if err != nil {
@@ -392,11 +347,8 @@ func TestResolveRole_ExactMatch(t *testing.T) {
 func TestResolveRole_FilePathBypass(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{roles: {}}`)
-	r := newTestResolver(cfg)
-
-	tests := []string{"./my-role.md", "/tmp/role.md", "~/roles/test.md"}
-	for _, path := range tests {
+	r := newTestResolver(buildTestCfg(t, `{roles: {}}`))
+	for _, path := range []string{"./my-role.md", "/tmp/role.md", "~/roles/test.md"} {
 		t.Run(path, func(t *testing.T) {
 			name, err := r.resolveRole(path)
 			if err != nil {
@@ -409,20 +361,14 @@ func TestResolveRole_FilePathBypass(t *testing.T) {
 	}
 }
 
+// TestResolveRole_SubstringMatch verifies a former "short name" now resolves by
+// substring fallback: "assistant" matches "golang/assistant".
 func TestResolveRole_SubstringMatch(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{
-		roles: {
-			"golang/assistant": {
-				description: "Go programming expert"
-				prompt: "You are a Go expert"
-			}
-		}
-	}`)
-
+	cfg := buildTestCfg(t, `{ roles: { "golang/assistant": { prompt: "You are a Go expert" } } }`)
 	r := newTestResolver(cfg)
-	name, err := r.resolveRole("golang")
+	name, err := r.resolveRole("assistant")
 	if err != nil {
 		t.Fatalf("resolveRole() error = %v", err)
 	}
@@ -431,137 +377,230 @@ func TestResolveRole_SubstringMatch(t *testing.T) {
 	}
 }
 
-func TestResolveModelName_ExactMatch(t *testing.T) {
+// TestResolveModule_ExactWinsOverSubstring asserts the exact-match-wins rule: an
+// exact whole name that is also a substring of longer names resolves directly,
+// even without a TTY, with no menu.
+func TestResolveModule_ExactWinsOverSubstring(t *testing.T) {
 	t.Parallel()
 
-	agent := orchestration.Agent{
-		Models: map[string]string{
-			"sonnet": "claude-sonnet-4-5",
-			"opus":   "claude-opus-4-6",
-			"haiku":  "claude-haiku-4-5",
-		},
-	}
+	cfg := buildTestCfg(t, `{
+		roles: {
+			"review": { prompt: "General review" }
+			"start/review": { prompt: "Start review" }
+			"gitlab/pipeline/review": { prompt: "Pipeline review" }
+		}
+	}`)
 
-	r := newTestResolver(internalcue.LoadResult{})
-	name := r.resolveModelName("sonnet", agent)
-	if name != "sonnet" {
-		t.Errorf("resolveModelName() = %q, want %q", name, "sonnet")
+	r := newTestResolver(cfg)
+	name, err := r.resolveRole("review")
+	if err != nil {
+		t.Fatalf("resolveRole(review) error = %v (exact match must win)", err)
+	}
+	if name != "review" {
+		t.Errorf("resolveRole(review) = %q, want %q", name, "review")
 	}
 }
 
-func TestResolveModelName_SubstringMatch(t *testing.T) {
-	t.Parallel()
-
-	agent := orchestration.Agent{
-		Models: map[string]string{
-			"sonnet": "claude-sonnet-4-5",
-			"opus":   "claude-opus-4-6",
-			"haiku":  "claude-haiku-4-5",
-		},
-	}
-
-	r := newTestResolver(internalcue.LoadResult{})
-	name := r.resolveModelName("son", agent)
-	if name != "sonnet" {
-		t.Errorf("resolveModelName() = %q, want %q", name, "sonnet")
-	}
-}
-
-func TestResolveModelName_Passthrough(t *testing.T) {
-	t.Parallel()
-
-	agent := orchestration.Agent{
-		Models: map[string]string{
-			"sonnet": "claude-sonnet-4-5",
-		},
-	}
-
-	r := newTestResolver(internalcue.LoadResult{})
-	name := r.resolveModelName("gpt-4o", agent)
-	if name != "gpt-4o" {
-		t.Errorf("resolveModelName() = %q, want %q (passthrough)", name, "gpt-4o")
-	}
-}
-
-func TestResolveModelName_MultipleMatches_Passthrough(t *testing.T) {
-	t.Parallel()
-
-	agent := orchestration.Agent{
-		Models: map[string]string{
-			"sonnet-4":   "claude-sonnet-4",
-			"sonnet-4-5": "claude-sonnet-4-5",
-		},
-	}
-
-	r := newTestResolver(internalcue.LoadResult{})
-	name := r.resolveModelName("sonnet", agent)
-	if name != "sonnet" {
-		t.Errorf("resolveModelName() = %q, want %q (passthrough on multiple)", name, "sonnet")
-	}
-}
-
-func TestResolveModelName_NilModels(t *testing.T) {
-	t.Parallel()
-
-	agent := orchestration.Agent{}
-	r := newTestResolver(internalcue.LoadResult{})
-	name := r.resolveModelName("sonnet", agent)
-	if name != "sonnet" {
-		t.Errorf("resolveModelName() = %q, want %q (passthrough)", name, "sonnet")
-	}
-}
-
-func TestResolveModelName_Empty(t *testing.T) {
-	t.Parallel()
-
-	agent := orchestration.Agent{
-		Models: map[string]string{"sonnet": "claude-sonnet"},
-	}
-	r := newTestResolver(internalcue.LoadResult{})
-	name := r.resolveModelName("", agent)
-	if name != "" {
-		t.Errorf("resolveModelName('') = %q, want empty", name)
-	}
-}
-
-// TestResolveModelName_ObjectFormAgent chains ExtractAgent with resolveModelName
-// to prove --model resolution works against an object-form agent loaded from CUE.
-// The overlapping Models[...] assertions split failure attribution between
-// extractAgentFields and resolveModelName; do not collapse them.
-func TestResolveModelName_ObjectFormAgent(t *testing.T) {
+// TestResolveModule_ExactWinsAgent verifies the same for --agent.
+func TestResolveModule_ExactWinsAgent(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{
 		agents: {
-			objform: {
-				bin: "objform"
-				command: "{{.bin}} --model {{.model}}"
-				default_model: "sonnet"
-				models: {
-					sonnet: { id: "obj-sonnet-id" }
-					opus:   { id: "obj-opus-id" }
-				}
+			"claude": { bin: "claude", command: "{{.bin}}" }
+			"claude-code": { bin: "claude", command: "{{.bin}}" }
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+	name, err := r.resolveAgent("claude")
+	if err != nil {
+		t.Fatalf("resolveAgent(claude) error = %v (exact match must win)", err)
+	}
+	if name != "claude" {
+		t.Errorf("resolveAgent(claude) = %q, want %q", name, "claude")
+	}
+}
+
+// TestResolveModule_ThreeCharFloor verifies the floor rejects a short fallback
+// query while the exact tier remains exempt.
+func TestResolveModule_ThreeCharFloor(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		roles: {
+			"ci": { prompt: "CI role" }
+			"review": { prompt: "Review role" }
+		}
+	}`)
+
+	r := newTestResolver(cfg)
+
+	// "rv" is not an exact name and is under three characters -> rejected.
+	if _, err := r.resolveRole("rv"); err == nil {
+		t.Error("resolveRole(rv) expected too-short error")
+	} else if got := ExitCodeFromError(err); got != ExitUsage {
+		t.Errorf("resolveRole(rv) exit code = %d, want %d (usage)", got, ExitUsage)
+	}
+
+	// "ci" is a complete name, matched by the exact tier despite being two chars.
+	name, err := r.resolveRole("ci")
+	if err != nil {
+		t.Fatalf("resolveRole(ci) error = %v (exact tier is floor-exempt)", err)
+	}
+	if name != "ci" {
+		t.Errorf("resolveRole(ci) = %q, want %q", name, "ci")
+	}
+
+	// "roles:ci" resolves via the exact tier despite the two-character name.
+	name, err = r.resolveRole("roles:ci")
+	if err != nil {
+		t.Fatalf("resolveRole(roles:ci) error = %v", err)
+	}
+	if name != "ci" {
+		t.Errorf("resolveRole(roles:ci) = %q, want %q", name, "ci")
+	}
+}
+
+// TestResolveModule_PrefixVsSubstring distinguishes the qualified prefix mode
+// from the bare substring mode: they return different sets.
+func TestResolveModule_PrefixVsSubstring(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		roles: {
+			"review/code": { prompt: "Review code" }
+			"jira/item/review": { prompt: "Jira review" }
+		}
+	}`)
+
+	// Bare "review" is a substring search: matches both, ambiguous (non-TTY).
+	r := newTestResolver(cfg)
+	if _, err := r.resolveRole("review"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("resolveRole(review) substring should be ambiguous, got: %v", err)
+	}
+
+	// "roles:review" is a prefix search: matches only review/code.
+	r = newTestResolver(cfg)
+	name, err := r.resolveRole("roles:review")
+	if err != nil {
+		t.Fatalf("resolveRole(roles:review) error = %v", err)
+	}
+	if name != "review/code" {
+		t.Errorf("resolveRole(roles:review) = %q, want %q (prefix excludes jira/item/review)", name, "review/code")
+	}
+}
+
+// TestResolveModule_NameOnly verifies resolution targets the name only: a query
+// matching only a description or tag is not found.
+func TestResolveModule_NameOnly(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		roles: {
+			"golang/assistant": {
+				description: "An expert debugger for tricky problems"
+				tags: ["troubleshooting"]
+				prompt: "You are a Go expert"
 			}
 		}
 	}`)
 
-	agent, err := orchestration.ExtractAgent(cfg.Value, "objform")
-	if err != nil {
-		t.Fatalf("ExtractAgent: %v", err)
+	r := newTestResolver(cfg)
+	for _, q := range []string{"debugger", "troubleshooting"} {
+		if _, err := r.resolveRole(q); err == nil {
+			t.Errorf("resolveRole(%q) should be not-found (name-only match), got nil", q)
+		} else if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("resolveRole(%q) error = %v, want not-found", q, err)
+		}
 	}
-	if got := agent.Models["sonnet"]; got != "obj-sonnet-id" {
-		t.Errorf("Models[sonnet] = %q, want %q", got, "obj-sonnet-id")
-	}
-	if got := agent.Models["opus"]; got != "obj-opus-id" {
-		t.Errorf("Models[opus] = %q, want %q", got, "obj-opus-id")
-	}
+}
 
-	r := newTestResolver(internalcue.LoadResult{})
-	if got := r.resolveModelName("sonnet", agent); got != "sonnet" {
-		t.Errorf("resolveModelName(\"sonnet\") = %q, want %q (exact)", got, "sonnet")
+// TestResolveModule_Certainty asserts the exit-code split: an uninstalled name
+// is not-found when the index is reachable, transient when it is unreachable,
+// and an installed name resolves regardless.
+func TestResolveModule_Certainty(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{ roles: { "golang/assistant": { prompt: "Go" } } }`)
+
+	t.Run("reachable index, no match -> not found", func(t *testing.T) {
+		r := newResolverWithIndex(cfg, &registry.Index{}) // reachable but empty
+		_, err := r.resolveRole("missing-role")
+		if err == nil {
+			t.Fatal("expected not-found error")
+		}
+		if got := ExitCodeFromError(err); got != ExitNotFound {
+			t.Errorf("exit code = %d, want %d (not-found)", got, ExitNotFound)
+		}
+	})
+
+	t.Run("unreachable index, no match -> transient", func(t *testing.T) {
+		r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
+		r.didFetch = true
+		r.index = nil
+		r.indexErr = &registry.FetchError{Kind: registry.FetchTransient, Op: "fetch", Path: "x", Err: io.EOF}
+		_, err := r.resolveRole("missing-role")
+		if err == nil {
+			t.Fatal("expected transient error")
+		}
+		if got := ExitCodeFromError(err); got != ExitTransient {
+			t.Errorf("exit code = %d, want %d (transient)", got, ExitTransient)
+		}
+	})
+
+	t.Run("installed name resolves despite unreachable index", func(t *testing.T) {
+		r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
+		r.didFetch = true
+		r.index = nil
+		r.indexErr = &registry.FetchError{Kind: registry.FetchTransient, Op: "fetch", Path: "x", Err: io.EOF}
+		name, err := r.resolveRole("golang/assistant")
+		if err != nil {
+			t.Fatalf("installed exact must resolve offline, got: %v", err)
+		}
+		if name != "golang/assistant" {
+			t.Errorf("resolveRole = %q, want %q", name, "golang/assistant")
+		}
+	})
+}
+
+// TestResolveModule_RegistryOnlyExactInstalls verifies a registry-only exact
+// name reaches the install path (which fails here because the client is nil,
+// proving the path executed) rather than being reported not-found.
+func TestResolveModule_RegistryOnlyExactInstalls(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{ roles: {} }`)
+	r := newResolverWithIndex(cfg, &registry.Index{
+		Roles: map[string]registry.IndexEntry{
+			"golang/assistant": {Module: "github.com/test/roles/golang/assistant@v0"},
+		},
+	})
+
+	_, err := r.resolveRole("golang/assistant")
+	if err == nil {
+		t.Fatal("expected install attempt for registry-only exact")
 	}
-	if got := r.resolveModelName("son", agent); got != "sonnet" {
-		t.Errorf("resolveModelName(\"son\") = %q, want %q (substring)", got, "sonnet")
+	if !strings.Contains(err.Error(), "registry client unavailable") {
+		t.Errorf("error = %q, want install path reached", err.Error())
+	}
+}
+
+// TestResolveModule_InstalledExactSkipsRegistry verifies a category-specific
+// surface resolves a lone installed exact without consulting the registry: with
+// skipRegistry on, any registry consultation would yield nothing, so the exact
+// must come from installed config alone.
+func TestResolveModule_InstalledExactSkipsRegistry(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{ roles: { "golang/assistant": { prompt: "Go" } } }`)
+	r := newTestResolver(cfg)
+	name, err := r.resolveRole("golang/assistant")
+	if err != nil {
+		t.Fatalf("resolveRole() error = %v", err)
+	}
+	if name != "golang/assistant" {
+		t.Errorf("resolveRole() = %q, want %q", name, "golang/assistant")
 	}
 }
 
@@ -570,14 +609,8 @@ func TestResolveContexts_ExactName(t *testing.T) {
 
 	cfg := buildTestCfg(t, `{
 		contexts: {
-			env: {
-				required: true
-				prompt: "environment"
-			}
-			project: {
-				default: true
-				prompt: "project info"
-			}
+			env: { required: true, prompt: "environment" }
+			project: { default: true, prompt: "project info" }
 		}
 	}`)
 
@@ -594,8 +627,7 @@ func TestResolveContexts_ExactName(t *testing.T) {
 func TestResolveContexts_FilePathBypass(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{contexts: {}}`)
-	r := newTestResolver(cfg)
+	r := newTestResolver(buildTestCfg(t, `{contexts: {}}`))
 	resolved, err := r.resolveContexts([]string{"./docs/guide.md"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -608,8 +640,7 @@ func TestResolveContexts_FilePathBypass(t *testing.T) {
 func TestResolveContexts_DefaultPassthrough(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{contexts: {}}`)
-	r := newTestResolver(cfg)
+	r := newTestResolver(buildTestCfg(t, `{contexts: {}}`))
 	resolved, err := r.resolveContexts([]string{"default"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -619,16 +650,12 @@ func TestResolveContexts_DefaultPassthrough(t *testing.T) {
 	}
 }
 
-func TestResolveContexts_SearchMatch(t *testing.T) {
+func TestResolveContexts_SubstringMatch(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{
 		contexts: {
-			"golang-env": {
-				description: "Go development environment"
-				tags: ["golang", "development"]
-				prompt: "Go env context"
-			}
+			"golang-env": { description: "Go development environment", tags: ["golang"], prompt: "Go env context" }
 		}
 	}`)
 
@@ -642,24 +669,46 @@ func TestResolveContexts_SearchMatch(t *testing.T) {
 	}
 }
 
-func TestResolveContexts_NoMatchPassthrough(t *testing.T) {
+// TestResolveContexts_NotFoundError verifies an explicit term that matches
+// nothing is a not-found error (no pass-through).
+func TestResolveContexts_NotFoundError(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{ contexts: { env: { prompt: "environment" } } }`)
+	r := newTestResolver(cfg)
+	_, err := r.resolveContexts([]string{"nonexistent"})
+	if err == nil {
+		t.Fatal("expected not-found error for unresolved context term")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error = %q, want containing 'not found'", err.Error())
+	}
+	if got := ExitCodeFromError(err); got != ExitNotFound {
+		t.Errorf("exit code = %d, want %d (not-found)", got, ExitNotFound)
+	}
+}
+
+// TestResolveContexts_NameOnly verifies a term matching only a tag is not found:
+// the score threshold and multi-select behaviour are gone.
+func TestResolveContexts_NameOnly(t *testing.T) {
 	t.Parallel()
 
 	cfg := buildTestCfg(t, `{
 		contexts: {
-			env: {
-				prompt: "environment"
-			}
+			env: { prompt: "basic environment" }
+			"golang-env": { description: "Go development environment", tags: ["golang"], prompt: "Go env" }
 		}
 	}`)
 
+	// "golang" matches the name "golang-env" only (the tag on golang-env is not a
+	// resolution dimension), so it resolves to that single context.
 	r := newTestResolver(cfg)
-	resolved, err := r.resolveContexts([]string{"nonexistent"})
+	resolved, err := r.resolveContexts([]string{"golang"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resolved) != 1 || resolved[0] != "nonexistent" {
-		t.Errorf("resolveContexts([nonexistent]) = %v, want [nonexistent]", resolved)
+	if len(resolved) != 1 || resolved[0] != "golang-env" {
+		t.Errorf("resolveContexts([golang]) = %v, want [golang-env]", resolved)
 	}
 }
 
@@ -668,15 +717,8 @@ func TestResolveContexts_Mixed(t *testing.T) {
 
 	cfg := buildTestCfg(t, `{
 		contexts: {
-			env: {
-				required: true
-				prompt: "environment"
-			}
-			"golang-env": {
-				description: "Go development environment"
-				tags: ["golang"]
-				prompt: "Go env"
-			}
+			env: { required: true, prompt: "environment" }
+			"golang-env": { description: "Go development environment", tags: ["golang"], prompt: "Go env" }
 		}
 	}`)
 
@@ -685,353 +727,21 @@ func TestResolveContexts_Mixed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resolved) != 3 {
-		t.Fatalf("resolveContexts() returned %d items, want 3: %v", len(resolved), resolved)
+	want := []string{"./custom.md", "default", "env"}
+	if len(resolved) != len(want) {
+		t.Fatalf("resolveContexts() returned %d items, want %d: %v", len(resolved), len(want), resolved)
 	}
-	if resolved[0] != "./custom.md" {
-		t.Errorf("resolved[0] = %q, want %q", resolved[0], "./custom.md")
-	}
-	if resolved[1] != "default" {
-		t.Errorf("resolved[1] = %q, want %q", resolved[1], "default")
-	}
-	if resolved[2] != "env" {
-		t.Errorf("resolved[2] = %q, want %q", resolved[2], "env")
-	}
-}
-
-func TestSelectSingleMatch_Zero(t *testing.T) {
-	t.Parallel()
-
-	r := newTestResolver(internalcue.LoadResult{})
-	_, err := r.selectSingleMatch(nil, "agent", "test")
-	if err == nil {
-		t.Fatal("expected error for zero matches")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("error = %q, want containing 'not found'", err.Error())
-	}
-}
-
-func TestSelectSingleMatch_Single(t *testing.T) {
-	t.Parallel()
-
-	matches := []ModuleMatch{{Name: "claude", Source: ModuleSourceInstalled, Score: 3}}
-	r := newTestResolver(internalcue.LoadResult{})
-	selected, err := r.selectSingleMatch(matches, "agent", "clau")
-	if err != nil {
-		t.Fatalf("selectSingleMatch() error = %v", err)
-	}
-	if selected.Name != "claude" {
-		t.Errorf("selectSingleMatch().Name = %q, want %q", selected.Name, "claude")
-	}
-}
-
-func TestPromptModuleSelection_NonTTY(t *testing.T) {
-	t.Parallel()
-
-	matches := []ModuleMatch{
-		{Name: "claude-code", Source: ModuleSourceInstalled, Score: 3},
-		{Name: "claude-chat", Source: ModuleSourceRegistry, Score: 3},
-	}
-
-	r := newTestResolver(internalcue.LoadResult{})
-	_, err := r.promptModuleSelection(matches, "agent", "claude")
-	if err == nil {
-		t.Fatal("expected error for non-TTY")
-	}
-	if !strings.Contains(err.Error(), "ambiguous") {
-		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
-	}
-}
-
-func TestSearchInstalled(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		agents: {
-			claude: {
-				description: "Anthropic Claude"
-				tags: ["ai"]
-			}
+	for i, w := range want {
+		if resolved[i] != w {
+			t.Errorf("resolved[%d] = %q, want %q", i, resolved[i], w)
 		}
-	}`)
-
-	matches, err := searchInstalled(cfg.Value, "agents", "agents", "claude")
-	if err != nil {
-		t.Fatalf("searchInstalled() error: %v", err)
-	}
-	if len(matches) != 1 {
-		t.Fatalf("searchInstalled() returned %d matches, want 1", len(matches))
-	}
-	if matches[0].Name != "claude" {
-		t.Errorf("match.Name = %q, want %q", matches[0].Name, "claude")
-	}
-	if matches[0].Source != ModuleSourceInstalled {
-		t.Errorf("match.Source = %q, want %q", matches[0].Source, ModuleSourceInstalled)
 	}
 }
 
-func TestSearchRegistryCategory(t *testing.T) {
-	t.Parallel()
-
-	entries := map[string]registry.IndexEntry{
-		"claude": {
-			Module:      "github.com/test/agents/claude@v0",
-			Description: "Anthropic Claude",
-			Tags:        []string{"ai"},
-		},
-	}
-
-	matches, err := searchRegistryCategory(entries, "agents", "claude")
-	if err != nil {
-		t.Fatalf("searchRegistryCategory() error: %v", err)
-	}
-	if len(matches) != 1 {
-		t.Fatalf("searchRegistryCategory() returned %d matches, want 1", len(matches))
-	}
-	if matches[0].Name != "claude" {
-		t.Errorf("match.Name = %q, want %q", matches[0].Name, "claude")
-	}
-	if matches[0].Source != ModuleSourceRegistry {
-		t.Errorf("match.Source = %q, want %q", matches[0].Source, ModuleSourceRegistry)
-	}
-}
-
-// TestResolveModule_SingleInstalledPlusRegistryMatch verifies a single installed
-// substring match plus a registry match are both presented for selection (error
-// in non-TTY) rather than silently returning the installed match.
-func TestResolveModule_SingleInstalledPlusRegistryMatch(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		roles: {
-			"golang/assistant": {
-				description: "Go programming expert"
-				prompt: "You are a Go expert"
-			}
-		}
-	}`)
-
-	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	// "assistant" matches both installed and registry.
-	r.didFetch = true
-	r.index = &registry.Index{
-		Roles: map[string]registry.IndexEntry{
-			"python/assistant": {
-				Module:      "github.com/test/roles/python/assistant@v0",
-				Description: "Python programming expert",
-			},
-		},
-	}
-
-	_, err := r.resolveModule("assistant", internalcue.KeyRoles, "roles", "Role", true)
-	if err == nil {
-		t.Fatal("expected ambiguous error for multiple matches, got nil")
-	}
-	if !strings.Contains(err.Error(), "ambiguous") {
-		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
-	}
-	if !strings.Contains(err.Error(), "golang/assistant") {
-		t.Errorf("error should list golang/assistant: %v", err)
-	}
-	if !strings.Contains(err.Error(), "python/assistant") {
-		t.Errorf("error should list python/assistant: %v", err)
-	}
-}
-
-// TestResolveModule_SingleInstalledNoRegistryMatch verifies a single installed
-// substring match resolves directly when the registry has no match.
-func TestResolveModule_SingleInstalledNoRegistryMatch(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		roles: {
-			"golang/assistant": {
-				description: "Go programming expert"
-				prompt: "You are a Go expert"
-			}
-		}
-	}`)
-
-	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	r.didFetch = true
-	r.index = &registry.Index{
-		Roles: map[string]registry.IndexEntry{
-			"python/debug": {
-				Module:      "github.com/test/roles/python/debug@v0",
-				Description: "Python debugger",
-			},
-		},
-	}
-
-	name, err := r.resolveModule("assistant", internalcue.KeyRoles, "roles", "Role", true)
-	if err != nil {
-		t.Fatalf("resolveModule() error = %v", err)
-	}
-	if name != "golang/assistant" {
-		t.Errorf("resolveModule() = %q, want %q", name, "golang/assistant")
-	}
-}
-
-// TestResolveModule_ExactFullNameSkipsRegistry verifies an exact installed match
-// resolves via Phase 1 without touching the registry.
-func TestResolveModule_ExactFullNameSkipsRegistry(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		roles: {
-			"golang/assistant": {
-				prompt: "You are a Go expert"
-			}
-		}
-	}`)
-
-	// skipRegistry=true: any registry call returns nil, so Phase 1 must catch it.
-	r := newTestResolver(cfg)
-	name, err := r.resolveModule("golang/assistant", internalcue.KeyRoles, "roles", "Role", true)
-	if err != nil {
-		t.Fatalf("resolveModule() error = %v", err)
-	}
-	if name != "golang/assistant" {
-		t.Errorf("resolveModule() = %q, want %q", name, "golang/assistant")
-	}
-}
-
-// TestResolveModule_AgentSingleInstalledPlusRegistryMatch verifies the same
-// behaviour for agent resolution via resolveAgent.
-func TestResolveModule_AgentSingleInstalledPlusRegistryMatch(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		agents: {
-			"claude-code": {
-				description: "Claude for coding"
-				bin: "claude"
-				command: "{{.bin}}"
-			}
-		}
-	}`)
-
-	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	r.didFetch = true
-	r.index = &registry.Index{
-		Agents: map[string]registry.IndexEntry{
-			"claude-chat": {
-				Module:      "github.com/test/agents/claude-chat@v0",
-				Description: "Claude for chatting",
-			},
-		},
-	}
-
-	_, err := r.resolveAgent("claude")
-	if err == nil {
-		t.Fatal("expected ambiguous error for multiple matches, got nil")
-	}
-	if !strings.Contains(err.Error(), "ambiguous") {
-		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
-	}
-}
-
-// TestContextScoreThreshold_LowScoreExcluded verifies context results below
-// threshold are excluded.
-func TestContextScoreThreshold_LowScoreExcluded(t *testing.T) {
-	t.Parallel()
-
-	// "env" scores 0 (no "golang"); "golang-env" scores 4 (name 3 + tag 1).
-	cfg := buildTestCfg(t, `{
-		contexts: {
-			env: {
-				prompt: "basic environment"
-			}
-			"golang-env": {
-				description: "Go development environment"
-				tags: ["golang"]
-				prompt: "Go env"
-			}
-		}
-	}`)
-
-	r := newTestResolver(cfg)
-	resolved, err := r.resolveContexts([]string{"golang"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(resolved) != 1 {
-		t.Fatalf("resolveContexts() returned %d items, want 1: %v", len(resolved), resolved)
-	}
-	if resolved[0] != "golang-env" {
-		t.Errorf("resolved[0] = %q, want %q", resolved[0], "golang-env")
-	}
-}
-
-// TestResolveAgent_PrefixMatching verifies agents:<name> strips the matching
-// category prefix and resolves the bare name.
-func TestResolveAgent_PrefixMatching(t *testing.T) {
-	t.Parallel()
-
-	cfg := buildTestCfg(t, `{
-		agents: {
-			claude: {
-				bin: "claude"
-				command: "{{.bin}}"
-			}
-		}
-	}`)
-
-	r := newTestResolver(cfg)
-	got, err := r.resolveAgent("agents:claude")
-	if err != nil {
-		t.Fatalf("resolveAgent(agents:claude) error: %v", err)
-	}
-	if got != "claude" {
-		t.Errorf("resolveAgent = %q, want %q", got, "claude")
-	}
-}
-
-// TestResolveAgent_PrefixMismatchError verifies a mismatched prefix (e.g.
-// roles:foo via --agent) returns an error naming the mismatch.
-func TestResolveAgent_PrefixMismatchError(t *testing.T) {
-	t.Parallel()
-
-	r := newTestResolver(buildTestCfg(t, `{}`))
-	_, err := r.resolveAgent("roles:assistant")
-	if err == nil {
-		t.Fatal("expected mismatch error from --agent receiving a roles: address")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "agents") || !strings.Contains(msg, "roles") {
-		t.Errorf("error should name both expected and given category, got: %v", err)
-	}
-}
-
-func TestResolveAgent_UnknownPrefixError(t *testing.T) {
-	t.Parallel()
-
-	r := newTestResolver(buildTestCfg(t, `{}`))
-	_, err := r.resolveAgent("foo:bar")
-	if err == nil {
-		t.Fatal("expected unknown-category error")
-	}
-	if !strings.Contains(err.Error(), "unknown category") {
-		t.Errorf("error should mention 'unknown category', got: %v", err)
-	}
-}
-
-// TestResolveContexts_PrefixMatching verifies a contexts: prefix is stripped
-// and resolution proceeds.
 func TestResolveContexts_PrefixMatching(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildTestCfg(t, `{
-		contexts: {
-			"golang-env": {
-				prompt: "Go environment"
-				tags: ["env"]
-			}
-		}
-	}`)
-
+	cfg := buildTestCfg(t, `{ contexts: { "golang-env": { prompt: "Go environment", tags: ["env"] } } }`)
 	r := newTestResolver(cfg)
 	resolved, err := r.resolveContexts([]string{"contexts:golang-env"})
 	if err != nil {
@@ -1052,5 +762,99 @@ func TestResolveContexts_PrefixMismatchError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "contexts") {
 		t.Errorf("error should name the expected category 'contexts', got: %v", err)
+	}
+}
+
+// --- Model resolution is out of scope and keeps the search-style match. ---
+
+func TestResolveModelName_ExactMatch(t *testing.T) {
+	t.Parallel()
+
+	agent := orchestration.Agent{Models: map[string]string{"sonnet": "claude-sonnet-4-5", "opus": "claude-opus-4-6"}}
+	r := newTestResolver(internalcue.LoadResult{})
+	if name := r.resolveModelName("sonnet", agent); name != "sonnet" {
+		t.Errorf("resolveModelName() = %q, want %q", name, "sonnet")
+	}
+}
+
+func TestResolveModelName_SubstringMatch(t *testing.T) {
+	t.Parallel()
+
+	agent := orchestration.Agent{Models: map[string]string{"sonnet": "claude-sonnet-4-5", "opus": "claude-opus-4-6"}}
+	r := newTestResolver(internalcue.LoadResult{})
+	if name := r.resolveModelName("son", agent); name != "sonnet" {
+		t.Errorf("resolveModelName() = %q, want %q", name, "sonnet")
+	}
+}
+
+func TestResolveModelName_Passthrough(t *testing.T) {
+	t.Parallel()
+
+	agent := orchestration.Agent{Models: map[string]string{"sonnet": "claude-sonnet-4-5"}}
+	r := newTestResolver(internalcue.LoadResult{})
+	if name := r.resolveModelName("gpt-4o", agent); name != "gpt-4o" {
+		t.Errorf("resolveModelName() = %q, want %q (passthrough)", name, "gpt-4o")
+	}
+}
+
+func TestResolveModelName_MultipleMatches_Passthrough(t *testing.T) {
+	t.Parallel()
+
+	agent := orchestration.Agent{Models: map[string]string{"sonnet-4": "claude-sonnet-4", "sonnet-4-5": "claude-sonnet-4-5"}}
+	r := newTestResolver(internalcue.LoadResult{})
+	if name := r.resolveModelName("sonnet", agent); name != "sonnet" {
+		t.Errorf("resolveModelName() = %q, want %q (passthrough on multiple)", name, "sonnet")
+	}
+}
+
+func TestResolveModelName_NilModels(t *testing.T) {
+	t.Parallel()
+
+	r := newTestResolver(internalcue.LoadResult{})
+	if name := r.resolveModelName("sonnet", orchestration.Agent{}); name != "sonnet" {
+		t.Errorf("resolveModelName() = %q, want %q (passthrough)", name, "sonnet")
+	}
+}
+
+func TestResolveModelName_Empty(t *testing.T) {
+	t.Parallel()
+
+	agent := orchestration.Agent{Models: map[string]string{"sonnet": "claude-sonnet"}}
+	r := newTestResolver(internalcue.LoadResult{})
+	if name := r.resolveModelName("", agent); name != "" {
+		t.Errorf("resolveModelName('') = %q, want empty", name)
+	}
+}
+
+// TestResolveModelName_ObjectFormAgent chains ExtractAgent with resolveModelName
+// to prove --model resolution works against an object-form agent loaded from CUE.
+func TestResolveModelName_ObjectFormAgent(t *testing.T) {
+	t.Parallel()
+
+	cfg := buildTestCfg(t, `{
+		agents: {
+			objform: {
+				bin: "objform"
+				command: "{{.bin}} --model {{.model}}"
+				default_model: "sonnet"
+				models: { sonnet: { id: "obj-sonnet-id" }, opus: { id: "obj-opus-id" } }
+			}
+		}
+	}`)
+
+	agent, err := orchestration.ExtractAgent(cfg.Value, "objform")
+	if err != nil {
+		t.Fatalf("ExtractAgent: %v", err)
+	}
+	if got := agent.Models["sonnet"]; got != "obj-sonnet-id" {
+		t.Errorf("Models[sonnet] = %q, want %q", got, "obj-sonnet-id")
+	}
+
+	r := newTestResolver(internalcue.LoadResult{})
+	if got := r.resolveModelName("sonnet", agent); got != "sonnet" {
+		t.Errorf("resolveModelName(\"sonnet\") = %q, want %q (exact)", got, "sonnet")
+	}
+	if got := r.resolveModelName("son", agent); got != "sonnet" {
+		t.Errorf("resolveModelName(\"son\") = %q, want %q (substring)", got, "sonnet")
 	}
 }

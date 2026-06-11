@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: 04
+Active Project: 05
 
 When a project is complete, update this file to point to the next active project (or `none` if nothing is queued)
 
@@ -120,7 +120,8 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 
 | File | Purpose |
 | ---- | ------- |
-| `internal/cli/resolve.go` | Three-tier module resolution (exact config → registry → substring) |
+| `internal/cli/engine.go` | Unified name-only resolution engine (exact tier → floor → substring/prefix fallback) shared by all surfaces |
+| `internal/cli/resolve.go` | Resolver state, surface entry points (`resolveAgent`/`resolveRole`/`resolveContexts`), registry fetch and auto-install |
 | `internal/cli/root.go` | Root command factory with all subcommands registered |
 | `internal/cli/start.go` | Main `start` command: config loading and execution env setup |
 | `internal/cli/task.go` | Task execution command |
@@ -131,18 +132,34 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 
 ### Resolution Logic
 
-Module resolution follows a three-tier strategy:
+One name-only engine (`engine.go`) resolves every module-selecting surface —
+`start task`, `--role`, `--context`, `--agent`, and the cross-category
+`start get`/`start describe` — against installed config and the registry index as
+two equal sources, de-duplicated by `category:name` (installed wins). The match
+rule, specified in `docs/module-resolution.md`, is:
 
-1. Exact match against installed config names
-2. Exact match against CUE Central Registry index
-3. Substring search across installed modules
+1. Interpret the identifier. A leading `./`, `/`, `~`, or `~/` is a filesystem
+   path read directly (no search); `--agent` rejects a path. A `category:name`
+   prefix scopes to that category and selects prefix fallback; a mismatched or
+   unknown category is a usage error.
+2. Exact-whole-name tier first, for every non-path input. A single case-
+   insensitive whole-name match resolves directly — even when the name is a
+   substring of longer names, even without a TTY, and including a registry-only
+   match (installed then used). This tier is exempt from the floor. A lone
+   installed exact resolves offline on the category-specific surfaces; the cross-
+   category surfaces also consult the registry here to detect a same-name twin.
+3. Fallback tier when no exact match exists, over the names only: a bare term is
+   a case-insensitive literal substring, a category-qualified term a literal
+   prefix. The query must be at least three characters (counting the name,
+   excluding any `category:` prefix). Zero matches is not-found, one is used, and
+   more than one menus on a TTY or errors with the list otherwise.
 
-File paths (starting with `./`, `/`, or `~`) bypass search entirely.
-
-CUE config lookup pattern:
-```go
-cfg.LookupPath(cue.ParsePath(key)).LookupPath(cue.MakePath(cue.Str(name)))
-```
+Matching is literal and case-insensitive over names only — no regex, no
+description/tag matching, no multi-term splitting. The registry index is fetched
+lazily and its absence is non-fatal: an uninstalled name is not-found when the
+index is reachable, and a transient (retry) error when it is unreachable, since
+absence cannot be confirmed. Model resolution (`--model`) is out of scope; it
+keeps the search-style match against the agent's `models` map.
 
 ### Architecture Principles
 

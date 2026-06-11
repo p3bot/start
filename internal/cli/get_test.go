@@ -576,17 +576,29 @@ func TestGetResolveQueryRoutesToStderr(t *testing.T) {
 		}
 	})
 
-	t.Run("short-query non-TTY surfaces error without writing stderr", func(t *testing.T) {
+	t.Run("short query passes through getResolveQuery to the engine floor", func(t *testing.T) {
+		// The floor moved into the resolver (exempting the exact tier), so
+		// getResolveQuery no longer rejects a short query itself.
 		stderr := new(bytes.Buffer)
-		_, err := getResolveQuery([]string{"ab"}, stderr, strings.NewReader(""))
+		q, err := getResolveQuery([]string{"ab"}, stderr, strings.NewReader(""))
+		if err != nil {
+			t.Fatalf("getResolveQuery should pass a short query through, got: %v", err)
+		}
+		if q != "ab" {
+			t.Errorf("getResolveQuery = %q, want %q", q, "ab")
+		}
+	})
+
+	t.Run("short non-exact query errors at the engine floor", func(t *testing.T) {
+		stdout, _, err := runGetCmd(t, "ab")
 		if err == nil {
-			t.Fatal("expected error for short query in non-TTY")
+			t.Fatal("expected error for short non-exact query")
 		}
 		if !strings.Contains(err.Error(), "3 characters") {
 			t.Errorf("error should mention minimum length, got: %v", err)
 		}
-		if stderr.Len() != 0 {
-			t.Errorf("stderr should be untouched on non-TTY error path, got: %q", stderr.String())
+		if stdout != "" {
+			t.Errorf("stdout should be empty on error, got: %q", stdout)
 		}
 	})
 }
@@ -641,6 +653,25 @@ func TestGetAppearsInRootHelp(t *testing.T) {
 		}
 	}
 	t.Fatal("get command not registered on root")
+}
+
+// TestGetFilePathReadsDirectly verifies a filesystem path bypasses resolution
+// and outputs the file's content directly.
+func TestGetFilePathReadsDirectly(t *testing.T) {
+	dir := setupGetTestConfig(t)
+
+	docPath := filepath.Join(dir, "note.md")
+	if err := os.WriteFile(docPath, []byte("Direct file body.\n"), 0o644); err != nil {
+		t.Fatalf("writing file: %v", err)
+	}
+
+	stdout, stderr, err := runGetCmd(t, docPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "Direct file body.\n" {
+		t.Errorf("stdout = %q, want %q", stdout, "Direct file body.\n")
+	}
 }
 
 // TestGetUnknownName verifies a name with no installed or registry match

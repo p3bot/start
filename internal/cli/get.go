@@ -91,17 +91,21 @@ func runGet(cmd *cobra.Command, args []string) error {
 	// stderr in the stdout slot so fetch progress, auto-install notices, and
 	// selection menus do not corrupt the piped content on stdout.
 	r := newResolver(cfg, flags, stderr, stderr, stdin)
-	match, err := resolveCrossCategory(query, r)
+	outcome, err := r.resolveCross(query)
 	if err != nil {
 		return err
 	}
+	if outcome.filePath != "" {
+		return outputFileBody(stdout, flags, outcome.filePath)
+	}
+	match := outcome.match
 
 	// Refresh config after an auto-install so the new module's CUE value is
 	// visible. reloadConfig always uses merged scope: autoInstall writes to
 	// global, so merged is the smallest scope guaranteed to see the module for
 	// any original --local/--global; --local widening is signalled via
 	// notifyScopeWidenedIfLocal.
-	if r.didInstall {
+	if r.cfgStale {
 		workingDir, wdErr := os.Getwd()
 		if wdErr != nil {
 			return fmt.Errorf("getting working directory: %w", wdErr)
@@ -141,15 +145,25 @@ func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, 
 		return promptSearchQuery(stderr, stdin)
 	}
 
-	query := args[0]
-	if len(query) >= 3 {
-		return query, nil
+	// The three-character floor lives in the resolver, exempting the exact tier;
+	// the raw argument passes straight through.
+	return args[0], nil
+}
+
+// outputFileBody reads a filesystem path supplied to get/describe and writes its
+// content, styling Markdown on a terminal exactly as a UTD file body is styled.
+// Piped, redirected, or --color=never output stays raw and byte-identical.
+func outputFileBody(w io.Writer, flags *Flags, path string) error {
+	content, err := orchestration.ReadFilePath(path)
+	if err != nil {
+		return fmt.Errorf("reading %q: %w", path, err)
 	}
-	if !isTerminal(stdin) {
-		return "", usageError(fmt.Errorf("query must be at least 3 characters"))
+	body := ensureTrailingNewline(content)
+	if shouldStyleMarkdown(sourceFile, path) {
+		return tui.RenderMarkdown(w, body, flags.MarkdownStyle())
 	}
-	fmt.Fprintln(stderr, "Query must be at least 3 characters")
-	return promptSearchQuery(stderr, stdin)
+	fmt.Fprint(w, body)
+	return nil
 }
 
 // getAgent writes the agent's command template (with {{.bin}} and {{.model}}

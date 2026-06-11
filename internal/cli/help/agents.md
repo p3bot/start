@@ -28,7 +28,7 @@ start prompt "Explain this" --role teacher
 start prompt "Quick question" -c default
 start task pre-commit-review
 start task review "focus on error handling"
-start task --tag golang
+start task tasks:review
 start task ./custom-task.md
 start describe
 start describe go-expert

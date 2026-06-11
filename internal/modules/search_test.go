@@ -632,94 +632,6 @@ func TestSearchResultOrdering(t *testing.T) {
 	}
 }
 
-func TestSearchCategoryEntries(t *testing.T) {
-	t.Parallel()
-
-	entries := map[string]registry.IndexEntry{
-		"golang/assistant": {
-			Module:      "github.com/test/roles/golang/assistant@v0",
-			Description: "Go programming expert",
-			Tags:        []string{"golang", "programming"},
-		},
-		"python/assistant": {
-			Module:      "github.com/test/roles/python/assistant@v0",
-			Description: "Python programming expert",
-			Tags:        []string{"python", "programming"},
-		},
-		"rust/assistant": {
-			Module:      "github.com/test/roles/rust/assistant@v0",
-			Description: "Rust programming expert",
-			Tags:        []string{"rust", "systems"},
-		},
-	}
-
-	tests := []struct {
-		name      string
-		query     string
-		wantCount int
-		wantFirst string // expected first result name
-	}{
-		{
-			name:      "find golang",
-			query:     "golang",
-			wantCount: 1,
-			wantFirst: "golang/assistant",
-		},
-		{
-			name:      "find programming matches multiple",
-			query:     "programming",
-			wantCount: 3, // golang, python, rust all have "programming" in description
-		},
-		{
-			name:      "no match",
-			query:     "javascript",
-			wantCount: 0,
-		},
-		{
-			name:      "results sorted by score then name",
-			query:     "assistant",
-			wantCount: 3,
-			wantFirst: "golang/assistant", // all same score, alphabetical
-		},
-		{
-			name:      "multi-term AND narrows",
-			query:     "golang,programming",
-			wantCount: 1,
-			wantFirst: "golang/assistant",
-		},
-		{
-			name:      "multi-term AND no match",
-			query:     "golang rust",
-			wantCount: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			results, err := SearchCategoryEntries("roles", entries, tt.query, nil)
-			if err != nil {
-				t.Fatalf("SearchCategoryEntries() error: %v", err)
-			}
-
-			if len(results) != tt.wantCount {
-				t.Errorf("SearchCategoryEntries() returned %d results, want %d", len(results), tt.wantCount)
-			}
-
-			if tt.wantFirst != "" && len(results) > 0 {
-				if results[0].Name != tt.wantFirst {
-					t.Errorf("SearchCategoryEntries() first result = %q, want %q", results[0].Name, tt.wantFirst)
-				}
-			}
-
-			for _, r := range results {
-				if r.Category != "roles" {
-					t.Errorf("result %q has category %q, want %q", r.Name, r.Category, "roles")
-				}
-			}
-		})
-	}
-}
-
 func TestSearchInstalledConfig(t *testing.T) {
 	t.Parallel()
 
@@ -1109,44 +1021,6 @@ func TestSearchInstalledConfig_TagFiltering(t *testing.T) {
 		}
 		if len(results) > 0 && results[0].Name != "gemini" {
 			t.Errorf("expected 'gemini', got %q", results[0].Name)
-		}
-	})
-}
-
-func TestSearchCategoryEntries_TagFiltering(t *testing.T) {
-	t.Parallel()
-
-	entries := map[string]registry.IndexEntry{
-		"golang/assistant": {
-			Description: "Go programming expert",
-			Tags:        []string{"golang", "programming"},
-		},
-		"python/assistant": {
-			Description: "Python programming expert",
-			Tags:        []string{"python", "programming"},
-		},
-	}
-
-	t.Run("tag only", func(t *testing.T) {
-		results, err := SearchCategoryEntries("roles", entries, "", []string{"golang"})
-		if err != nil {
-			t.Fatalf("error: %v", err)
-		}
-		if len(results) != 1 {
-			t.Errorf("expected 1 result, got %d", len(results))
-		}
-	})
-
-	t.Run("tag with query", func(t *testing.T) {
-		results, err := SearchCategoryEntries("roles", entries, "programming", []string{"python"})
-		if err != nil {
-			t.Fatalf("error: %v", err)
-		}
-		if len(results) != 1 {
-			t.Errorf("expected 1 result, got %d", len(results))
-		}
-		if len(results) > 0 && results[0].Name != "python/assistant" {
-			t.Errorf("expected 'python/assistant', got %q", results[0].Name)
 		}
 	})
 }
