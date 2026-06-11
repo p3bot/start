@@ -334,6 +334,141 @@ settings: { default_agent: "echo" }
 	chdir(t, tmpDir)
 }
 
+// writeNoContextsConfig writes a config with no contexts defined and chdirs into
+// it, for exercising the SectionNone and SectionSkipped context-header paths end
+// to end. It keeps a role and task so only the context section is empty.
+func writeNoContextsConfig(t *testing.T) {
+	t.Helper()
+	tmpDir := isolateConfigEnv(t)
+	configDir := filepath.Join(tmpDir, ".start")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	config := `
+agents: {
+	echo: {
+		bin: "echo"
+		command: "{{.bin}} 'Agent executed'"
+		default_model: "default"
+		models: { default: "echo-model" }
+	}
+}
+
+roles: {
+	assistant: { prompt: "You are a helpful assistant." }
+}
+
+tasks: {
+	"test-task": { role: "assistant", prompt: "Test task prompt." }
+}
+
+settings: { default_agent: "echo" }
+`
+	configFile := filepath.Join(configDir, "settings.cue")
+	if err := os.WriteFile(configFile, []byte(config), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, tmpDir)
+}
+
+// TestExecuteStart_NoContextsConfig asserts the start header reports
+// "Context: none" when no contexts are configured, guarding the call site
+// against silent rendering.
+func TestExecuteStart_NoContextsConfig(t *testing.T) {
+	writeNoContextsConfig(t)
+
+	flags := &Flags{DryRun: true}
+	selection := orchestration.ContextSelection{IncludeRequired: true, IncludeDefaults: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	if err := executeStart(stdout, stderr, strings.NewReader(""), flags, selection, ""); err != nil {
+		t.Fatalf("executeStart() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Context: none") {
+		t.Errorf("Expected 'Context: none' in output, got:\n%s", output)
+	}
+	if strings.Contains(output, "Context: skipped") {
+		t.Errorf("no-context state must not read as a skip, got:\n%s", output)
+	}
+}
+
+// TestExecuteTask_NoContextsConfig mirrors the start case for the task header.
+func TestExecuteTask_NoContextsConfig(t *testing.T) {
+	writeNoContextsConfig(t)
+
+	flags := &Flags{DryRun: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	if err := executeTask(stdout, stderr, strings.NewReader(""), flags, "test-task", ""); err != nil {
+		t.Fatalf("executeTask() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Context: none") {
+		t.Errorf("Expected 'Context: none' in output, got:\n%s", output)
+	}
+}
+
+// TestExecuteStart_ContextNoneOptOut asserts that --context none with no explicit
+// selectors and no default contexts reports the deliberate opt-out, naming the
+// flag, distinct from the plain no-contexts line.
+func TestExecuteStart_ContextNoneOptOut(t *testing.T) {
+	writeNoContextsConfig(t)
+
+	flags := &Flags{DryRun: true, NoImplicitContexts: true}
+	selection := orchestration.ContextSelection{IncludeRequired: true, IncludeDefaults: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	if err := executeStart(stdout, stderr, strings.NewReader(""), flags, selection, ""); err != nil {
+		t.Fatalf("executeStart() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Context: skipped") {
+		t.Errorf("Expected 'Context: skipped' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "via --context none") {
+		t.Errorf("Expected opt-out reason 'via --context none' in output, got:\n%s", output)
+	}
+	if strings.Contains(output, "Context: none") {
+		t.Errorf("opt-out must not read as the neutral none line, got:\n%s", output)
+	}
+}
+
+// TestExecuteTask_ContextNoneOptOut mirrors the start opt-out case for the task
+// header, guarding the task path's SuppressImplicit wiring.
+func TestExecuteTask_ContextNoneOptOut(t *testing.T) {
+	writeNoContextsConfig(t)
+
+	flags := &Flags{DryRun: true, NoImplicitContexts: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	if err := executeTask(stdout, stderr, strings.NewReader(""), flags, "test-task", ""); err != nil {
+		t.Fatalf("executeTask() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Context: skipped") {
+		t.Errorf("Expected 'Context: skipped' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "via --context none") {
+		t.Errorf("Expected opt-out reason 'via --context none' in output, got:\n%s", output)
+	}
+	if strings.Contains(output, "Context: none") {
+		t.Errorf("opt-out must not read as the neutral none line, got:\n%s", output)
+	}
+}
+
 // TestExecuteStart_NoRolesConfig asserts the start header reports "Role: none"
 // when no roles are configured, guarding the call site against silent rendering.
 func TestExecuteStart_NoRolesConfig(t *testing.T) {
@@ -647,7 +782,8 @@ func TestPrintDryRunSummary(t *testing.T) {
 		RoleResolutions: []orchestration.RoleResolution{
 			{Name: "test-role", Status: "loaded", File: "test-role.md"},
 		},
-		RoleOutcome: orchestration.SectionOutcome{State: orchestration.SectionListed},
+		RoleOutcome:    orchestration.SectionOutcome{State: orchestration.SectionListed},
+		ContextOutcome: orchestration.SectionOutcome{State: orchestration.SectionListed},
 	}
 
 	printDryRunSummary(buf, agent, "", "", result, "/tmp/test-dir")

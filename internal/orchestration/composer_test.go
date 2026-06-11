@@ -430,6 +430,71 @@ func TestComposeWithRole_RoleOutcome(t *testing.T) {
 	})
 }
 
+// TestCompose_ContextOutcome verifies Compose stamps ContextOutcome from the
+// assembled list: a non-empty list is SectionListed; an empty list with
+// SuppressImplicit set is SectionSkipped naming --context none; an empty list
+// without the opt-out is SectionNone.
+func TestCompose_ContextOutcome(t *testing.T) {
+	t.Parallel()
+	ctx := cuecontext.New()
+
+	processor := NewTemplateProcessor(nil, nil, "")
+	composer := NewComposer(processor, "")
+
+	t.Run("contexts present is SectionListed", func(t *testing.T) {
+		cfg := ctx.CompileString(`contexts: { env: { required: true, prompt: "Environment" } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.Compose(cfg, ContextSelection{IncludeRequired: true}, "")
+		if err != nil {
+			t.Fatalf("Compose() error = %v", err)
+		}
+		if result.ContextOutcome.State != SectionListed {
+			t.Errorf("ContextOutcome.State = %v, want SectionListed", result.ContextOutcome.State)
+		}
+	})
+
+	t.Run("empty list with opt-out is SectionSkipped", func(t *testing.T) {
+		// A required-only context that the selection does not include, with no
+		// default contexts to surface as skipped rows, yields an empty list.
+		cfg := ctx.CompileString(`contexts: { env: { required: true, prompt: "Environment" } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.Compose(cfg, ContextSelection{SuppressImplicit: true}, "")
+		if err != nil {
+			t.Fatalf("Compose() error = %v", err)
+		}
+		if len(result.Contexts) != 0 {
+			t.Fatalf("Contexts = %v, want empty", result.Contexts)
+		}
+		if result.ContextOutcome.State != SectionSkipped {
+			t.Errorf("ContextOutcome.State = %v, want SectionSkipped", result.ContextOutcome.State)
+		}
+		if result.ContextOutcome.Reason != "--context none" {
+			t.Errorf("ContextOutcome.Reason = %q, want %q", result.ContextOutcome.Reason, "--context none")
+		}
+	})
+
+	t.Run("empty list without opt-out is SectionNone", func(t *testing.T) {
+		cfg := ctx.CompileString(`roles: { assistant: { prompt: "You are a helpful assistant." } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.Compose(cfg, ContextSelection{IncludeRequired: true, IncludeDefaults: true}, "")
+		if err != nil {
+			t.Fatalf("Compose() error = %v", err)
+		}
+		if len(result.Contexts) != 0 {
+			t.Fatalf("Contexts = %v, want empty", result.Contexts)
+		}
+		if result.ContextOutcome.State != SectionNone {
+			t.Errorf("ContextOutcome.State = %v, want SectionNone", result.ContextOutcome.State)
+		}
+	})
+}
+
 func TestComposer_ResolveTask(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()

@@ -36,11 +36,26 @@ func printSeparator(w io.Writer) {
 	tui.ColorSeparator.Fprintln(w, strings.Repeat("─", 79))
 }
 
-func printContextTable(w io.Writer, contexts []orchestration.Context, selection orchestration.ContextSelection) {
-	if len(contexts) == 0 {
-		return
+// printContextTable renders the context header section. It is a pure switch over
+// outcome.State set by the producer (Compose); it must not re-derive the section
+// state from len(contexts) or any CLI flag. selection is read only to build the
+// populated-table annotation for SectionListed.
+func printContextTable(w io.Writer, contexts []orchestration.Context, outcome orchestration.SectionOutcome, selection orchestration.ContextSelection) {
+	tui.ColorContexts.Fprint(w, "Context:")
+	switch outcome.State {
+	case orchestration.SectionListed:
+		printContextRows(w, contexts, selection)
+	case orchestration.SectionSkipped:
+		fmt.Fprintf(w, " skipped %s\n", tui.Annotate("via %s", outcome.Reason))
+	default: // SectionNone and any unstamped state degrade to the neutral line.
+		fmt.Fprintln(w, " none")
 	}
+	fmt.Fprintln(w)
+}
 
+// printContextRows renders the context annotation and table body for
+// SectionListed. The trailing blank line is owned by printContextTable.
+func printContextRows(w io.Writer, contexts []orchestration.Context, selection orchestration.ContextSelection) {
 	var parts []string
 	if selection.IncludeRequired {
 		parts = append(parts, "required")
@@ -54,7 +69,6 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 		}
 	}
 
-	tui.ColorContexts.Fprint(w, "Context:")
 	if len(parts) > 0 {
 		fmt.Fprintf(w, " %s", tui.Annotate("%s", strings.Join(parts, ", ")))
 	}
@@ -132,7 +146,6 @@ func printContextTable(w io.Writer, contexts []orchestration.Context, selection 
 		}
 		fmt.Fprintf(w, "       %-*s  %s\n", tagsWidth, r.tags, r.file)
 	}
-	fmt.Fprintln(w)
 }
 
 func printAgentModel(w io.Writer, agent orchestration.Agent, model, modelSource string) {

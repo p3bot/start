@@ -218,7 +218,10 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		Tags:            contextTags,
 	}
 	if flags.NoImplicitContexts {
+		// SuppressImplicit records the opt-out so Compose stamps a skip rather
+		// than none when the resulting context list is empty.
 		selection.IncludeRequired = false
+		selection.SuppressImplicit = true
 	}
 
 	debugf(stderr, flags, dbgContext, "Selection: required=%t, defaults=%t, tags=%v",
@@ -318,7 +321,7 @@ func printTaskExecutionInfo(w io.Writer, agent orchestration.Agent, model, model
 	printSeparator(w)
 
 	printAgentModel(w, agent, model, modelSource)
-	printContextTable(w, result.Contexts, result.Selection)
+	printContextTable(w, result.Contexts, result.ContextOutcome, result.Selection)
 	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	if taskResult.CommandExecuted {
@@ -339,7 +342,7 @@ func printTaskDryRunSummary(w io.Writer, agent orchestration.Agent, model, model
 	printSeparator(w)
 
 	printAgentModel(w, agent, model, modelSource)
-	printContextTable(w, result.Contexts, result.Selection)
+	printContextTable(w, result.Contexts, result.ContextOutcome, result.Selection)
 	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	if instructions != "" {

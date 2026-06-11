@@ -358,9 +358,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selection orchestration.ContextSelection, customText string) error {
 	if flags.NoImplicitContexts {
 		// Drop the auto-loaded required and default contexts; any explicit tag
-		// or path selectors in selection.Tags still apply.
+		// or path selectors in selection.Tags still apply. SuppressImplicit
+		// records the opt-out so Compose can stamp a skip rather than none when
+		// the resulting list is empty.
 		selection.IncludeRequired = false
 		selection.IncludeDefaults = false
+		selection.SuppressImplicit = true
 	}
 
 	cfg, workingDir, err := loadExecutionConfig(stdout, stderr, stdin, flags)
@@ -530,7 +533,7 @@ func printExecutionInfo(w io.Writer, agent orchestration.Agent, model, modelSour
 	printSeparator(w)
 
 	printAgentModel(w, agent, model, modelSource)
-	printContextTable(w, result.Contexts, result.Selection)
+	printContextTable(w, result.Contexts, result.ContextOutcome, result.Selection)
 	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	fmt.Fprintf(w, "Starting %s - awaiting response...\n", agent.Name)
@@ -542,7 +545,7 @@ func printDryRunSummary(w io.Writer, agent orchestration.Agent, model, modelSour
 	printSeparator(w)
 
 	printAgentModel(w, agent, model, modelSource)
-	printContextTable(w, result.Contexts, result.Selection)
+	printContextTable(w, result.Contexts, result.ContextOutcome, result.Selection)
 	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 
 	if result.Role != "" {
@@ -572,7 +575,7 @@ func printComposeError(w io.Writer, agent orchestration.Agent, result orchestrat
 	fmt.Fprintf(w, " %s\n", agent.Name)
 	fmt.Fprintln(w)
 
-	printContextTable(w, result.Contexts, result.Selection)
+	printContextTable(w, result.Contexts, result.ContextOutcome, result.Selection)
 
 	printRoleTable(w, result.RoleOutcome, result.RoleResolutions)
 }

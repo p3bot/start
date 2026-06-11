@@ -19,6 +19,13 @@ type ContextSelection struct {
 	IncludeRequired bool
 	IncludeDefaults bool
 	Tags            []string
+	// SuppressImplicit records that the --context none sentinel turned off the
+	// implicit (required and default) selectors. It separates a deliberate
+	// opt-out from contexts simply being absent: a false IncludeDefaults cannot
+	// carry that distinction, because piped one-shot invocations also set
+	// IncludeDefaults false. Compose reads it to stamp ContextOutcome as
+	// SectionSkipped rather than SectionNone when the resolved list is empty.
+	SuppressImplicit bool
 }
 
 // Context represents a resolved context.
@@ -114,6 +121,11 @@ type SectionOutcome struct {
 	Reason string // opt-out flag (e.g. "--role none"); set only for SectionSkipped
 }
 
+// contextSkipReason is the opt-out reason stamped on ContextOutcome when
+// --context none suppressed the implicit contexts and no explicit context
+// resolved, leaving the list empty.
+const contextSkipReason = "--context none"
+
 // ComposeResult contains the result of prompt composition.
 type ComposeResult struct {
 	// Prompt is the fully composed prompt.
@@ -134,6 +146,11 @@ type ComposeResult struct {
 	// reports it with a pure switch. ComposeWithRole stamps SectionListed or
 	// SectionNone; the --role none caller stamps SectionSkipped.
 	RoleOutcome SectionOutcome
+	// ContextOutcome classifies how the context section resolved so the render
+	// layer reports it with a pure switch. Compose stamps SectionListed when the
+	// list is non-empty, SectionSkipped (Reason --context none) when the list is
+	// empty and Selection.SuppressImplicit is set, and SectionNone otherwise.
+	ContextOutcome SectionOutcome
 	// Warnings contains any non-fatal issues.
 	Warnings []string
 }
@@ -253,6 +270,22 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 			ctx.Status = "skipped"
 			result.Contexts = append(result.Contexts, ctx)
 		}
+	}
+
+	// Stamp the context outcome from the assembled list. Compose is the producer,
+	// so it owns this; the render layer never sees SuppressImplicit. An empty list
+	// reached via the --context none opt-out reads as a skip, otherwise as none.
+	// Error early-returns above leave the outcome zero (SectionNone), which never
+	// renders: the only error path that prints contexts (printComposeError) fires
+	// solely when role resolutions exist, and those are appended after Compose
+	// returns successfully — so a stamped outcome is always present by then.
+	switch {
+	case len(result.Contexts) > 0:
+		result.ContextOutcome = SectionOutcome{State: SectionListed}
+	case selection.SuppressImplicit:
+		result.ContextOutcome = SectionOutcome{State: SectionSkipped, Reason: contextSkipReason}
+	default:
+		result.ContextOutcome = SectionOutcome{State: SectionNone}
 	}
 
 	result.Prompt = strings.Join(promptParts, "\n\n")
