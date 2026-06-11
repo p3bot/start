@@ -393,7 +393,6 @@ func TestSearchResultJSON(t *testing.T) {
 				Tags:        []string{"anthropic", "ai"},
 				Version:     "v0.2.0",
 			},
-			MatchScore: 5,
 		},
 	}
 
@@ -406,7 +405,6 @@ func TestSearchResultJSON(t *testing.T) {
 	for _, want := range []string{
 		`"category": "agents"`,
 		`"name": "ai/claude"`,
-		`"matchScore": 5`,
 		`"entry"`,
 		`"module": "github.com/test/agents/ai/claude@v0"`,
 		`"description": "Claude by Anthropic"`,
@@ -414,6 +412,10 @@ func TestSearchResultJSON(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Errorf("output missing %s, got: %s", want, output)
 		}
+	}
+
+	if strings.Contains(output, "matchScore") {
+		t.Errorf("output should not contain matchScore, got: %s", output)
 	}
 }
 

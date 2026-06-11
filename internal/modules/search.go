@@ -13,10 +13,9 @@ import (
 
 // SearchResult holds a matched index entry with its category and name.
 type SearchResult struct {
-	Category   string              `json:"category"`
-	Name       string              `json:"name"`
-	Entry      registry.IndexEntry `json:"entry"`
-	MatchScore int                 `json:"matchScore"`
+	Category string              `json:"category"`
+	Name     string              `json:"name"`
+	Entry    registry.IndexEntry `json:"entry"`
 }
 
 // ParseSearchTerms splits input into unique, lowercased terms (on whitespace and commas).
@@ -112,11 +111,8 @@ func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchRe
 	results = append(results, searchCategory("contexts", index.Contexts, patterns, tags)...)
 	results = append(results, searchCategory("tasks", index.Tasks, patterns, tags)...)
 
-	// Sort by score desc, then category, then name.
+	// Sort by category order, then name.
 	sort.Slice(results, func(i, j int) bool {
-		if results[i].MatchScore != results[j].MatchScore {
-			return results[i].MatchScore > results[j].MatchScore
-		}
 		if results[i].Category != results[j].Category {
 			return CategoryOrder(results[i].Category) < CategoryOrder(results[j].Category)
 		}
@@ -127,41 +123,30 @@ func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchRe
 }
 
 // searchCategory searches a single category map for matching entries.
-// The three branches stay explicit rather than collapsed: matchScorePatterns returns 0
-// for nil patterns, so a merged score+tagOK expression would mishandle the (nil, nil) case.
+// The three branches stay explicit rather than collapsed into a single
+// matchesPatterns(...) && matchesAnyTag(...): tags-only mode has nil patterns
+// (matchesPatterns reports false) and patterns-only mode has nil tags
+// (matchesAnyTag reports false), so a merged expression would wrongly exclude both.
 func searchCategory(category string, entries map[string]registry.IndexEntry, patterns []*regexp.Regexp, tags []string) []SearchResult {
 	var results []SearchResult
 
 	for name, entry := range entries {
-		if len(patterns) > 0 && len(tags) > 0 {
-			score := matchScorePatterns(name, entry, patterns)
-			if score > 0 && matchesAnyTag(entry.Tags, tags) {
-				results = append(results, SearchResult{
-					Category:   category,
-					Name:       name,
-					Entry:      entry,
-					MatchScore: score,
-				})
-			}
-		} else if len(tags) > 0 {
-			if matchesAnyTag(entry.Tags, tags) {
-				results = append(results, SearchResult{
-					Category:   category,
-					Name:       name,
-					Entry:      entry,
-					MatchScore: 1,
-				})
-			}
-		} else {
-			score := matchScorePatterns(name, entry, patterns)
-			if score > 0 {
-				results = append(results, SearchResult{
-					Category:   category,
-					Name:       name,
-					Entry:      entry,
-					MatchScore: score,
-				})
-			}
+		var match bool
+		switch {
+		case len(patterns) > 0 && len(tags) > 0:
+			match = matchesPatterns(name, entry, patterns) && matchesAnyTag(entry.Tags, tags)
+		case len(tags) > 0:
+			match = matchesAnyTag(entry.Tags, tags)
+		default:
+			match = matchesPatterns(name, entry, patterns)
+		}
+
+		if match {
+			results = append(results, SearchResult{
+				Category: category,
+				Name:     name,
+				Entry:    entry,
+			})
 		}
 	}
 
@@ -181,38 +166,27 @@ func matchesAnyTag(entryTags, filterTags []string) bool {
 	return false
 }
 
-// matchScorePatterns sums per-pattern field scores (name 3, description 1, tags 1),
-// returning 0 if any pattern matches no field (AND semantics).
-func matchScorePatterns(name string, entry registry.IndexEntry, patterns []*regexp.Regexp) int {
+// matchesPatterns reports whether every pattern matches the name, description, or any
+// tag (AND across patterns). Returns false for nil patterns.
+func matchesPatterns(name string, entry registry.IndexEntry, patterns []*regexp.Regexp) bool {
 	if len(patterns) == 0 {
-		return 0
+		return false
 	}
 
-	totalScore := 0
 	for _, pattern := range patterns {
-		termScore := 0
-
-		if pattern.MatchString(name) {
-			termScore += 3
+		matched := pattern.MatchString(name) ||
+			pattern.MatchString(entry.Description) ||
+			slices.ContainsFunc(entry.Tags, pattern.MatchString)
+		if !matched {
+			return false // AND: every pattern must match something
 		}
-		if pattern.MatchString(entry.Description) {
-			termScore += 1
-		}
-		if slices.ContainsFunc(entry.Tags, pattern.MatchString) {
-			termScore += 1
-		}
-
-		if termScore == 0 {
-			return 0 // AND: every pattern must match something
-		}
-		totalScore += termScore
 	}
 
-	return totalScore
+	return true
 }
 
 // SearchInstalledConfig searches installed config entries under cueKey (e.g. "agents"),
-// scoring them the same way as the registry index search.
+// matching them the same way as the registry index search.
 func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags []string) ([]SearchResult, error) {
 	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {
@@ -250,18 +224,15 @@ func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags [
 	return results, nil
 }
 
-// sortResults sorts by score descending, then name ascending.
+// sortResults sorts by name ascending.
 func sortResults(results []SearchResult) {
 	sort.Slice(results, func(i, j int) bool {
-		if results[i].MatchScore != results[j].MatchScore {
-			return results[i].MatchScore > results[j].MatchScore
-		}
 		return results[i].Name < results[j].Name
 	})
 }
 
 // extractIndexEntryFromCUE extracts description, tags, and origin from a CUE value
-// into an IndexEntry for scoring.
+// into an IndexEntry for matching.
 func extractIndexEntryFromCUE(v cue.Value) registry.IndexEntry {
 	var entry registry.IndexEntry
 

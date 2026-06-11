@@ -16,8 +16,8 @@ func TestPrintSearchSections(t *testing.T) {
 	t.Parallel()
 
 	results := []modules.SearchResult{
-		{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go programming expert"}, MatchScore: 5},
-		{Category: "tasks", Name: "pre-commit-review", Entry: registry.IndexEntry{Description: "Review staged changes"}, MatchScore: 3},
+		{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go programming expert"}},
+		{Category: "tasks", Name: "pre-commit-review", Entry: registry.IndexEntry{Description: "Review staged changes"}},
 	}
 
 	t.Run("single section output", func(t *testing.T) {
@@ -122,10 +122,9 @@ func TestPrintSearchSections(t *testing.T) {
 		t.Parallel()
 		verboseResults := []modules.SearchResult{
 			{
-				Category:   "roles",
-				Name:       "golang",
-				Entry:      registry.IndexEntry{Description: "Go expert", Module: "github.com/test/roles/golang@v0", Tags: []string{"go", "programming"}},
-				MatchScore: 5,
+				Category: "roles",
+				Name:     "golang",
+				Entry:    registry.IndexEntry{Description: "Go expert", Module: "github.com/test/roles/golang@v0", Tags: []string{"go", "programming"}},
 			},
 		}
 		var buf bytes.Buffer
@@ -153,10 +152,9 @@ func TestPrintSearchSections(t *testing.T) {
 		t.Parallel()
 		verboseResults := []modules.SearchResult{
 			{
-				Category:   "roles",
-				Name:       "golang",
-				Entry:      registry.IndexEntry{Description: "Go expert", Module: "github.com/test/roles/golang@v0", Tags: []string{"go"}},
-				MatchScore: 5,
+				Category: "roles",
+				Name:     "golang",
+				Entry:    registry.IndexEntry{Description: "Go expert", Module: "github.com/test/roles/golang@v0", Tags: []string{"go"}},
 			},
 		}
 		var buf bytes.Buffer
@@ -177,10 +175,10 @@ func TestPrintSearchSections(t *testing.T) {
 	t.Run("category order is agents roles contexts tasks", func(t *testing.T) {
 		t.Parallel()
 		allCatResults := []modules.SearchResult{
-			{Category: "contexts", Name: "env", Entry: registry.IndexEntry{Description: "Environment"}, MatchScore: 3},
-			{Category: "agents", Name: "claude", Entry: registry.IndexEntry{Description: "Claude AI"}, MatchScore: 3},
-			{Category: "tasks", Name: "review", Entry: registry.IndexEntry{Description: "Code review"}, MatchScore: 3},
-			{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go expert"}, MatchScore: 3},
+			{Category: "contexts", Name: "env", Entry: registry.IndexEntry{Description: "Environment"}},
+			{Category: "agents", Name: "claude", Entry: registry.IndexEntry{Description: "Claude AI"}},
+			{Category: "tasks", Name: "review", Entry: registry.IndexEntry{Description: "Code review"}},
+			{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go expert"}},
 		}
 		var buf bytes.Buffer
 		sections := []searchSection{
@@ -205,7 +203,7 @@ func TestPrintSearchSections(t *testing.T) {
 		var buf bytes.Buffer
 		sections := []searchSection{
 			{Label: "test", Results: []modules.SearchResult{
-				{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go expert"}, MatchScore: 3},
+				{Category: "roles", Name: "golang", Entry: registry.IndexEntry{Description: "Go expert"}},
 			}},
 		}
 		printSearchSections(&buf, sections, false, nil)

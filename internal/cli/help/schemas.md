@@ -52,7 +52,7 @@ entry = { module, description?, tags?, version?, bin? }
 Array of source sections. Empty result is `[]`.
 
 ```
-[{ label, path?, results: [ { category, name, matchScore,
+[{ label, path?, results: [ { category, name,
    entry: { module, description?, tags?, version?, bin? } } ] }]
 ```
 

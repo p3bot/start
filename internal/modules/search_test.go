@@ -73,50 +73,62 @@ func TestParseSearchPatterns(t *testing.T) {
 	}
 }
 
-func TestMatchScorePatterns(t *testing.T) {
+func TestMatchesPatterns(t *testing.T) {
 	t.Parallel()
 
 	entry := registry.IndexEntry{
 		Module:      "github.com/test/roles/golang/assistant@v0",
 		Description: "Go programming expert for code assistance",
-		Tags:        []string{"golang", "programming", "expert"},
+		Tags:        []string{"golang", "programming", "expert", "cli"},
 	}
 
 	tests := []struct {
 		name       string
 		moduleName string
 		terms      []string
-		wantScore  int
+		want       bool
 	}{
 		{
-			name:       "single term backward compat",
+			name:       "single term matches name and tag",
 			moduleName: "golang",
 			terms:      []string{"golang"},
-			wantScore:  4, // name(3) + tag(1)
+			want:       true,
+		},
+		{
+			name:       "term matches description only",
+			moduleName: "golang",
+			terms:      []string{"assistance"},
+			want:       true,
+		},
+		{
+			name:       "term matches tag only",
+			moduleName: "golang",
+			terms:      []string{"cli"}, // absent from name and description
+			want:       true,
 		},
 		{
 			name:       "two terms both match",
 			moduleName: "golang",
 			terms:      []string{"golang", "expert"},
-			wantScore:  6, // golang: name(3)+tag(1)=4, expert: desc(1)+tag(1)=2
+			want:       true,
 		},
 		{
 			name:       "two terms one fails",
 			moduleName: "golang",
 			terms:      []string{"golang", "python"},
-			wantScore:  0,
+			want:       false,
 		},
 		{
 			name:       "empty terms",
 			moduleName: "golang",
 			terms:      nil,
-			wantScore:  0,
+			want:       false,
 		},
 		{
 			name:       "three terms all match",
 			moduleName: "golang",
 			terms:      []string{"golang", "programming", "code"},
-			wantScore:  7, // golang: name(3)+tag(1)=4, programming: desc(1)+tag(1)=2, code: desc(1)=1
+			want:       true,
 		},
 	}
 
@@ -130,9 +142,9 @@ func TestMatchScorePatterns(t *testing.T) {
 					t.Fatalf("CompileSearchTerms() error: %v", err)
 				}
 			}
-			score := matchScorePatterns(tt.moduleName, entry, patterns)
-			if score != tt.wantScore {
-				t.Errorf("matchScorePatterns() = %d, want %d", score, tt.wantScore)
+			got := matchesPatterns(tt.moduleName, entry, patterns)
+			if got != tt.want {
+				t.Errorf("matchesPatterns() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -193,7 +205,7 @@ func TestSearchIndex(t *testing.T) {
 			name:      "find by partial name",
 			query:     "golang",
 			wantCount: 2,
-			wantFirst: "roles/golang/assistant", // or golang/code-review, both valid
+			wantFirst: "roles/golang/assistant", // name-ascending: assistant before code-review
 		},
 		{
 			name:      "find by description",
@@ -256,17 +268,7 @@ func TestSearchIndex(t *testing.T) {
 			if tt.wantCount > 0 && tt.wantFirst != "" {
 				first := results[0].Category + "/" + results[0].Name
 				if first != tt.wantFirst {
-					if tt.query == "golang" {
-						validResults := map[string]bool{
-							"roles/golang/assistant":   true,
-							"roles/golang/code-review": true,
-						}
-						if !validResults[first] {
-							t.Errorf("SearchIndex() first result = %q, want one of golang/assistant or golang/code-review", first)
-						}
-					} else {
-						t.Errorf("SearchIndex() first result = %q, want %q", first, tt.wantFirst)
-					}
+					t.Errorf("SearchIndex() first result = %q, want %q", first, tt.wantFirst)
 				}
 			}
 		})
@@ -612,23 +614,20 @@ func TestSearchResultOrdering(t *testing.T) {
 		t.Fatalf("SearchIndex() error: %v", err)
 	}
 
-	if len(results) != 3 {
-		t.Fatalf("SearchIndex() returned %d results, want 3", len(results))
+	// Deterministic order: category order (roles before tasks) then name ascending.
+	want := []string{
+		"roles/golang/assistant",
+		"roles/golang/code-review",
+		"tasks/golang/test",
 	}
 
-	categoryOrder := make([]string, len(results))
+	got := make([]string, len(results))
 	for i, r := range results {
-		categoryOrder[i] = r.Category
+		got[i] = r.Category + "/" + r.Name
 	}
 
-	var seenTasks bool
-	for _, cat := range categoryOrder {
-		if cat == "tasks" {
-			seenTasks = true
-		}
-		if seenTasks && cat == "roles" {
-			t.Error("SearchIndex() results not properly ordered: tasks before roles")
-		}
+	if !slices.Equal(got, want) {
+		t.Errorf("SearchIndex() order = %v, want %v", got, want)
 	}
 }
 
