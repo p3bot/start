@@ -2,6 +2,9 @@ package orchestration
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1289,6 +1292,88 @@ func TestComposeWithRole_OptionalBehavior(t *testing.T) {
 			t.Errorf("Role = %q, want 'Real role content'", result.Role)
 		}
 	})
+}
+
+// TestComposeWithRole_RemoteLocator covers an http(s) --role: the fetched body
+// becomes the role content, and a temp file is materialised so {{role_file}}
+// resolves for agents that consume the path rather than the content.
+func TestComposeWithRole_RemoteLocator(t *testing.T) {
+	t.Parallel()
+	const body = "You are a remote assistant.\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	workingDir := t.TempDir()
+	cfg := cuecontext.New().CompileString(`{}`)
+	if err := cfg.Err(); err != nil {
+		t.Fatalf("compile config: %v", err)
+	}
+
+	processor := NewTemplateProcessor(nil, nil, workingDir)
+	composer := NewComposer(processor, workingDir)
+
+	url := srv.URL + "/role.md"
+	result, err := composer.ComposeWithRole(cfg, ContextSelection{}, url, "")
+	if err != nil {
+		t.Fatalf("ComposeWithRole() error = %v", err)
+	}
+
+	if result.Role != body {
+		t.Errorf("Role = %q, want %q", result.Role, body)
+	}
+	if result.RoleFile == "" {
+		t.Fatal("RoleFile is empty; {{role_file}} would not resolve for a remote role")
+	}
+	onDisk, err := os.ReadFile(result.RoleFile)
+	if err != nil {
+		t.Fatalf("reading materialised role file: %v", err)
+	}
+	if string(onDisk) != body {
+		t.Errorf("materialised role file = %q, want %q", string(onDisk), body)
+	}
+	if len(result.RoleResolutions) == 0 || result.RoleResolutions[len(result.RoleResolutions)-1].File != url {
+		t.Errorf("expected a role resolution naming the URL %q, got %+v", url, result.RoleResolutions)
+	}
+}
+
+// TestCompose_RemoteContext covers an http(s) --context tag: the fetched body is
+// injected into the prompt and the context is listed under the URL it was given.
+func TestCompose_RemoteContext(t *testing.T) {
+	t.Parallel()
+	const body = "Remote context content."
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	workingDir := t.TempDir()
+	cfg := cuecontext.New().CompileString(`{}`)
+	if err := cfg.Err(); err != nil {
+		t.Fatalf("compile config: %v", err)
+	}
+
+	processor := NewTemplateProcessor(nil, nil, workingDir)
+	composer := NewComposer(processor, workingDir)
+
+	url := srv.URL + "/context.md"
+	result, err := composer.Compose(cfg, ContextSelection{Tags: []string{url}}, "")
+	if err != nil {
+		t.Fatalf("Compose() error = %v", err)
+	}
+
+	if !strings.Contains(result.Prompt, body) {
+		t.Errorf("Prompt = %q, want it to contain the fetched context %q", result.Prompt, body)
+	}
+	if len(result.Contexts) != 1 || result.Contexts[0].Name != url {
+		t.Errorf("Contexts = %+v, want a single context named %q", result.Contexts, url)
+	}
+	if result.Contexts[0].Status != "loaded" {
+		t.Errorf("context status = %q, want loaded", result.Contexts[0].Status)
+	}
 }
 
 func TestComposer_ResolveContext_Errors(t *testing.T) {

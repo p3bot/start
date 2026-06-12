@@ -64,7 +64,7 @@ func printContextRows(w io.Writer, contexts []orchestration.Context, selection o
 		parts = append(parts, "default")
 	}
 	for _, tag := range selection.Tags {
-		if !orchestration.IsFilePath(tag) {
+		if !orchestration.IsLocator(tag) {
 			parts = append(parts, tag)
 		}
 	}

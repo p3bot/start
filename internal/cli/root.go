@@ -67,22 +67,24 @@ func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "AI agent CLI orchestrator",
-		Long: `start is a command-line orchestrator for AI agents built on CUE.
-It manages prompt composition, context injection, and workflow automation.
+		Long: `
+start
+https://github.com/start-cli/start
 
-When stdin is piped, its content is used as the prompt text — equivalent
-to passing it inline. For bare 'start', only required contexts are
-included; for 'start prompt' it fills the missing [text] arg; for
-'start task <name>' it fills the missing [instructions] arg. Persistent
-flags (--agent, --role, --context, ...) are honoured as normal.
+A command-line orchestrator for AI agents built on CUE.
+Manages prompt composition, context injection, and workflow automation.
 
 Examples:
   start                              Launch agent with default role and contexts
+  start task review/pre-commit       Run a predefined task
+  start task https://x.test/t.md     Run a predefined task from a URL
   start --role go-expert             Launch with a specific role
+  start --role https://x.test/r.md   Launch with a role fetched from a URL
   echo "summarise this" | start      Send piped text as a one-shot prompt
   echo "..." | start task review     Pipe instructions to a task
-  start task review/pre-commit       Run a predefined task
-  start doctor                       Check installation and configuration`,
+  start doctor                       Check installation and configuration
+
+  `,
 		Version: cliVersion,
 		// SilenceUsage suppresses usage on RunE errors; flag/arg parse errors still show it.
 		SilenceUsage: true,
@@ -134,9 +136,9 @@ Examples:
 	cmd.SetVersionTemplate(versionTemplate)
 
 	cmd.PersistentFlags().StringVarP(&flags.Agent, "agent", "a", "", "Override agent selection")
-	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name or file path); 'none' skips role assignment (also: nil, off, 0)")
+	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name, file path, or http(s) URL); 'none' skips role assignment (also: nil, off, 0)")
 	cmd.PersistentFlags().StringVarP(&flags.Model, "model", "m", "", "Override model selection")
-	cmd.PersistentFlags().StringSliceVarP(&flags.Context, "context", "c", nil, "Select contexts (tags or file paths); 'none' drops auto-loaded contexts (also: nil, off, 0)")
+	cmd.PersistentFlags().StringSliceVarP(&flags.Context, "context", "c", nil, "Select contexts (tags, file paths, or http(s) URLs); 'none' drops auto-loaded contexts (also: nil, off, 0)")
 	cmd.PersistentFlags().BoolVar(&flags.DryRun, "dry-run", false, "Preview execution without launching agent")
 	cmd.PersistentFlags().BoolVarP(&flags.Quiet, "quiet", "q", false, "Suppress output")
 	cmd.PersistentFlags().BoolVar(&flags.Verbose, "verbose", false, "Detailed output")

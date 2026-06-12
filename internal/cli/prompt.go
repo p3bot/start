@@ -13,9 +13,9 @@ func addPromptCommand(parent *cobra.Command) {
 		Long: `Launch AI agent with a custom prompt and only required contexts.
 
 Accepts any number of arguments. Each argument is independently treated as
-inline text or a file path (starting with ./, /, ~, or ~/); file paths are read
-and inline text is used verbatim. Resolved segments are joined with exactly one
-blank line between them.
+inline text, a file path (starting with ./, /, ~, or ~/), or an http(s) URL;
+paths and URLs are read and inline text is used verbatim. Resolved segments are
+joined with exactly one blank line between them.
 
 If no argument is given and stdin is piped, the piped content is used as the
 prompt text. Default contexts are excluded to keep the prompt focused.
@@ -29,7 +29,7 @@ Use -c default to include contexts configured with default: true.`,
 func runPrompt(cmd *cobra.Command, args []string) error {
 	customText := ""
 	if len(args) > 0 {
-		composed, err := orchestration.ComposeSegments(args, "prompt file")
+		composed, err := orchestration.ComposeSegments(args, "prompt")
 		if err != nil {
 			return err
 		}

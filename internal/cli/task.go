@@ -23,13 +23,15 @@ Without arguments, lists all tasks from global and local configuration.
 With a name, searches for and runs the matching task.
 
 The name can be a config task name, a "tasks:name" fully-qualified address
-(the prefix must be "tasks"), or a file path (starting with ./, /, ~, or ~/).
-Tasks are reusable workflows defined in configuration.
+(the prefix must be "tasks"), a file path (starting with ./, /, ~, or ~/), or an
+http(s) URL. A path or URL is read directly. Tasks are reusable workflows defined
+in configuration.
 
 The first argument is the task name; every argument after it is an instruction
-segment. Each segment is independently treated as inline text or a file path
-(starting with ./, /, ~, or ~/); file paths are read and inline text is used
-verbatim. Resolved segments are joined with exactly one blank line between them.
+segment. Each segment is independently treated as inline text, a file path
+(starting with ./, /, ~, or ~/), or an http(s) URL; paths and URLs are read and
+inline text is used verbatim. Resolved segments are joined with exactly one blank
+line between them.
 
 Instructions fill the task template's {{.instructions}} placeholder. When the
 task has no {{.instructions}} placeholder, the instructions are appended after
@@ -60,7 +62,7 @@ func runTask(cmd *cobra.Command, args []string) error {
 	taskName := args[0]
 	instructions := ""
 	if len(args) > 1 {
-		composed, err := orchestration.ComposeSegments(args[1:], "instructions file")
+		composed, err := orchestration.ComposeSegments(args[1:], "instructions")
 		if err != nil {
 			return err
 		}
@@ -139,11 +141,11 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 
 	var taskResult orchestration.ProcessResult
 	var resolvedName string
-	if orchestration.IsFilePath(taskName) {
-		debugf(stderr, flags, dbgTask, "Detected file path, reading file")
-		content, err := orchestration.ReadFilePath(taskName)
+	if orchestration.IsLocator(taskName) {
+		debugf(stderr, flags, dbgTask, "Detected locator, reading content")
+		content, err := orchestration.ReadLocator(taskName)
 		if err != nil {
-			return fmt.Errorf("reading task file %q: %w", taskName, err)
+			return fmt.Errorf("reading task %q: %w", taskName, err)
 		}
 		// Process through the template processor for {{.instructions}} support.
 		taskResult, err = env.Composer.ProcessContent(content, instructions)
@@ -151,7 +153,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 			return fmt.Errorf("processing task file: %w", err)
 		}
 		taskResult.FileRead = true
-		resolvedName = taskName // Display file path as task name.
+		resolvedName = taskName // Display the locator as the task name.
 	} else {
 		// Resolve the task name through the unified engine: file paths are
 		// handled above, so a path never reaches here. A registry-only match is

@@ -23,7 +23,9 @@ func addGetCommand(parent *cobra.Command, flags *Flags) {
 Searches across all categories (agents, roles, contexts, tasks) and writes the
 module's content to stdout. Names may be bare (e.g. "agents-md") or fully
 qualified as "category:name" (e.g. "contexts:cwd/agents-md"); the category
-prefix scopes the search to a single category. UTD modules (roles, contexts,
+prefix scopes the search to a single category. A file path (starting with ./, /,
+~, or ~/) or an http(s) URL bypasses the search and its content is read directly.
+UTD modules (roles, contexts,
 tasks) are template-resolved: file contents are read, prompts are rendered,
 and commands are executed. Agent modules emit the command template with static
 placeholders ({{.bin}}, {{.model}}) substituted while runtime placeholders
@@ -95,8 +97,8 @@ func runGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if outcome.filePath != "" {
-		return outputFileBody(stdout, flags, outcome.filePath)
+	if outcome.locator != "" {
+		return outputFileBody(stdout, flags, outcome.locator)
 	}
 	match := outcome.match
 
@@ -150,11 +152,12 @@ func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, 
 	return args[0], nil
 }
 
-// outputFileBody reads a filesystem path supplied to get/describe and writes its
-// content, styling Markdown on a terminal exactly as a UTD file body is styled.
-// Piped, redirected, or --color=never output stays raw and byte-identical.
+// outputFileBody reads a locator supplied to get/describe (a local path or an
+// http(s) URL) and writes its content, styling Markdown on a terminal exactly as
+// a UTD file body is styled. Piped, redirected, or --color=never output stays
+// raw and byte-identical.
 func outputFileBody(w io.Writer, flags *Flags, path string) error {
-	content, err := orchestration.ReadFilePath(path)
+	content, err := orchestration.ReadLocator(path)
 	if err != nil {
 		return fmt.Errorf("reading %q: %w", path, err)
 	}

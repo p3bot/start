@@ -107,7 +107,9 @@ With an argument, searches across all categories and displays a verbose dump.
 
 Names may be bare (e.g. "claude") or fully qualified as "category:name"
 (e.g. "agents:claude/interactive"). The category prefix scopes the search
-to a single category; bare names continue to search across all four.
+to a single category; bare names continue to search across all four. A file path
+(starting with ./, /, ~, or ~/) or an http(s) URL bypasses the search and its
+content is read directly.
 
 Use --global to restrict output to the global config (~/.config/start/) or
 --local to restrict to the local config (./.start/). These flags are mutually
@@ -257,8 +259,8 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	// Leading gap before the describe body, emitted only once resolution
 	// succeeds so a resolution error leaves no stray blank line on stdout.
 	fmt.Fprintln(w)
-	if outcome.filePath != "" {
-		return outputFileBody(w, flags, outcome.filePath)
+	if outcome.locator != "" {
+		return outputFileBody(w, flags, outcome.locator)
 	}
 	match := outcome.match
 

@@ -45,28 +45,29 @@ func nameMatches(query, candidate string, mode matchMode) bool {
 // resolveScope parameterises the unified resolver for one surface: which
 // categories it spans, whether it is a cross-category surface (display as
 // category:name and consult the registry in the exact tier to detect twins),
-// whether a filesystem path is accepted, and the noun used in messages.
+// whether a locator (local path or http(s) URL) is accepted, and the noun used
+// in messages.
 type resolveScope struct {
 	categories    []describeCategory
 	crossCategory bool
-	allowFilePath bool
+	allowLocator  bool
 	displayType   string
 }
 
-// resolveOutcome is the result of resolution: either a filesystem path (read
-// directly, no search) or a resolved module match.
+// resolveOutcome is the result of resolution: either a locator (a local path or
+// http(s) URL, read directly with no search) or a resolved module match.
 type resolveOutcome struct {
-	filePath string
-	match    ModuleMatch
+	locator string
+	match   ModuleMatch
 }
 
 // singleCategoryScope builds a scope for a category-specific surface
 // (--role, --agent, start task, --context).
-func singleCategoryScope(category, displayType string, allowFilePath bool) resolveScope {
+func singleCategoryScope(category, displayType string, allowLocator bool) resolveScope {
 	return resolveScope{
-		categories:    []describeCategory{*describeCategoryFor(category)},
-		allowFilePath: allowFilePath,
-		displayType:   displayType,
+		categories:   []describeCategory{*describeCategoryFor(category)},
+		allowLocator: allowLocator,
+		displayType:  displayType,
 	}
 }
 
@@ -76,22 +77,22 @@ func crossCategoryScope() resolveScope {
 	return resolveScope{
 		categories:    describeCategories,
 		crossCategory: true,
-		allowFilePath: true,
+		allowLocator:  true,
 		displayType:   "module",
 	}
 }
 
 // resolve turns an identifier into an outcome through the unified match rule:
-// file-path bypass, category-prefix interpretation, the exact-whole-name tier,
+// locator bypass, category-prefix interpretation, the exact-whole-name tier,
 // the three-character floor, then the fallback tier, reducing to a single
 // decision and installing a chosen registry-only match.
 func (r *resolver) resolve(input string, scope resolveScope) (resolveOutcome, error) {
-	if orchestration.IsFilePath(input) {
-		if !scope.allowFilePath {
-			return resolveOutcome{}, usageError(fmt.Errorf("%s does not accept a file path: %q", scope.displayType, input))
+	if orchestration.IsLocator(input) {
+		if !scope.allowLocator {
+			return resolveOutcome{}, usageError(fmt.Errorf("%s does not accept a file path or URL: %q", scope.displayType, input))
 		}
-		debugf(r.stderr, r.flags, dbgResolve, "%s %q: file path bypass", scope.displayType, input)
-		return resolveOutcome{filePath: input}, nil
+		debugf(r.stderr, r.flags, dbgResolve, "%s %q: locator bypass", scope.displayType, input)
+		return resolveOutcome{locator: input}, nil
 	}
 
 	addr, err := parseAddress(input)

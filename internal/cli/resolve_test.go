@@ -267,19 +267,24 @@ func TestResolveAgent_Empty(t *testing.T) {
 	}
 }
 
-// TestResolveAgent_FilePathRejected verifies --agent rejects a filesystem path:
-// an agent is a structured configuration, not a document body.
-func TestResolveAgent_FilePathRejected(t *testing.T) {
+// TestResolveAgent_LocatorRejected verifies --agent rejects a locator — a
+// filesystem path or an http(s) URL: an agent is a structured configuration, not
+// a document body.
+func TestResolveAgent_LocatorRejected(t *testing.T) {
 	t.Parallel()
 
 	r := newTestResolver(buildTestCfg(t, `{agents: {}}`))
-	for _, path := range []string{"./agent.cue", "/tmp/agent.cue", "~/agent.cue"} {
-		_, err := r.resolveAgent(path)
+	locators := []string{
+		"./agent.cue", "/tmp/agent.cue", "~/agent.cue",
+		"https://example.com/agent.cue", "http://example.com/agent.cue",
+	}
+	for _, loc := range locators {
+		_, err := r.resolveAgent(loc)
 		if err == nil {
-			t.Fatalf("resolveAgent(%q) expected error for file path", path)
+			t.Fatalf("resolveAgent(%q) expected error for locator", loc)
 		}
 		if got := ExitCodeFromError(err); got != ExitUsage {
-			t.Errorf("resolveAgent(%q) exit code = %d, want %d (usage)", path, got, ExitUsage)
+			t.Errorf("resolveAgent(%q) exit code = %d, want %d (usage)", loc, got, ExitUsage)
 		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -763,6 +765,42 @@ func TestExecuteTask_DryRun(t *testing.T) {
 	}
 }
 
+// TestExecuteTask_RemoteLocator drives the task surface end-to-end with an
+// http(s) task body: the remote content is fetched, {{.instructions}} is
+// substituted, and the locator is shown as the task name. The dry-run path still
+// performs the fetch, matching how a local task file is read.
+func TestExecuteTask_RemoteLocator(t *testing.T) {
+	tmpDir := setupStartTestConfig(t)
+	chdir(t, tmpDir)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, "Remote task body.\nInstructions: {{.instructions}}\n")
+	}))
+	defer srv.Close()
+
+	flags := &Flags{DryRun: true, NoRole: true}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	url := srv.URL + "/task.md"
+	if err := executeTask(stdout, stderr, strings.NewReader(""), flags, url, "focus on testing"); err != nil {
+		t.Fatalf("executeTask() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, url) {
+		t.Errorf("expected the locator %q as the task name, got:\n%s", url, output)
+	}
+	if !strings.Contains(output, "Remote task body.") {
+		t.Errorf("expected fetched task body in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "focus on testing") {
+		t.Errorf("expected {{.instructions}} substitution in output, got:\n%s", output)
+	}
+}
+
 func TestPrintDryRunSummary(t *testing.T) {
 	buf := new(bytes.Buffer)
 
@@ -1437,7 +1475,7 @@ func TestRunTask_UnreadableInstructionsFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unreadable instructions file")
 	}
-	if !strings.Contains(err.Error(), `reading instructions file "./nonexistent-instr.md"`) {
+	if !strings.Contains(err.Error(), `reading instructions "./nonexistent-instr.md"`) {
 		t.Errorf("error = %q, want it to name the unreadable file", err.Error())
 	}
 	if strings.Contains(stdout.String(), "Dry Run") {

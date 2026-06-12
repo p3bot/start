@@ -87,14 +87,15 @@ func (r *resolver) resolveAgent(name string) (string, error) {
 }
 
 // resolveRole resolves the --role identifier to an installed role name or a
-// filesystem path.
+// locator (local path or http(s) URL).
 func (r *resolver) resolveRole(name string) (string, error) {
 	return r.resolveSingle(name, singleCategoryScope("roles", "role", true))
 }
 
 // resolveSingle resolves a category-specific identifier, returning either the
-// resolved module name or the filesystem path it bypassed to. An empty
-// identifier passes through unchanged (the caller's "use the default" signal).
+// resolved module name or the locator (local path or http(s) URL) it bypassed
+// to. An empty identifier passes through unchanged (the caller's "use the
+// default" signal).
 func (r *resolver) resolveSingle(name string, scope resolveScope) (string, error) {
 	if name == "" {
 		return "", nil
@@ -103,8 +104,8 @@ func (r *resolver) resolveSingle(name string, scope resolveScope) (string, error
 	if err != nil {
 		return "", err
 	}
-	if outcome.filePath != "" {
-		return outcome.filePath, nil
+	if outcome.locator != "" {
+		return outcome.locator, nil
 	}
 	return outcome.match.Name, nil
 }
@@ -174,9 +175,10 @@ func (r *resolver) resolveModelName(name string, agent orchestration.Agent) stri
 }
 
 // resolveContexts resolves each --context term independently through the unified
-// match rule. A filesystem path is read directly; the "default" sentinel passes
-// through unsearched ("none" is consumed upstream and never reaches here). Every
-// other term resolves to exactly one context, erroring when it matches nothing.
+// match rule. A locator (local path or http(s) URL) is read directly; the
+// "default" sentinel passes through unsearched ("none" is consumed upstream and
+// never reaches here). Every other term resolves to exactly one context,
+// erroring when it matches nothing.
 func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 	if len(terms) == 0 {
 		return nil, nil
@@ -196,8 +198,8 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if outcome.filePath != "" {
-			resolved = append(resolved, outcome.filePath)
+		if outcome.locator != "" {
+			resolved = append(resolved, outcome.locator)
 			continue
 		}
 		resolved = append(resolved, outcome.match.Name)

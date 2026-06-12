@@ -284,8 +284,8 @@ func TestResolveCross_FilePathBypass(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveCross(%q) error = %v", path, err)
 		}
-		if outcome.filePath != path {
-			t.Errorf("resolveCross(%q).filePath = %q, want %q", path, outcome.filePath, path)
+		if outcome.locator != path {
+			t.Errorf("resolveCross(%q).locator = %q, want %q", path, outcome.locator, path)
 		}
 	}
 }

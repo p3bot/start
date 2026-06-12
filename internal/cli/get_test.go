@@ -2,6 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -671,6 +674,27 @@ func TestGetFilePathReadsDirectly(t *testing.T) {
 	}
 	if stdout != "Direct file body.\n" {
 		t.Errorf("stdout = %q, want %q", stdout, "Direct file body.\n")
+	}
+}
+
+// TestGetRemoteLocatorReadsDirectly verifies get fetches an http(s) locator and
+// writes its body to stdout pipe-clean, the remote analogue of a direct file
+// read.
+func TestGetRemoteLocatorReadsDirectly(t *testing.T) {
+	setupGetTestConfig(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, "Remote get body.\n")
+	}))
+	defer srv.Close()
+
+	stdout, stderr, err := runGetCmd(t, srv.URL+"/note.md")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "Remote get body.\n" {
+		t.Errorf("stdout = %q, want %q", stdout, "Remote get body.\n")
 	}
 }
 

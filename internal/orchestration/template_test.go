@@ -1,12 +1,35 @@
 package orchestration
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
+
+// TestDefaultFileReader_RejectsRemoteURL locks the trust boundary: a
+// module/config-declared file: field set to an http(s) URL must be treated as a
+// (missing) local path, never fetched. The in-process server records any hit;
+// the read must fail without one. Remote locators are a CLI-only feature.
+func TestDefaultFileReader_RejectsRemoteURL(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+	}))
+	defer srv.Close()
+
+	fr := &DefaultFileReader{}
+	if _, err := fr.Read(srv.URL + "/role.md"); err == nil {
+		t.Fatal("expected error reading an http URL as a local path")
+	}
+	if got := hits.Load(); got != 0 {
+		t.Errorf("server received %d requests; a file: field must not fetch over the network", got)
+	}
+}
 
 type mockShellRunner struct {
 	output string

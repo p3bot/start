@@ -141,6 +141,7 @@ exact match exists:
 | `foo/bar` | bare term containing a slash | substring over the name |
 | `tasks:foo` | category-qualified term | prefix over the name, scoped to that category |
 | `/foo`, `./foo`, `~`, `~/foo` | filesystem path | no search; read the file directly |
+| `http://…`, `https://…` | remote locator | no search; fetch the content directly |
 
 Notes:
 
@@ -153,13 +154,19 @@ Notes:
 - A bare term is a substring match: `foo/bar` matches `foofoo/barbar` because the
   literal `foo/bar` appears inside it. A slash in a bare term is an ordinary
   character, not a path separator.
-- A leading `/`, `./`, or `~` (including a bare `~`) marks a filesystem path. The
-  path is read directly and the search procedure is skipped entirely. This applies
-  to every surface that yields a document body: the `--role` and `--context` flags,
-  `start task`, and the cross-category `get`/`describe`, which read and display the
-  file directly. The sole exception is `--agent`: it does not accept a filesystem
-  path, because an agent is a structured configuration rather than a document body,
-  so a path supplied to `--agent` is an error.
+- A leading `/`, `./`, or `~` (including a bare `~`), or an `http://` or `https://`
+  scheme, marks a locator. The locator is read directly — a path from the
+  filesystem, a URL by fetch — and the search procedure is skipped entirely. This
+  applies to every surface that yields a document body: the `--role` and `--context`
+  flags, `start task`, and the cross-category `get`/`describe`, which read and
+  display the content directly. The sole exception is `--agent`: it accepts neither
+  a filesystem path nor a URL, because an agent is a structured configuration rather
+  than a document body, so a locator supplied to `--agent` is an error.
+- A remote fetch is bounded: it follows the response under a timeout and a size
+  cap, and refuses a `text/html` body so a rendered file page or a soft-404 is not
+  injected verbatim. Only locators typed at the CLI are fetched; a `file:` field
+  declared inside a module or config is always read from the local filesystem and
+  is never fetched over the network.
 
 ## Category prefix
 

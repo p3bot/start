@@ -207,12 +207,12 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 
 	// User tags are processed in given order.
 	for _, tag := range selection.Tags {
-		if IsFilePath(tag) {
+		if IsLocator(tag) {
 			ctx := Context{
 				Name: tag,
 				File: tag,
 			}
-			content, err := ReadFilePath(tag)
+			content, err := ReadLocator(tag)
 			if err != nil {
 				ctx.Status = "error"
 				ctx.Error = err.Error()
@@ -334,11 +334,10 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 		var roleFilePath string
 		var roleErr error
 
-		if IsFilePath(roleName) {
-			roleContent, roleErr = ReadFilePath(roleName)
-			if roleErr == nil {
-				roleFilePath, _ = ExpandFilePath(roleName)
-			}
+		if IsLocator(roleName) {
+			// A remote role materialises to .start/temp/ so {{role_file}} points
+			// at a real file; a local role returns its own on-disk path.
+			roleContent, roleFilePath, roleErr = ReadRoleLocator(c.tempManager, roleName)
 			res := RoleResolution{
 				Name: roleName,
 				File: roleName,

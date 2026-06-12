@@ -5,19 +5,20 @@ import (
 	"strings"
 )
 
-// ComposeSegments resolves each argument as a file path or literal and joins the
+// ComposeSegments resolves each argument as a locator (file path or http(s)
+// URL) or literal and joins the
 // resolved segments with exactly one blank line between adjacent non-empty
 // segments. With exactly one argument it returns that resolved segment verbatim,
 // bypassing the drop-empty step, so single-argument behaviour is byte-identical
-// to the previous single-argument handling. fileNoun names the segment kind in
-// read errors (for example "prompt file" or "instructions file").
-func ComposeSegments(args []string, fileNoun string) (string, error) {
+// to the previous single-argument handling. segmentNoun names the segment kind
+// in read errors (for example "prompt" or "instructions").
+func ComposeSegments(args []string, segmentNoun string) (string, error) {
 	segs := make([]string, len(args))
 	for i, arg := range args {
-		if IsFilePath(arg) {
-			content, err := ReadFilePath(arg)
+		if IsLocator(arg) {
+			content, err := ReadLocator(arg)
 			if err != nil {
-				return "", fmt.Errorf("reading %s %q: %w", fileNoun, arg, err)
+				return "", fmt.Errorf("reading %s %q: %w", segmentNoun, arg, err)
 			}
 			segs[i] = content
 			continue

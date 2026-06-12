@@ -86,9 +86,9 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | Flag | Short | Description |
 | ---- | ----- | ----------- |
 | `--agent` | `-a` | Override the configured agent |
-| `--role` | `-r` | Override role (config name or file path); `none` skips role assignment |
+| `--role` | `-r` | Override role (config name, file path, or http(s) URL); `none` skips role assignment |
 | `--model` | `-m` | Override the model |
-| `--context` | `-c` | Select contexts (tags or file paths, repeatable); `none` drops auto-loaded required/default contexts (`none,foo` keeps only foo) |
+| `--context` | `-c` | Select contexts (tags, file paths, or http(s) URLs, repeatable); `none` drops auto-loaded required/default contexts (`none,foo` keeps only foo) |
 | `--dry-run` | | Preview execution without running |
 | `--quiet` | `-q` | Suppress non-essential output |
 | `--verbose` | | Show detailed output |
@@ -139,7 +139,9 @@ two equal sources, de-duplicated by `category:name` (installed wins). The match
 rule, specified in `docs/module-resolution.md`, is:
 
 1. Interpret the identifier. A leading `./`, `/`, `~`, or `~/` is a filesystem
-   path read directly (no search); `--agent` rejects a path. A `category:name`
+   path, and an `http(s)://` scheme a remote locator, each read directly (no
+   search — the path from disk, the URL by a bounded fetch); `--agent` rejects
+   both. A `category:name`
    prefix scopes to that category and selects prefix fallback; a mismatched or
    unknown category is a usage error.
 2. Exact-whole-name tier first, for every non-path input. A single case-

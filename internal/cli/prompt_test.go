@@ -501,7 +501,7 @@ func TestRunPrompt_UnreadableFileArg(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unreadable file-path argument")
 	}
-	if !strings.Contains(err.Error(), `reading prompt file "./nonexistent-file-xyz.md"`) {
+	if !strings.Contains(err.Error(), `reading prompt "./nonexistent-file-xyz.md"`) {
 		t.Errorf("error = %q, want it to name the unreadable file", err.Error())
 	}
 	if strings.Contains(stdout.String(), "Dry Run") {

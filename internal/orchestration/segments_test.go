@@ -103,16 +103,16 @@ func TestComposeSegments_ReadError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "nope.md")
 
 	tests := []struct {
-		name     string
-		fileNoun string
-		wantPre  string
+		name        string
+		segmentNoun string
+		wantPre     string
 	}{
-		{name: "prompt noun", fileNoun: "prompt file", wantPre: `reading prompt file "`},
-		{name: "instructions noun", fileNoun: "instructions file", wantPre: `reading instructions file "`},
+		{name: "prompt noun", segmentNoun: "prompt", wantPre: `reading prompt "`},
+		{name: "instructions noun", segmentNoun: "instructions", wantPre: `reading instructions "`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ComposeSegments([]string{missing}, tt.fileNoun)
+			_, err := ComposeSegments([]string{missing}, tt.segmentNoun)
 			if err == nil {
 				t.Fatalf("expected error for missing file %q", missing)
 			}
