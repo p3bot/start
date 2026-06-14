@@ -10,7 +10,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
@@ -157,20 +156,23 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Search registry; degrade gracefully if unavailable.
+	// Search registry; degrade gracefully if unavailable. Cache-gated under the
+	// shared rule: a fresh cache resolves the index version offline (unless
+	// --refresh), so a follow-up FetchIndex of that canonical version makes no
+	// metadata request.
 	var registryErr error
 	ctx := context.Background()
+	flags := getFlags(cmd)
 	client, err := getProvider(cmd)()
 	if err != nil {
 		registryErr = err
+	} else if version, vErr := resolveDisplayIndexVersion(ctx, client, resolveLibraryIndexPath(), stderr, flags); vErr != nil {
+		registryErr = vErr
 	} else {
-		index, indexVersion, err := client.FetchIndex(ctx, resolveLibraryIndexPath())
+		index, _, err := client.FetchIndex(ctx, version)
 		if err != nil {
 			registryErr = err
 		} else {
-			if err := cache.WriteIndex(indexVersion); err != nil {
-				debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
-			}
 			results, err := modules.SearchIndex(index, query, tags)
 			if err != nil {
 				return err
@@ -227,7 +229,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintln(cmd.OutOrStdout())
 	installed := collectInstalledNames()
-	flags := getFlags(cmd)
 	printSearchSections(cmd.OutOrStdout(), sections, flags.Verbose, installed)
 
 	if registryErr != nil {

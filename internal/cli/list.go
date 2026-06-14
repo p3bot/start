@@ -9,7 +9,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
@@ -145,7 +144,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		if err == nil {
 			prog := tui.NewProgress(cmd.ErrOrStderr(), flags.Quiet)
 			prog.Update("Checking for updates...")
-			checkForUpdates(ctx, client, installed, resolveLibraryIndexPath())
+			checkForUpdates(ctx, client, installed, resolveLibraryIndexPath(), flags, cmd.ErrOrStderr())
 			prog.Done()
 		}
 	}
@@ -270,13 +269,18 @@ func determineScopeAndFile(localCfg cue.Value, paths config.Paths, category, nam
 }
 
 // checkForUpdates fills in LatestVer/UpdateAvail by comparing against the
-// registry index.
-func checkForUpdates(ctx context.Context, client registry.Client, installed []InstalledModule, indexPath string) {
-	index, indexVersion, err := client.FetchIndex(ctx, indexPath)
+// registry index. Cache-gated under the shared rule: a fresh cache resolves the
+// index version offline (unless --refresh) so FetchIndex of that canonical
+// version makes no metadata request.
+func checkForUpdates(ctx context.Context, client registry.Client, installed []InstalledModule, indexPath string, flags *Flags, stderr io.Writer) {
+	version, err := resolveDisplayIndexVersion(ctx, client, indexPath, stderr, flags)
 	if err != nil {
 		return
 	}
-	_ = cache.WriteIndex(indexVersion)
+	index, _, err := client.FetchIndex(ctx, version)
+	if err != nil {
+		return
+	}
 
 	for i := range installed {
 		entry := findInIndex(index, installed[i].Category, installed[i].Name)

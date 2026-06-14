@@ -36,6 +36,16 @@ type registryStub struct {
 	// the live registry; the exact count pins each command's client-construction
 	// count (e.g. doctor builds two per invocation).
 	providerCalls int
+
+	// Recorded request paths, the metadata-resolve observable that distinguishes
+	// a cache-gated resolve from a live one. resolvePaths records every
+	// ResolveLatestVersion (the display helper's live-resolve call, absent on a
+	// fresh-cache hit); fetchIndexPaths records the path each FetchIndex was
+	// asked for, so the resolver path is distinguishable as bare-major (live) vs
+	// canonical (cache-gated). providerCalls cannot tell these apart — it is 1 on
+	// both paths.
+	resolvePaths    []string
+	fetchIndexPaths []string
 }
 
 type fetchResponse struct {
@@ -85,6 +95,7 @@ func (s *registryStub) SetFetchIndexError(err error) {
 // FetchIndex returns the canned in-memory index. The returned version string
 // mirrors a canonical resolved path (what the real client produces).
 func (s *registryStub) FetchIndex(ctx context.Context, indexPath string) (*registry.Index, string, error) {
+	s.fetchIndexPaths = append(s.fetchIndexPaths, indexPath)
 	if s.fetchIndexErr != nil {
 		return nil, "", s.fetchIndexErr
 	}
@@ -116,6 +127,7 @@ func (s *registryStub) ModuleVersions(ctx context.Context, modulePath string) ([
 
 // ResolveLatestVersion returns a deterministic canonical version for any path.
 func (s *registryStub) ResolveLatestVersion(ctx context.Context, modulePath string) (string, error) {
+	s.resolvePaths = append(s.resolvePaths, modulePath)
 	base := stubBasePath(modulePath)
 	if resp, ok := s.resolves[base]; ok {
 		return resp.version, resp.err

@@ -145,6 +145,7 @@ Examples:
 	cmd.PersistentFlags().BoolVar(&flags.Debug, "debug", false, "Debug output (implies --verbose)")
 	cmd.PersistentFlags().StringVar(&flags.Color, "color", "auto", "Colour output: auto, always, never")
 	cmd.PersistentFlags().BoolVarP(&flags.Local, "local", "l", false, "Target local config (./.start/) instead of global")
+	cmd.PersistentFlags().BoolVar(&flags.Refresh, "refresh", false, "Bypass the 24h index cache and resolve the registry index live")
 
 	cmd.RunE = runStart
 

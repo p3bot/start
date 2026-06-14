@@ -39,6 +39,7 @@ type Flags struct {
 	Color   string
 	Local   bool
 	Global  bool
+	Refresh bool
 
 	// NoRole and NoImplicitContexts are derived skip state, set by none-sentinel
 	// normalisation in PersistentPreRunE rather than bound to a flag. NoRole
@@ -372,6 +373,13 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 	}
 
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
+
+	// Decide index liveness once, up front, over every flag-bound surface: live
+	// iff --refresh is set or some surface has no installed match. Computed before
+	// the first resolve so the choice is position-independent and the held index
+	// serves the whole invocation. selection.Tags equals flags.Context here, so
+	// baseSurfaces covers the contexts this invocation will resolve.
+	r.wantLive = r.computeWantLive(baseSurfaces(flags))
 
 	agentName := flags.Agent
 	if agentName != "" {

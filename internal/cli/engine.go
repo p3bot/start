@@ -82,22 +82,54 @@ func crossCategoryScope() resolveScope {
 	}
 }
 
-// resolve turns an identifier into an outcome through the unified match rule:
-// locator bypass, category-prefix interpretation, the exact-whole-name tier,
-// the three-character floor, then the fallback tier, reducing to a single
-// decision and installing a chosen registry-only match.
-func (r *resolver) resolve(input string, scope resolveScope) (resolveOutcome, error) {
+// surfaceKind classifies how a surface identifier is handled before any lookup.
+type surfaceKind int
+
+const (
+	surfaceName    surfaceKind = iota // a module name to look up (cats/mode/name set)
+	surfaceLocator                    // a local path or http(s) URL, read directly
+	surfaceSkip                       // empty or a none/default sentinel — no index touch
+)
+
+// surfaceInterpretation is the result of classifying a surface identifier: the
+// shared front-half of resolution that both resolve() and the up-front liveness
+// union consume, so the two cannot drift on what an identifier means.
+type surfaceInterpretation struct {
+	kind    surfaceKind
+	locator string             // when kind == surfaceLocator
+	cats    []describeCategory // when kind == surfaceName: scoped categories
+	mode    matchMode          // when kind == surfaceName: fallback match mode
+	name    string             // when kind == surfaceName: the bare name
+}
+
+// interpretSurface classifies an identifier exactly as resolve() does before it
+// looks anything up: an empty value or a context none/default sentinel is a skip
+// (the surface never touches the index), a path or http(s) URL is a locator
+// (read directly), and anything else is a name whose category prefix scopes the
+// lookup and selects prefix vs substring fallback. A malformed category prefix
+// returns a usage error.
+//
+// This is the single source of the locator/prefix/sentinel interpretation. Both
+// resolve()'s own dispatch and computeWantLive call it, so a future change to
+// what an identifier means updates both at once.
+func interpretSurface(input string, scope resolveScope) (surfaceInterpretation, error) {
+	// Empty is the universal "use the default" signal. none/default are context
+	// sentinels (role's none is normalised to empty upstream); they apply only to
+	// the category-specific contexts surface, never to a cross-category get/
+	// describe query where "default" or "none" could name a real module.
+	if input == "" {
+		return surfaceInterpretation{kind: surfaceSkip}, nil
+	}
+	if scope.displayType == "context" && (isNoneToken(input) || input == "default") {
+		return surfaceInterpretation{kind: surfaceSkip}, nil
+	}
 	if orchestration.IsLocator(input) {
-		if !scope.allowLocator {
-			return resolveOutcome{}, usageError(fmt.Errorf("%s does not accept a file path or URL: %q", scope.displayType, input))
-		}
-		debugf(r.stderr, r.flags, dbgResolve, "%s %q: locator bypass", scope.displayType, input)
-		return resolveOutcome{locator: input}, nil
+		return surfaceInterpretation{kind: surfaceLocator, locator: input}, nil
 	}
 
 	addr, err := parseAddress(input)
 	if err != nil {
-		return resolveOutcome{}, err
+		return surfaceInterpretation{}, err
 	}
 
 	cats := scope.categories
@@ -108,11 +140,39 @@ func (r *resolver) resolve(input string, scope resolveScope) (resolveOutcome, er
 			// parseAddress already validated the category, so the lookup is non-nil.
 			cats = []describeCategory{*describeCategoryFor(addr.Category)}
 		} else if addr.Category != scope.categories[0].category {
-			return resolveOutcome{}, usageError(fmt.Errorf("%s expects category %q, got %q in %q",
+			return surfaceInterpretation{}, usageError(fmt.Errorf("%s expects category %q, got %q in %q",
 				scope.displayType, scope.categories[0].category, addr.Category, input))
 		}
 	}
-	name := addr.Name
+	return surfaceInterpretation{kind: surfaceName, cats: cats, mode: mode, name: addr.Name}, nil
+}
+
+// resolve turns an identifier into an outcome through the unified match rule:
+// locator bypass, category-prefix interpretation, the exact-whole-name tier,
+// the three-character floor, then the fallback tier, reducing to a single
+// decision and installing a chosen registry-only match.
+func (r *resolver) resolve(input string, scope resolveScope) (resolveOutcome, error) {
+	interp, err := interpretSurface(input, scope)
+	if err != nil {
+		return resolveOutcome{}, err
+	}
+	switch interp.kind {
+	case surfaceLocator:
+		if !scope.allowLocator {
+			return resolveOutcome{}, usageError(fmt.Errorf("%s does not accept a file path or URL: %q", scope.displayType, input))
+		}
+		debugf(r.stderr, r.flags, dbgResolve, "%s %q: locator bypass", scope.displayType, input)
+		return resolveOutcome{locator: input}, nil
+	case surfaceSkip:
+		// A sentinel/empty reaching resolve() is a caller bug: resolveSingle and
+		// resolveContexts filter these before dispatching. Treat defensively as
+		// not-found rather than silently mis-resolving.
+		return resolveOutcome{}, notFoundError(fmt.Errorf("%s %q not found", scope.displayType, input))
+	}
+
+	cats := interp.cats
+	mode := interp.mode
+	name := interp.name
 
 	// Exact tier first, exempt from the floor.
 	match, resolved, err := r.resolveExact(name, cats, scope)

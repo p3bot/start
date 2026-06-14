@@ -66,6 +66,19 @@ type resolver struct {
 	didInstall   bool
 	cfgStale     bool
 	skipRegistry bool // skip registry fetch (for testing)
+
+	// wantLive forces ensureIndex to resolve the index live rather than reuse a
+	// fresh cache. It is decided once up front by the driver (computeWantLive):
+	// true when --refresh is set or any pending surface has no installed match
+	// (a module is about to be auto-installed, so the latest index is needed).
+	// The late task-declared-role check may flip it true (forceLiveReResolve).
+	wantLive bool
+
+	// testClient, when set, is the registry client ensureIndex resolves through
+	// instead of constructing one via registry.NewClient(). A test-only seam
+	// (parallel to skipRegistry) that lets a recording stub observe the
+	// bare-major (live) vs canonical (cache-gated) path the resolver takes.
+	testClient registry.Client
 }
 
 func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) *resolver {
@@ -77,6 +90,108 @@ func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Wri
 		stdin:        stdin,
 		skipRegistry: offlineRegistryForTests,
 	}
+}
+
+// pendingSurface is one flag- or arg-bound surface whose identifier is known
+// before resolution begins, paired with the scope it resolves under. The
+// liveness union (computeWantLive) interprets each through interpretSurface.
+type pendingSurface struct {
+	input string
+	scope resolveScope
+}
+
+// baseSurfaces builds the flag-bound liveness surfaces every resolution driver
+// shares: the agent, the role flag (when set and not skipped by a none-token),
+// and one surface per --context selector. executeStart passes these straight to
+// computeWantLive; executeTask appends its task surface. The late task-declared
+// role is excluded — its name is unknown here and ensureTaskRoleLive handles it.
+func baseSurfaces(flags *Flags) []pendingSurface {
+	surfaces := []pendingSurface{{flags.Agent, singleCategoryScope("agents", "agent", false)}}
+	if flags.Role != "" && !flags.NoRole {
+		surfaces = append(surfaces, pendingSurface{flags.Role, singleCategoryScope("roles", "role", true)})
+	}
+	for _, tag := range flags.Context {
+		surfaces = append(surfaces, pendingSurface{tag, singleCategoryScope("contexts", "context", true)})
+	}
+	return surfaces
+}
+
+// computeWantLive decides, once and up front, whether the resolver must resolve
+// the index live: true when --refresh is set or any pending surface has no
+// installed match (a module is about to be auto-installed, so the whole
+// invocation must see the latest index, like start install). A surface that
+// bypasses the index — a locator or a sentinel — is excluded, so it never forces
+// a spurious live resolve for a co-resolved installed surface.
+//
+// The union interprets each identifier exactly as resolve() does (via
+// interpretSurface) rather than counting raw flag values; a malformed surface is
+// skipped here and left for the real resolve to report in order.
+func (r *resolver) computeWantLive(surfaces []pendingSurface) bool {
+	if r.flags.Refresh {
+		return true
+	}
+	for _, s := range surfaces {
+		interp, err := interpretSurface(s.input, s.scope)
+		if err != nil {
+			continue
+		}
+		if !r.surfaceHasInstalledMatch(interp) {
+			return true
+		}
+	}
+	return false
+}
+
+// surfaceHasInstalledMatch reports whether an installed module satisfies the
+// interpreted surface under either the exact tier or its fallback (substring/
+// prefix) tier — both network-free config lookups. A skip or locator surface
+// bypasses the index and so counts as satisfied: it can never force a live
+// resolve on its own.
+func (r *resolver) surfaceHasInstalledMatch(interp surfaceInterpretation) bool {
+	if interp.kind != surfaceName {
+		return true
+	}
+	for _, cat := range interp.cats {
+		if len(r.collectInstalled(cat.key, cat.category, interp.name, modeExact)) > 0 {
+			return true
+		}
+		if len(r.collectInstalled(cat.key, cat.category, interp.name, interp.mode)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// forceLiveReResolve arms the next ensureIndex to resolve live, discarding any
+// cache-gated index already held. It exists for the one late-bound surface — the
+// task-declared role, whose name is unknown when the up-front union runs — and
+// may repeat at most one metadata resolve if the cache-gated path had already
+// fetched. Keyed off r.wantLive by the caller, so no held-index-liveness field
+// is needed.
+func (r *resolver) forceLiveReResolve() {
+	r.wantLive = true
+	r.didFetch = false
+	r.index = nil
+	r.indexErr = nil
+}
+
+// ensureTaskRoleLive runs the late liveness check for the one surface the
+// up-front union could not see — the task-declared role, whose name only becomes
+// known after the task resolves. When the union already resolved cache-gated and
+// the declared role has no installed match, it forces a single live re-resolve
+// so a role published within the cache window is still discovered. It is a no-op
+// when the union already forced live, when the declared name is malformed, or
+// when an installed match already satisfies it.
+func (r *resolver) ensureTaskRoleLive(declared string) {
+	if r.wantLive {
+		return
+	}
+	interp, err := interpretSurface(declared, singleCategoryScope("roles", "role", true))
+	if err != nil || r.surfaceHasInstalledMatch(interp) {
+		return
+	}
+	debugf(r.stderr, r.flags, dbgResolve, "task-declared role %q not installed; forcing live index resolve", declared)
+	r.forceLiveReResolve()
 }
 
 // resolveAgent resolves the --agent identifier to an installed agent name. An
@@ -97,7 +212,12 @@ func (r *resolver) resolveRole(name string) (string, error) {
 // to. An empty identifier passes through unchanged (the caller's "use the
 // default" signal).
 func (r *resolver) resolveSingle(name string, scope resolveScope) (string, error) {
-	if name == "" {
+	interp, err := interpretSurface(name, scope)
+	if err != nil {
+		return "", err
+	}
+	if interp.kind == surfaceSkip {
+		// An empty identifier is the caller's "use the default" signal.
 		return "", nil
 	}
 	outcome, err := r.resolve(name, scope)
@@ -188,9 +308,19 @@ func (r *resolver) resolveContexts(terms []string) ([]string, error) {
 
 	var resolved []string
 	for _, term := range terms {
-		if term == "default" {
-			debugf(r.stderr, r.flags, dbgResolve, "Context %q: default passthrough", term)
-			resolved = append(resolved, term)
+		interp, err := interpretSurface(term, scope)
+		if err != nil {
+			return nil, err
+		}
+		if interp.kind == surfaceSkip {
+			// The only skip token that survives as a real selector is "default",
+			// which passes through unsearched for Compose to expand. An empty
+			// selector names nothing, and none-tokens are stripped upstream
+			// (resolveContextSkip); either way there is nothing to select, so drop.
+			if term == "default" {
+				debugf(r.stderr, r.flags, dbgResolve, "Context %q: default passthrough", term)
+				resolved = append(resolved, term)
+			}
 			continue
 		}
 
@@ -247,10 +377,14 @@ func (r *resolver) autoInstall(client registry.Client, result modules.SearchResu
 
 // ensureIndex lazily fetches the registry index, returning a nil index with nil
 // error when the registry is unavailable (graceful fallback); the underlying
-// failure is recorded in r.indexErr so callers can apply the certainty split. A
-// fresh cache (< 24h) supplies a canonical version that lets FetchIndex serve
-// from CUE's module cache without a network call; a stale or missing cache
-// triggers a full fetch and cache update.
+// failure is recorded in r.indexErr so callers can apply the certainty split.
+//
+// Liveness is decided once per resolver (r.wantLive, set up front by the
+// driver): a cache-gated resolve reuses a fresh cache's canonical version so
+// FetchIndex serves from CUE's module cache without a metadata request, while a
+// live resolve passes the bare-major path so the latest version is resolved. A
+// stale or missing cache always fetches and updates the cache. The cache-gating
+// choice is shared with the display commands via decideCachedIndex.
 func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	// An injected index (didFetch set by a test) is honoured even under
 	// skipRegistry, so resolvers that pre-load an index resolve against it.
@@ -263,27 +397,25 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 	}
 	r.didFetch = true
 
-	// Use the cache only when it belongs to the same module as the configured index.
-	indexPath := resolveLibraryIndexPath()
-	effectivePath := registry.EffectiveIndexPath(indexPath)
-	usedCache := false
-	cached, cacheErr := cache.ReadIndex()
-	if cacheErr == nil && cached.IsFresh(cache.DefaultMaxAge) &&
-		modules.ModuleFromOrigin(cached.Version) == modules.ModuleFromOrigin(effectivePath) {
-		debugf(r.stderr, r.flags, dbgResolve, "Using cached index version: %s", cached.Version)
-		indexPath = cached.Version
-		usedCache = true
-	} else {
-		if !r.flags.Quiet {
-			fmt.Fprintf(r.stdout, "Fetching registry index...\n")
-		}
+	effectivePath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
+	cachedVersion, usedCache := decideCachedIndex(effectivePath, r.wantLive)
+	indexPath := effectivePath
+	if usedCache {
+		debugf(r.stderr, r.flags, dbgResolve, "Using cached index version: %s", cachedVersion)
+		indexPath = cachedVersion
+	} else if !r.flags.Quiet {
+		fmt.Fprintf(r.stdout, "Fetching registry index...\n")
 	}
 
-	client, err := registry.NewClient()
-	if err != nil {
-		debugf(r.stderr, r.flags, dbgResolve, "Registry unavailable: %v", err)
-		r.indexErr = err
-		return nil, nil, nil // graceful fallback
+	client := r.testClient
+	if client == nil {
+		var err error
+		client, err = registry.NewClient()
+		if err != nil {
+			debugf(r.stderr, r.flags, dbgResolve, "Registry unavailable: %v", err)
+			r.indexErr = err
+			return nil, nil, nil // graceful fallback
+		}
 	}
 	r.client = client
 

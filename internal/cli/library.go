@@ -10,7 +10,6 @@ import (
 
 	"cuelang.org/go/mod/modconfig"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
 	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
@@ -71,8 +70,9 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	defer prog.Done()
 
 	prog.Update("Fetching index...")
-	indexPath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
-	resolvedPath, err := client.ResolveLatestVersion(ctx, indexPath)
+	// Cache-gated under the shared rule: a fresh cache skips the metadata resolve
+	// (unless --refresh); the helper writes the cache on a live resolve.
+	resolvedPath, err := resolveDisplayIndexVersion(ctx, client, resolveLibraryIndexPath(), cmd.ErrOrStderr(), flags)
 	if err != nil {
 		return fmt.Errorf("resolving index version: %w", err)
 	}
@@ -85,9 +85,6 @@ func runLibrary(cmd *cobra.Command, args []string) error {
 	result, err := client.Fetch(ctx, resolvedPath)
 	if err != nil {
 		return fmt.Errorf("fetching index module: %w", err)
-	}
-	if err := cache.WriteIndex(resolvedPath); err != nil {
-		debugf(cmd.ErrOrStderr(), getFlags(cmd), dbgCache, "cache write failed: %v", err)
 	}
 	prog.Done()
 

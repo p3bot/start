@@ -95,6 +95,7 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | `--debug` | | Debug output (implies --verbose) |
 | `--color` | | Colour output: `auto` (default), `always`, `never` |
 | `--local` | `-l` | Target local config |
+| `--refresh` | | Bypass the 24h index cache and resolve the registry index live (inert on `install`/`update`/`doctor validate`, which already resolve live) |
 
 ## Architecture
 
@@ -162,6 +163,39 @@ lazily and its absence is non-fatal: an uninstalled name is not-found when the
 index is reachable, and a transient (retry) error when it is unreachable, since
 absence cannot be confirmed. Model resolution (`--model`) is out of scope; it
 keeps the search-style match against the agent's `models` map.
+
+### Index Caching and Liveness
+
+One rule governs how each command reads the library index version from the
+registry, expressed by the shared `decideCachedIndex` primitive (cache read +
+`IsFresh` against a 24h window + `modules.ModuleFromOrigin` module-match guard):
+
+- Read-only display commands (`start list --verbose`, `start search`,
+  `start library`) are cache-gated. With a fresh cache they resolve the index
+  version offline (no registry metadata request); a stale or missing cache
+  triggers one resolve and a best-effort cache write. They consume the primitive
+  through `resolveDisplayIndexVersion`. Plain `start list` and `start list --json`
+  make no registry call at all (the index is only read under `--verbose`).
+- Resolution surfaces (`start`, `start task`, `--role`, `--context`, `--agent`,
+  and the cross-category `start get` / `start describe`) resolve the index live
+  when, and only when, some surface in the invocation has no installed match — it
+  is about to auto-install, so the whole invocation must see the latest index,
+  like `start install`. An invocation whose every surface is satisfied by an
+  installed module stays cache-gated. The decision (`computeWantLive`) is made
+  once, up front, as a union over the flag/arg-bound surfaces, interpreting each
+  identifier through the single `interpretSurface` function that `resolve()` also
+  uses, so a locator or `none`/`default`/empty sentinel surface (which bypasses
+  the index) never forces a spurious live resolve. The lone exception is the
+  late-bound task-declared role, whose name lives in the task content: it carries
+  a targeted late liveness check after the task resolves.
+- `start install`, `start update`, and `start doctor validate` already resolve
+  live on every invocation and are unchanged. `start doctor` (non-validate) and
+  first-run auto-setup are out of scope.
+
+The persistent `--refresh` flag is the single user-facing override of the
+cache-gating rule: it forces a live index resolve on the display commands (across
+default, `--json`, and `--export`) and ORs into `computeWantLive` on the
+resolution surfaces, and is an inert no-op on the already-live commands.
 
 ### Architecture Principles
 

@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,27 +12,16 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// captureJSON runs a --json command through a fresh root command with the
-// provider bound to stub, returning the decoded JSON and raw bytes. Threading
+// captureJSON runs a --json command through the shared captureStreams scaffold
+// and decodes its stdout, returning the decoded JSON and raw bytes. Threading
 // stub as a parameter makes a bypass a compile error. A non-nil Execute error
 // is tolerated as long as JSON was still produced (doctor returns a silent
 // exit-code error alongside its report).
 func captureJSON(t *testing.T, stub *registryStub, args ...string) (decoded any, raw []byte) {
 	t.Helper()
 
-	cmd := NewRootCmd()
-	cmd.SetContext(WithProvider(cmd.Context(), func() (registry.Client, error) {
-		stub.providerCalls++
-		return stub, nil
-	}))
-
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(io.Discard)
-	cmd.SetArgs(args)
-
-	execErr := cmd.Execute()
-	raw = buf.Bytes()
+	stdout, _, execErr := captureStreams(t, stub, args...)
+	raw = []byte(stdout)
 
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatalf("captureJSON(%v): output did not decode as JSON: %v (execute error: %v)\noutput: %s",

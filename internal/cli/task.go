@@ -92,6 +92,13 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
 
+	// Decide index liveness once, up front, over every flag/arg-bound surface
+	// (agent, role flag, contexts, task). The task-declared role is late-bound —
+	// its name lives in the task content — so it is excluded here and carries its
+	// own targeted liveness check (ensureTaskRoleLive) after the task resolves.
+	surfaces := append(baseSurfaces(flags), pendingSurface{taskName, singleCategoryScope("tasks", "task", false)})
+	r.wantLive = r.computeWantLive(surfaces)
+
 	agentName := flags.Agent
 	if agentName != "" {
 		agentName, err = r.resolveAgent(agentName)
@@ -182,6 +189,9 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		// rule as --role, auto-installing a registry-only role and reloading.
 		if !flags.NoRole && roleName == "" {
 			if declared := orchestration.GetTaskRole(env.Cfg.Value, resolvedName); declared != "" {
+				// Late liveness check for the one surface the up-front union could
+				// not see; the declared role's name only became known here.
+				r.ensureTaskRoleLive(declared)
 				roleName, err = r.resolveRole(declared)
 				if err != nil {
 					return err

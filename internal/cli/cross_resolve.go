@@ -15,5 +15,12 @@ package cli
 // refreshed; a caller that then reads r.cfg.Value must call r.reloadConfig
 // first, which clears cfgStale (see runGet, runDescribeSearch).
 func (r *resolver) resolveCross(query string) (resolveOutcome, error) {
-	return r.resolve(query, crossCategoryScope())
+	scope := crossCategoryScope()
+	// Single-surface commands have no multi-stage driver, so the liveness union
+	// is computed here over the one query: live iff --refresh is set or it has no
+	// installed match across the four categories. An installed query stays
+	// cache-gated (its cross-category twin detection runs over the cached index);
+	// an uninstalled one resolves live so a freshly published module is found.
+	r.wantLive = r.computeWantLive([]pendingSurface{{query, scope}})
+	return r.resolve(query, scope)
 }

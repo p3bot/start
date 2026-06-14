@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,24 +20,12 @@ var errFetchBoom = errors.New("registry stub: boom")
 // text-mode rendering, category filtering, --export, the update apply/upgrade
 // write path, doctor's schema-validation success branch, and the install flow.
 
-// captureText mirrors captureJSON but for text-mode output, binding the
-// registry-client provider to stub and returning stdout plus the Execute error.
+// captureText runs a text-mode command through the shared captureStreams
+// scaffold, returning stdout plus the Execute error and discarding stderr.
 func captureText(t *testing.T, stub *registryStub, args ...string) (string, error) {
 	t.Helper()
-
-	cmd := NewRootCmd()
-	cmd.SetContext(WithProvider(cmd.Context(), func() (registry.Client, error) {
-		stub.providerCalls++
-		return stub, nil
-	}))
-
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(io.Discard)
-	cmd.SetArgs(args)
-
-	err := cmd.Execute()
-	return buf.String(), err
+	stdout, _, err := captureStreams(t, stub, args...)
+	return stdout, err
 }
 
 // buildModuleFixture writes a self-contained CUE module to a temp dir and
