@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: none
+Active Project: 01-module-uses-field-support.md
 
 When a project is complete, update this file to point to the next active project (or `none` if nothing is queued)
 
