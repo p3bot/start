@@ -35,12 +35,12 @@ type ModuleMatch struct {
 // maxModuleResults is the maximum number of results to display in interactive selection.
 const maxModuleResults = 20
 
-// offlineRegistryForTests makes every newResolver skip the registry fetch. The
-// cross-category surfaces (get, describe) now consult the registry through a
-// resolver they build internally, which the provider seam cannot stub, so the
-// cli test binary sets this in TestMain to keep content and scope tests offline.
-// Production never sets it; resolvers that inject an index (didFetch) are
-// honoured regardless, since ensureIndex checks didFetch first.
+// offlineRegistryForTests makes newResolver wire the offline index source (a nil
+// index, no registry access) in place of the production one. The cross-category
+// surfaces (get, describe) consult the registry through a resolver they build
+// internally, which the provider seam cannot stub, so the cli test binary sets
+// this in TestMain to keep content and scope tests offline. Production never sets
+// it; a resolver given an injected index source resolves against it regardless.
 var offlineRegistryForTests bool
 
 // resolver performs name-only resolution for module-selecting surfaces. It
@@ -54,18 +54,22 @@ var offlineRegistryForTests bool
 // must gate every reload on cfgStale, never on the sticky didInstall, or a later
 // stage's install is missed once an earlier one already set didInstall.
 type resolver struct {
-	cfg          internalcue.LoadResult
-	flags        *Flags
-	stderr       io.Writer
-	stdout       io.Writer
-	stdin        io.Reader
-	index        *registry.Index
-	client       registry.Client
-	indexErr     error
-	didFetch     bool
-	didInstall   bool
-	cfgStale     bool
-	skipRegistry bool // skip registry fetch (for testing)
+	cfg        internalcue.LoadResult
+	flags      *Flags
+	stderr     io.Writer
+	stdout     io.Writer
+	stdin      io.Reader
+	index      *registry.Index
+	client     registry.Client
+	indexErr   error
+	didFetch   bool
+	didInstall bool
+	cfgStale   bool
+
+	// indexSrc is the resolver's sole index-acquisition seam. newResolver wires
+	// the production source (the lone registry.NewClient caller) or, in the test
+	// binary, the offline source; newResolverWithIndex injects a pre-loaded index.
+	indexSrc indexSource
 
 	// wantLive forces ensureIndex to resolve the index live rather than reuse a
 	// fresh cache. It is decided once up front by the driver (computeWantLive):
@@ -73,22 +77,22 @@ type resolver struct {
 	// (a module is about to be auto-installed, so the latest index is needed).
 	// The late task-declared-role check may flip it true (forceLiveReResolve).
 	wantLive bool
-
-	// testClient, when set, is the registry client ensureIndex resolves through
-	// instead of constructing one via registry.NewClient(). A test-only seam
-	// (parallel to skipRegistry) that lets a recording stub observe the
-	// bare-major (live) vs canonical (cache-gated) path the resolver takes.
-	testClient registry.Client
 }
 
 func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) *resolver {
+	var src indexSource
+	if offlineRegistryForTests {
+		src = offlineIndexSource{}
+	} else {
+		src = newProductionIndexSource(flags, stdout, stderr)
+	}
 	return &resolver{
-		cfg:          cfg,
-		flags:        flags,
-		stderr:       stderr,
-		stdout:       stdout,
-		stdin:        stdin,
-		skipRegistry: offlineRegistryForTests,
+		cfg:      cfg,
+		flags:    flags,
+		stderr:   stderr,
+		stdout:   stdout,
+		stdin:    stdin,
+		indexSrc: src,
 	}
 }
 
@@ -375,62 +379,69 @@ func (r *resolver) autoInstall(client registry.Client, result modules.SearchResu
 	return nil
 }
 
-// ensureIndex lazily fetches the registry index, returning a nil index with nil
-// error when the registry is unavailable (graceful fallback); the underlying
-// failure is recorded in r.indexErr so callers can apply the certainty split.
+// indexSource acquires the registry index for the resolver. Its single
+// operation takes the already-decided live-vs-cache-gated signal for the
+// invocation and returns the index, the client used (nil when none was built),
+// and a soft failure. A registry-unavailable outcome is a nil index with the
+// failure returned for the resolver to record in indexErr — never a hard error
+// the resolver propagates.
+type indexSource interface {
+	fetch(ctx context.Context, wantLive bool) (*registry.Index, registry.Client, error)
+}
+
+// productionIndexSource holds the live index-acquisition mechanism: effective-
+// path computation, the decideCachedIndex cache-gating call, the conditional
+// "Fetching registry index..." progress line, client construction, the slow-
+// warning goroutine, FetchIndex, and the best-effort cache write on a live
+// resolve. It is the single place in the resolver's dependency graph that calls
+// registry.NewClient.
+type productionIndexSource struct {
+	flags  *Flags
+	stdout io.Writer
+	stderr io.Writer
+}
+
+func newProductionIndexSource(flags *Flags, stdout, stderr io.Writer) *productionIndexSource {
+	return &productionIndexSource{flags: flags, stdout: stdout, stderr: stderr}
+}
+
+// fetch resolves the index under the cache-gating rule. Client construction and
+// FetchIndex failures are soft: the index comes back nil with the error returned
+// for the resolver to record, never propagated as a hard error.
 //
-// Liveness is decided once per resolver (r.wantLive, set up front by the
-// driver): a cache-gated resolve reuses a fresh cache's canonical version so
-// FetchIndex serves from CUE's module cache without a metadata request, while a
-// live resolve passes the bare-major path so the latest version is resolved. A
-// stale or missing cache always fetches and updates the cache. The cache-gating
-// choice is shared with the display commands via decideCachedIndex.
-func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
-	// An injected index (didFetch set by a test) is honoured even under
-	// skipRegistry, so resolvers that pre-load an index resolve against it.
-	if r.didFetch {
-		return r.index, r.client, r.indexErr
-	}
-
-	if r.skipRegistry {
-		return nil, nil, nil
-	}
-	r.didFetch = true
-
+// A cache-gated resolve reuses a fresh cache's canonical version so FetchIndex
+// serves from CUE's module cache without a metadata request, while a live
+// resolve passes the bare-major path so the latest version is resolved; a stale
+// or missing cache always fetches and updates the cache.
+func (s *productionIndexSource) fetch(ctx context.Context, wantLive bool) (*registry.Index, registry.Client, error) {
 	effectivePath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
-	cachedVersion, usedCache := decideCachedIndex(effectivePath, r.wantLive)
+	cachedVersion, usedCache := decideCachedIndex(effectivePath, wantLive)
 	indexPath := effectivePath
 	if usedCache {
-		debugf(r.stderr, r.flags, dbgResolve, "Using cached index version: %s", cachedVersion)
+		debugf(s.stderr, s.flags, dbgResolve, "Using cached index version: %s", cachedVersion)
 		indexPath = cachedVersion
-	} else if !r.flags.Quiet {
-		fmt.Fprintf(r.stdout, "Fetching registry index...\n")
+	} else if !s.flags.Quiet {
+		fmt.Fprintf(s.stdout, "Fetching registry index...\n")
 	}
 
-	client := r.testClient
-	if client == nil {
-		var err error
-		client, err = registry.NewClient()
-		if err != nil {
-			debugf(r.stderr, r.flags, dbgResolve, "Registry unavailable: %v", err)
-			r.indexErr = err
-			return nil, nil, nil // graceful fallback
-		}
+	client, err := registry.NewClient()
+	if err != nil {
+		debugf(s.stderr, s.flags, dbgResolve, "Registry unavailable: %v", err)
+		return nil, nil, err // soft failure
 	}
-	r.client = client
 
 	const fetchTimeout = 60 * time.Second
 	const slowWarning = 10 * time.Second
 
-	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 
-	if !r.flags.Quiet {
+	if !s.flags.Quiet {
 		go func() {
 			select {
 			case <-time.After(slowWarning):
 				remaining := fetchTimeout - slowWarning
-				printWarning(r.stdout, "registry is taking longer than expected, timeout in %d seconds", int(remaining.Seconds()))
+				printWarning(s.stdout, "registry is taking longer than expected, timeout in %d seconds", int(remaining.Seconds()))
 			case <-ctx.Done():
 			}
 		}()
@@ -438,19 +449,46 @@ func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
 
 	index, indexVersion, err := client.FetchIndex(ctx, indexPath)
 	if err != nil {
-		debugf(r.stderr, r.flags, dbgResolve, "Index fetch failed: %v", err)
-		r.indexErr = err
-		return nil, client, nil // graceful fallback
+		debugf(s.stderr, s.flags, dbgResolve, "Index fetch failed: %v", err)
+		return nil, client, err // soft failure
 	}
 	if !usedCache {
 		if err := cache.WriteIndex(indexVersion); err != nil {
-			debugf(r.stderr, r.flags, dbgResolve, "Cache write failed: %v", err)
+			debugf(s.stderr, s.flags, dbgResolve, "Cache write failed: %v", err)
 		}
 	}
 
-	r.index = index
-	debugf(r.stderr, r.flags, dbgResolve, "Index fetched: version %s", indexVersion)
+	debugf(s.stderr, s.flags, dbgResolve, "Index fetched: version %s", indexVersion)
 	return index, client, nil
+}
+
+// offlineIndexSource returns a nil index without any registry access. It backs
+// the test-binary offline default (offlineRegistryForTests) that keeps resolver-
+// backed surfaces offline.
+type offlineIndexSource struct{}
+
+func (offlineIndexSource) fetch(context.Context, bool) (*registry.Index, registry.Client, error) {
+	return nil, nil, nil
+}
+
+// ensureIndex lazily acquires the registry index through the resolver's index
+// source, memoizing the result for the whole invocation. It returns a nil index
+// with a nil error when the registry is unavailable (graceful fallback); the
+// underlying failure is recorded in r.indexErr so callers can apply the
+// certainty split.
+//
+// Liveness is decided once per resolver (r.wantLive, set up front by the driver)
+// and handed to the source, which gates the cache accordingly. All mechanism —
+// client construction, fetching, the progress line, the cache write — lives in
+// the source; ensureIndex keeps only memoization and the indexErr bookkeeping
+// that turns a soft source failure into graceful degradation.
+func (r *resolver) ensureIndex() (*registry.Index, registry.Client, error) {
+	if r.didFetch {
+		return r.index, r.client, r.indexErr
+	}
+	r.didFetch = true
+	r.index, r.client, r.indexErr = r.indexSrc.fetch(context.Background(), r.wantLive)
+	return r.index, r.client, nil
 }
 
 // resolveLibraryIndexPath returns the library_index setting (empty on unset or

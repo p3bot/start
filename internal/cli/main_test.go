@@ -24,7 +24,8 @@ func TestMain(m *testing.M) {
 	// Keep resolver-backed surfaces (get, describe, start, task) offline by
 	// default: the cross-category exact tier now consults the registry, which
 	// would otherwise pull the real index over the network in every content and
-	// scope test. Tests that need an index inject one directly (didFetch).
+	// scope test. Tests that need an index inject one through the index source
+	// (newResolverWithIndex).
 	offlineRegistryForTests = true
 	os.Exit(m.Run())
 }

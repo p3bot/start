@@ -1869,7 +1869,7 @@ func TestEnsureIndex_FreshCacheSkipsFetchMessage(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false // exercise the real ensureIndex path, overriding the offline default
+	r.indexSrc = newProductionIndexSource(flags, stdout, io.Discard) // drive the real mechanism, overriding the offline default
 
 	_, _, _ = r.ensureIndex()
 
@@ -1906,7 +1906,7 @@ func TestEnsureIndex_StaleCacheShowsFetchMessage(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false // exercise the real ensureIndex path, overriding the offline default
+	r.indexSrc = newProductionIndexSource(flags, stdout, io.Discard) // drive the real mechanism, overriding the offline default
 
 	_, _, _ = r.ensureIndex()
 
@@ -1930,7 +1930,7 @@ func TestEnsureIndex_MissingCacheShowsFetchMessage(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false // exercise the real ensureIndex path, overriding the offline default
+	r.indexSrc = newProductionIndexSource(flags, stdout, io.Discard) // drive the real mechanism, overriding the offline default
 
 	_, _, _ = r.ensureIndex()
 
@@ -1954,7 +1954,7 @@ func TestEnsureIndex_QuietSuppressesFetchMessage(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	flags := &Flags{Quiet: true}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false // exercise the real ensureIndex path, overriding the offline default
+	r.indexSrc = newProductionIndexSource(flags, stdout, io.Discard) // drive the real mechanism, overriding the offline default
 
 	_, _, _ = r.ensureIndex()
 
@@ -1990,7 +1990,7 @@ func TestEnsureIndex_MismatchedModuleShowsFetchMessage(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false // exercise the real ensureIndex path, overriding the offline default
+	r.indexSrc = newProductionIndexSource(flags, stdout, io.Discard) // drive the real mechanism, overriding the offline default
 
 	_, _, _ = r.ensureIndex()
 
@@ -2028,7 +2028,7 @@ func TestEnsureIndex_FreshCacheNotRewritten(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	flags := &Flags{}
 	r := newResolver(cfg, flags, stdout, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false // exercise the real ensureIndex path, overriding the offline default
+	r.indexSrc = newProductionIndexSource(flags, stdout, io.Discard) // drive the real mechanism, overriding the offline default
 
 	_, _, _ = r.ensureIndex()
 

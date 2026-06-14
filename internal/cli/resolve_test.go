@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -21,21 +22,32 @@ func buildTestCfg(t *testing.T, cueStr string) internalcue.LoadResult {
 	return internalcue.LoadResult{Value: v}
 }
 
-// newTestResolver creates a resolver that skips registry access. With no index
-// fetched and no index error recorded, an unmatched name resolves to not-found
-// (the index-reachable certainty branch).
+// newTestResolver creates a resolver whose index source returns a nil index, so
+// resolution runs offline against installed config only. With no index fetched
+// and no index error recorded, an unmatched name resolves to not-found (the
+// index-reachable certainty branch).
 func newTestResolver(cfg internalcue.LoadResult) *resolver {
 	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	r.skipRegistry = true
+	r.indexSrc = offlineIndexSource{}
 	return r
+}
+
+// injectedIndexSource returns a pre-loaded index offline, ignoring the live-vs-
+// cache-gated decision, so an injected index resolves without a live pull
+// regardless of wantLive.
+type injectedIndexSource struct {
+	index *registry.Index
+}
+
+func (s injectedIndexSource) fetch(context.Context, bool) (*registry.Index, registry.Client, error) {
+	return s.index, nil, nil
 }
 
 // newResolverWithIndex injects a pre-fetched index so resolution runs offline
 // against installed config plus the supplied registry entries.
 func newResolverWithIndex(cfg internalcue.LoadResult, index *registry.Index) *resolver {
 	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	r.didFetch = true
-	r.index = index
+	r.indexSrc = injectedIndexSource{index: index}
 	return r
 }
 
@@ -592,9 +604,9 @@ func TestResolveModule_RegistryOnlyExactInstalls(t *testing.T) {
 }
 
 // TestResolveModule_InstalledExactSkipsRegistry verifies a category-specific
-// surface resolves a lone installed exact without consulting the registry: with
-// skipRegistry on, any registry consultation would yield nothing, so the exact
-// must come from installed config alone.
+// surface resolves a lone installed exact without consulting the registry: the
+// offline index source yields nothing, so the exact must come from installed
+// config alone.
 func TestResolveModule_InstalledExactSkipsRegistry(t *testing.T) {
 	t.Parallel()
 

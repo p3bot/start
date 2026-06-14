@@ -13,7 +13,6 @@ import (
 	"github.com/start-cli/start/internal/cache"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/registry"
-	"golang.org/x/mod/semver"
 )
 
 // canonicalIndexVersion is the fresh-cache version the stub and seeded cache
@@ -52,24 +51,41 @@ func seedStaleIndexCache(t *testing.T) {
 	}
 }
 
-// newRecordingResolver builds a resolver wired to a recording stub via the
-// testClient seam, with the offline default disabled so ensureIndex runs its
-// full cache/wantLive decision and resolves through the stub. The driver's
-// up-front union is not run here; tests set r.wantLive (or call computeWantLive)
-// to simulate the decision under test.
-func newRecordingResolver(cfg internalcue.LoadResult, stub *registryStub) *resolver {
-	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
-	r.skipRegistry = false
-	r.testClient = stub
-	return r
+// recordingIndexSource is a test index source that consumes the real
+// decideCachedIndex cache-gating decision and records, per acquisition, whether
+// it resolved live (bare-major) or cache-gated (canonical). It returns a canned
+// index, or a soft failure when fetchErr is set, so resolver-path liveness tests
+// assert the decision on the fake rather than through a smuggled client.
+type recordingIndexSource struct {
+	index    *registry.Index
+	fetchErr error
+
+	// live records one entry per fetch: true when the acquisition resolved live
+	// (bare-major), false when it was cache-gated (canonical).
+	live []bool
 }
 
-// isBareMajor reports whether path carries a bare major version (e.g. @v1) — the
-// live-resolve marker — rather than a canonical one (@v1.0.0), the cache-gated
-// marker.
-func isBareMajor(path string) bool {
-	v := path[strings.LastIndex(path, "@")+1:]
-	return semver.Canonical(v) != v
+func (s *recordingIndexSource) fetch(_ context.Context, wantLive bool) (*registry.Index, registry.Client, error) {
+	effectivePath := registry.EffectiveIndexPath(resolveLibraryIndexPath())
+	_, useCache := decideCachedIndex(effectivePath, wantLive)
+	s.live = append(s.live, !useCache)
+	if s.fetchErr != nil {
+		return nil, nil, s.fetchErr
+	}
+	return s.index, nil, nil
+}
+
+// newRecordingResolver builds a resolver wired to a recording index source that
+// returns idx and records the live-vs-cache-gated decision each acquisition
+// took. ensureIndex runs its full memoization path and delegates to the source,
+// so tests assert liveness on src.live. The driver's up-front union is not run
+// here; tests set r.wantLive (or call computeWantLive) to simulate the decision
+// under test.
+func newRecordingResolver(cfg internalcue.LoadResult, idx *registry.Index) (*resolver, *recordingIndexSource) {
+	src := &recordingIndexSource{index: idx}
+	r := newResolver(cfg, &Flags{}, io.Discard, io.Discard, strings.NewReader(""))
+	r.indexSrc = src
+	return r, src
 }
 
 // --- Display-command cache-gating (observed via stub.resolvePaths) ---
@@ -189,44 +205,41 @@ func TestList_RefreshForcesLive(t *testing.T) {
 	}
 }
 
-// --- Resolver-path liveness (observed via stub.fetchIndexPaths) ---
+// --- Resolver-path liveness (observed via the recording index source) ---
 
 func TestEnsureIndex_CacheGatedFetchesCanonical(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(stubLibraryIndex(), "")
-	r := newRecordingResolver(buildTestCfg(t, `{}`), stub)
+	r, src := newRecordingResolver(buildTestCfg(t, `{}`), stubLibraryIndex())
 	r.wantLive = false
 
 	idx, _, err := r.ensureIndex()
 	if err != nil || idx == nil {
 		t.Fatalf("ensureIndex() = (%v, %v), want index", idx, err)
 	}
-	if len(stub.fetchIndexPaths) != 1 || isBareMajor(stub.fetchIndexPaths[0]) {
-		t.Errorf("cache-gated resolve should fetch the canonical version, got %v", stub.fetchIndexPaths)
+	if len(src.live) != 1 || src.live[0] {
+		t.Errorf("cache-gated resolve should record a cache-gated acquisition, got %v", src.live)
 	}
 }
 
 func TestEnsureIndex_LiveFetchesBareMajor(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(stubLibraryIndex(), "")
-	r := newRecordingResolver(buildTestCfg(t, `{}`), stub)
+	r, src := newRecordingResolver(buildTestCfg(t, `{}`), stubLibraryIndex())
 	r.wantLive = true
 
 	if _, _, err := r.ensureIndex(); err != nil {
 		t.Fatalf("ensureIndex() error = %v", err)
 	}
-	if len(stub.fetchIndexPaths) != 1 || !isBareMajor(stub.fetchIndexPaths[0]) {
-		t.Errorf("live resolve should fetch the bare-major path, got %v", stub.fetchIndexPaths)
+	if len(src.live) != 1 || !src.live[0] {
+		t.Errorf("live resolve should record a live acquisition, got %v", src.live)
 	}
 }
 
 func TestEnsureIndex_LiveResolveErrorDegrades(t *testing.T) {
 	isolateConfigEnv(t) // empty cache → live regardless
-	stub := newRegistryStub(stubLibraryIndex(), "")
-	stub.SetFetchIndexError(fmt.Errorf("registry down"))
-	r := newRecordingResolver(buildTestCfg(t, `{}`), stub)
+	r, src := newRecordingResolver(buildTestCfg(t, `{}`), stubLibraryIndex())
+	src.fetchErr = fmt.Errorf("registry down")
 	r.wantLive = true
 
 	idx, _, err := r.ensureIndex()
@@ -247,38 +260,36 @@ func TestEnsureIndex_LiveResolveErrorDegrades(t *testing.T) {
 func TestForceLiveReResolve_RefetchesLive(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(stubLibraryIndex(), "")
-	r := newRecordingResolver(buildTestCfg(t, `{}`), stub)
+	r, src := newRecordingResolver(buildTestCfg(t, `{}`), stubLibraryIndex())
 
 	r.wantLive = false
-	if _, _, err := r.ensureIndex(); err != nil { // cache-gated → canonical
+	if _, _, err := r.ensureIndex(); err != nil { // cache-gated
 		t.Fatalf("first ensureIndex: %v", err)
 	}
 	r.forceLiveReResolve()
-	if _, _, err := r.ensureIndex(); err != nil { // live → bare-major
+	if _, _, err := r.ensureIndex(); err != nil { // live
 		t.Fatalf("re-resolve ensureIndex: %v", err)
 	}
 
-	if len(stub.fetchIndexPaths) != 2 {
-		t.Fatalf("expected two fetches, got %v", stub.fetchIndexPaths)
+	if len(src.live) != 2 {
+		t.Fatalf("expected two acquisitions, got %v", src.live)
 	}
-	if isBareMajor(stub.fetchIndexPaths[0]) {
-		t.Errorf("first fetch should be cache-gated (canonical), got %q", stub.fetchIndexPaths[0])
+	if src.live[0] {
+		t.Errorf("first acquisition should be cache-gated, got live")
 	}
-	if !isBareMajor(stub.fetchIndexPaths[1]) {
-		t.Errorf("forced re-resolve should be live (bare-major), got %q", stub.fetchIndexPaths[1])
+	if !src.live[1] {
+		t.Errorf("forced re-resolve should be live, got cache-gated")
 	}
 }
 
 // TestResolveExactInstalled_NoRegistryCall asserts a category-specific lone
 // installed exact match resolves without touching the index at all (it
-// short-circuits before ensureIndex), so even a recording client sees no fetch.
+// short-circuits before ensureIndex), so the index source sees no acquisition.
 func TestResolveExactInstalled_NoRegistryCall(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(stubLibraryIndex(), "")
 	cfg := buildTestCfg(t, `{roles: {"go-expert": {prompt: "Go"}}}`)
-	r := newRecordingResolver(cfg, stub)
+	r, src := newRecordingResolver(cfg, stubLibraryIndex())
 	r.wantLive = r.computeWantLive([]pendingSurface{{"go-expert", roleScope()}})
 
 	name, err := r.resolveRole("go-expert")
@@ -288,8 +299,8 @@ func TestResolveExactInstalled_NoRegistryCall(t *testing.T) {
 	if name != "go-expert" {
 		t.Errorf("resolved %q, want go-expert", name)
 	}
-	if len(stub.fetchIndexPaths) != 0 {
-		t.Errorf("an installed exact match should make no registry call, got %v", stub.fetchIndexPaths)
+	if len(src.live) != 0 {
+		t.Errorf("an installed exact match should make no registry call, got %v", src.live)
 	}
 }
 
@@ -298,25 +309,23 @@ func TestResolveExactInstalled_NoRegistryCall(t *testing.T) {
 func TestResolveCross_UninstalledResolvesLive(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(&registry.Index{}, "")
-	r := newRecordingResolver(buildTestCfg(t, `{}`), stub)
+	r, src := newRecordingResolver(buildTestCfg(t, `{}`), &registry.Index{})
 
 	// Not installed and absent from the index: not-found, but the path taken to
 	// confirm that must be live so a freshly published module would be seen.
 	if _, err := r.resolveCross("missing-module"); err == nil {
 		t.Fatal("expected not-found for an uninstalled, absent query")
 	}
-	if len(stub.fetchIndexPaths) == 0 || !isBareMajor(stub.fetchIndexPaths[0]) {
-		t.Errorf("uninstalled get/describe query should resolve live, got %v", stub.fetchIndexPaths)
+	if len(src.live) == 0 || !src.live[0] {
+		t.Errorf("uninstalled get/describe query should resolve live, got %v", src.live)
 	}
 }
 
 func TestResolveCross_InstalledStaysCacheGated(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(&registry.Index{}, "")
 	cfg := buildTestCfg(t, `{agents: {claude: {bin: "claude", command: "{{.bin}} run"}}}`)
-	r := newRecordingResolver(cfg, stub)
+	r, src := newRecordingResolver(cfg, &registry.Index{})
 
 	outcome, err := r.resolveCross("claude")
 	if err != nil {
@@ -325,31 +334,30 @@ func TestResolveCross_InstalledStaysCacheGated(t *testing.T) {
 	if outcome.match.Name != "claude" {
 		t.Errorf("resolved %q, want claude", outcome.match.Name)
 	}
-	if len(stub.fetchIndexPaths) != 1 || isBareMajor(stub.fetchIndexPaths[0]) {
-		t.Errorf("installed get/describe query should stay cache-gated (canonical), got %v", stub.fetchIndexPaths)
+	if len(src.live) != 1 || src.live[0] {
+		t.Errorf("installed get/describe query should stay cache-gated, got %v", src.live)
 	}
 }
 
 func TestResolveCross_RefreshForcesLiveForInstalled(t *testing.T) {
 	isolateConfigEnv(t)
 	seedFreshIndexCache(t)
-	stub := newRegistryStub(&registry.Index{}, "")
 	cfg := buildTestCfg(t, `{agents: {claude: {bin: "claude", command: "{{.bin}} run"}}}`)
-	r := newRecordingResolver(cfg, stub)
+	r, src := newRecordingResolver(cfg, &registry.Index{})
 	r.flags.Refresh = true
 
 	if _, err := r.resolveCross("claude"); err != nil {
 		t.Fatalf("resolveCross(claude) error = %v", err)
 	}
-	if len(stub.fetchIndexPaths) == 0 || !isBareMajor(stub.fetchIndexPaths[0]) {
-		t.Errorf("--refresh should force a live resolve even for an installed query, got %v", stub.fetchIndexPaths)
+	if len(src.live) == 0 || !src.live[0] {
+		t.Errorf("--refresh should force a live resolve even for an installed query, got %v", src.live)
 	}
 }
 
-// --- Substring-shadow boundary (path observable) ---
+// --- Substring-shadow boundary (liveness observable) ---
 
-// TestSubstringShadow_StaysCacheGated covers the accepted limitation: a
-// substring-installed surface (--role expert with go-expert installed) stays
+// TestSubstringShadow_CacheGatedThenRefreshLive covers the accepted limitation:
+// a substring-installed surface (--role expert with go-expert installed) stays
 // cache-gated under a fresh cache and resolves to the installed go-expert with
 // no live resolve, while --refresh flips it live.
 func TestSubstringShadow_CacheGatedThenRefreshLive(t *testing.T) {
@@ -358,8 +366,7 @@ func TestSubstringShadow_CacheGatedThenRefreshLive(t *testing.T) {
 	t.Run("cache-gated", func(t *testing.T) {
 		isolateConfigEnv(t)
 		seedFreshIndexCache(t)
-		stub := newRegistryStub(&registry.Index{}, "")
-		r := newRecordingResolver(cfg, stub)
+		r, src := newRecordingResolver(cfg, &registry.Index{})
 		// Simulate the up-front union: "expert" is substring-satisfied by the
 		// installed go-expert, so the invocation stays cache-gated.
 		r.wantLive = r.computeWantLive([]pendingSurface{{"expert", singleCategoryScope("roles", "role", true)}})
@@ -371,9 +378,9 @@ func TestSubstringShadow_CacheGatedThenRefreshLive(t *testing.T) {
 		if name != "go-expert" {
 			t.Errorf("resolved %q, want go-expert", name)
 		}
-		for _, p := range stub.fetchIndexPaths {
-			if isBareMajor(p) {
-				t.Errorf("substring-installed surface should stay cache-gated, saw live fetch %q", p)
+		for _, live := range src.live {
+			if live {
+				t.Error("substring-installed surface should stay cache-gated, saw live acquisition")
 			}
 		}
 	})
@@ -381,16 +388,15 @@ func TestSubstringShadow_CacheGatedThenRefreshLive(t *testing.T) {
 	t.Run("refresh-live", func(t *testing.T) {
 		isolateConfigEnv(t)
 		seedFreshIndexCache(t)
-		stub := newRegistryStub(&registry.Index{}, "")
-		r := newRecordingResolver(cfg, stub)
+		r, src := newRecordingResolver(cfg, &registry.Index{})
 		r.flags.Refresh = true
 		r.wantLive = r.computeWantLive([]pendingSurface{{"expert", singleCategoryScope("roles", "role", true)}})
 
 		if _, err := r.resolveRole("expert"); err != nil {
 			t.Fatalf("resolveRole(expert) error = %v", err)
 		}
-		if len(stub.fetchIndexPaths) == 0 || !isBareMajor(stub.fetchIndexPaths[0]) {
-			t.Errorf("--refresh should flip the substring-installed surface live, got %v", stub.fetchIndexPaths)
+		if len(src.live) == 0 || !src.live[0] {
+			t.Errorf("--refresh should flip the substring-installed surface live, got %v", src.live)
 		}
 	})
 }
