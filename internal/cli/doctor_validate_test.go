@@ -315,6 +315,174 @@ func TestValidateIsStale(t *testing.T) {
 	})
 }
 
+// writeUsesModuleFixture creates a buildable, schema-less CUE module under
+// cacheDir/<category>/<name> whose module-value file is `body`, mirroring the
+// clone layout doctor validate walks.
+func writeUsesModuleFixture(t *testing.T, cacheDir, category, name, body string) {
+	t.Helper()
+	moduleDir := filepath.Join(cacheDir, category, name)
+	modDir := filepath.Join(moduleDir, "cue.mod")
+	if err := os.MkdirAll(modDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	moduleCue := "module: \"test.example/" + name + "@v0\"\nlanguage: version: \"v0.15.1\"\n"
+	if err := os.WriteFile(filepath.Join(modDir, "module.cue"), []byte(moduleCue), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	singular := strings.TrimSuffix(category, "s")
+	if err := os.WriteFile(filepath.Join(moduleDir, singular+".cue"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLoadModuleUses exercises the clone-loader against schema-less fixtures,
+// including its failure modes. A build or descent failure surfaces as an error,
+// which the per-module walk converts to a distinguishable "could not read uses"
+// issue rather than propagating.
+func TestLoadModuleUses(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reads uses under module value", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeUsesModuleFixture(t, dir, "tasks", "publish", `package task
+
+task: {
+	description: "Publish"
+	uses: ["contexts:start/library/publishing", "roles:go-expert"]
+}
+`)
+		got, err := loadModuleUses(dir, "tasks", "publish", nil)
+		if err != nil {
+			t.Fatalf("loadModuleUses: %v", err)
+		}
+		want := []string{"contexts:start/library/publishing", "roles:go-expert"}
+		if !stringSlicesEqual(got, want) {
+			t.Errorf("uses = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("no uses field is empty, not error", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeUsesModuleFixture(t, dir, "roles", "plain", `package role
+
+role: {
+	description: "Plain role"
+}
+`)
+		got, err := loadModuleUses(dir, "roles", "plain", nil)
+		if err != nil {
+			t.Fatalf("loadModuleUses: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("uses = %v, want empty", got)
+		}
+	})
+
+	t.Run("missing module value errors", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeUsesModuleFixture(t, dir, "tasks", "wrongkey", `package task
+
+other: {
+	description: "Not under the module key"
+}
+`)
+		if _, err := loadModuleUses(dir, "tasks", "wrongkey", nil); err == nil {
+			t.Error("expected error when module value is absent at both descent keys")
+		}
+	})
+
+	t.Run("unbuildable CUE errors", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeUsesModuleFixture(t, dir, "tasks", "broken", `package task
+
+task: {
+	description: "Unterminated
+`)
+		if _, err := loadModuleUses(dir, "tasks", "broken", nil); err == nil {
+			t.Error("expected error for unbuildable module CUE")
+		}
+	})
+}
+
+// TestValidateUsesReferences exercises the index-resolver: a resolvable entry
+// passes, while malformed and unresolvable entries each yield one issue.
+func TestValidateUsesReferences(t *testing.T) {
+	t.Parallel()
+
+	idx := &registry.Index{
+		Contexts: map[string]registry.IndexEntry{
+			"start/library/publishing": {Module: "github.com/start-cli/library/contexts/start/library/publishing@v1"},
+		},
+		Roles: map[string]registry.IndexEntry{
+			"go-expert": {Module: "github.com/start-cli/library/roles/go-expert@v1"},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		uses      []string
+		wantCount int
+		wantMsg   string
+	}{
+		{
+			name:      "resolves",
+			uses:      []string{"contexts:start/library/publishing", "roles:go-expert"},
+			wantCount: 0,
+		},
+		{
+			name:      "case-insensitive whole-name match",
+			uses:      []string{"contexts:START/library/Publishing"},
+			wantCount: 0,
+		},
+		{
+			name:      "missing colon is malformed",
+			uses:      []string{"publishing"},
+			wantCount: 1,
+			wantMsg:   "not a fully-qualified",
+		},
+		{
+			name:      "unknown category is invalid",
+			uses:      []string{"widgets:foo"},
+			wantCount: 1,
+			wantMsg:   "invalid uses reference",
+		},
+		{
+			name:      "absent module does not resolve",
+			uses:      []string{"contexts:does/not/exist"},
+			wantCount: 1,
+			wantMsg:   "resolves to no module",
+		},
+		{
+			name:      "no substring or prefix match",
+			uses:      []string{"contexts:start/library"},
+			wantCount: 1,
+			wantMsg:   "resolves to no module",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			issues := validateUsesReferences("declaring-module", tt.uses, idx)
+			if len(issues) != tt.wantCount {
+				t.Fatalf("issues = %v, want %d", issues, tt.wantCount)
+			}
+			if tt.wantMsg != "" {
+				if !strings.Contains(issues[0], tt.wantMsg) {
+					t.Errorf("issue %q missing %q", issues[0], tt.wantMsg)
+				}
+				if !strings.Contains(issues[0], "declaring-module") {
+					t.Errorf("issue %q does not name the declaring module", issues[0])
+				}
+			}
+		})
+	}
+}
+
 func TestPrintValidateStats(t *testing.T) {
 	t.Parallel()
 

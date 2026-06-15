@@ -27,6 +27,7 @@ type ConfigListItem struct {
 	Optional     bool              `json:"optional,omitempty"`
 	Models       map[string]string `json:"models,omitempty"`
 	Tags         []string          `json:"tags,omitempty"`
+	Uses         []string          `json:"uses,omitempty"`
 	Source       string            `json:"source"`
 	Origin       string            `json:"origin,omitempty"`
 }
@@ -49,6 +50,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		item.Description = agent.Description
 		item.Models = agent.Models
 		item.Tags = agent.Tags
+		item.Uses = agent.Uses
 		item.Source = agent.Source
 		item.Origin = agent.Origin
 	case "role":
@@ -66,6 +68,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		item.Optional = role.Optional
 		item.Prompt = role.Prompt
 		item.Tags = role.Tags
+		item.Uses = role.Uses
 		item.Source = role.Source
 		item.Origin = role.Origin
 	case "context":
@@ -84,6 +87,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		item.Prompt = ctx.Prompt
 		item.Required = ctx.Required
 		item.Tags = ctx.Tags
+		item.Uses = ctx.Uses
 		item.Source = ctx.Source
 		item.Origin = ctx.Origin
 	case "task":
@@ -101,6 +105,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		item.Prompt = task.Prompt
 		item.Role = task.Role
 		item.Tags = task.Tags
+		item.Uses = task.Uses
 		item.Source = task.Source
 		item.Origin = task.Origin
 	default:
@@ -125,7 +130,7 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 			items = append(items, ConfigListItem{
 				Category: "agent", Name: name, Bin: a.Bin, Command: a.Command,
 				DefaultModel: a.DefaultModel, Description: a.Description,
-				Models: a.Models, Tags: a.Tags, Source: a.Source, Origin: a.Origin,
+				Models: a.Models, Tags: a.Tags, Uses: a.Uses, Source: a.Source, Origin: a.Origin,
 			})
 		}
 	}
@@ -141,7 +146,7 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 			items = append(items, ConfigListItem{
 				Category: "role", Name: name, Command: r.Command, Description: r.Description,
 				File: r.File, Optional: r.Optional, Prompt: r.Prompt,
-				Tags: r.Tags, Source: r.Source, Origin: r.Origin,
+				Tags: r.Tags, Uses: r.Uses, Source: r.Source, Origin: r.Origin,
 			})
 		}
 	}
@@ -157,7 +162,7 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 			items = append(items, ConfigListItem{
 				Category: "context", Name: name, Command: c.Command, Default: c.Default,
 				Description: c.Description, File: c.File, Prompt: c.Prompt,
-				Required: c.Required, Tags: c.Tags, Source: c.Source, Origin: c.Origin,
+				Required: c.Required, Tags: c.Tags, Uses: c.Uses, Source: c.Source, Origin: c.Origin,
 			})
 		}
 	}
@@ -173,7 +178,7 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 			items = append(items, ConfigListItem{
 				Category: "task", Name: name, Command: t.Command, Description: t.Description,
 				File: t.File, Prompt: t.Prompt, Role: t.Role,
-				Tags: t.Tags, Source: t.Source, Origin: t.Origin,
+				Tags: t.Tags, Uses: t.Uses, Source: t.Source, Origin: t.Origin,
 			})
 		}
 	}

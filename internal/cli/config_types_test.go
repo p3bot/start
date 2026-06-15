@@ -20,6 +20,7 @@ func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 		default_model: "sonnet"
 		description:   "Anthropic Claude"
 		tags: ["anthropic", "ai"]
+		uses: ["contexts:start/library/publishing"]
 		models: {
 			sonnet: "claude-sonnet-4"
 			opus:   "claude-opus-4"
@@ -46,6 +47,9 @@ func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Tags, []string{"anthropic", "ai"}) {
 		t.Errorf("Tags: got %v", got.Tags)
+	}
+	if !reflect.DeepEqual(got.Uses, []string{"contexts:start/library/publishing"}) {
+		t.Errorf("Uses: got %v", got.Uses)
 	}
 	wantModels := map[string]string{
 		"sonnet": "claude-sonnet-4",
@@ -126,7 +130,7 @@ func TestDecodeAgentValue_Empty(t *testing.T) {
 
 	if got.Bin != "" || got.Command != "" || got.DefaultModel != "" ||
 		got.Description != "" || got.Origin != "" ||
-		len(got.Tags) != 0 || len(got.Models) != 0 {
+		len(got.Tags) != 0 || len(got.Uses) != 0 || len(got.Models) != 0 {
 		t.Errorf("expected zero-value AgentConfig, got %+v", got)
 	}
 }
@@ -140,6 +144,7 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 		prompt:      "You are an expert code reviewer."
 		optional:    true
 		tags: ["review", "quality"]
+		uses: ["contexts:start/library/publishing"]
 		origin: "github.com/example/start-reviewer@v1"
 	}`)
 	if err := val.Err(); err != nil {
@@ -147,6 +152,10 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 	}
 
 	got := decodeRoleValue(val)
+
+	if !reflect.DeepEqual(got.Uses, []string{"contexts:start/library/publishing"}) {
+		t.Errorf("Uses: got %v", got.Uses)
+	}
 
 	if got.Description != "Reviews code carefully." {
 		t.Errorf("Description: got %q", got.Description)
@@ -198,6 +207,7 @@ func TestDecodeContextValue_FullMetadata(t *testing.T) {
 		required:    true
 		default:     true
 		tags: ["system", "env"]
+		uses: ["contexts:start/library/publishing", "roles:go-expert"]
 		origin: "github.com/example/start-env@v1"
 	}`)
 	if err := val.Err(); err != nil {
@@ -205,6 +215,10 @@ func TestDecodeContextValue_FullMetadata(t *testing.T) {
 	}
 
 	got := decodeContextValue(val)
+
+	if !reflect.DeepEqual(got.Uses, []string{"contexts:start/library/publishing", "roles:go-expert"}) {
+		t.Errorf("Uses: got %v", got.Uses)
+	}
 
 	if got.Description != "Environment details." {
 		t.Errorf("Description: got %q", got.Description)
@@ -253,6 +267,7 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 		prompt:      "Review the staged changes."
 		role:        "code-reviewer"
 		tags: ["review", "git"]
+		uses: ["contexts:start/library/publishing"]
 		origin: "github.com/example/start-review@v1"
 	}`)
 	if err := val.Err(); err != nil {
@@ -260,6 +275,10 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 	}
 
 	got := decodeTaskValue(val)
+
+	if !reflect.DeepEqual(got.Uses, []string{"contexts:start/library/publishing"}) {
+		t.Errorf("Uses: got %v", got.Uses)
+	}
 
 	if got.Description != "Review staged changes." {
 		t.Errorf("Description: got %q", got.Description)
@@ -281,6 +300,59 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 	}
 	if got.Origin != "github.com/example/start-review@v1" {
 		t.Errorf("Origin: got %q", got.Origin)
+	}
+}
+
+// TestWriteContextsFile_PreservesUsesAcrossEdit guards the writeXFile path: a
+// rewrite triggered by editing one module must not strip `uses` from the other
+// modules sharing the same file.
+func TestWriteContextsFile_PreservesUsesAcrossEdit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	initial := `contexts: {
+	"alpha": {
+		prompt: "Alpha context."
+	}
+	"publisher": {
+		prompt: "Publisher context."
+		uses: ["contexts:start/library/publishing", "roles:go-expert"]
+	}
+}
+`
+	path := filepath.Join(dir, "contexts.cue")
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	contexts, order, err := loadContextsFromDir(dir)
+	if err != nil {
+		t.Fatalf("loadContextsFromDir: %v", err)
+	}
+
+	// Simulate a `start config edit` to a different module in the same file.
+	alpha := contexts["alpha"]
+	alpha.Description = "Edited alpha."
+	contexts["alpha"] = alpha
+
+	if err := writeContextsFile(path, contexts, order); err != nil {
+		t.Fatalf("writeContextsFile: %v", err)
+	}
+
+	reloaded, _, err := loadContextsFromDir(dir)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	pub, ok := reloaded["publisher"]
+	if !ok {
+		t.Fatal("publisher missing after rewrite")
+	}
+	wantUses := []string{"contexts:start/library/publishing", "roles:go-expert"}
+	if !reflect.DeepEqual(pub.Uses, wantUses) {
+		t.Errorf("publisher Uses not preserved across edit: got %v want %v", pub.Uses, wantUses)
+	}
+	if reloaded["alpha"].Description != "Edited alpha." {
+		t.Errorf("alpha edit not applied: %q", reloaded["alpha"].Description)
 	}
 }
 

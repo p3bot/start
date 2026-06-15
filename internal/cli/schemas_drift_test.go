@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -60,6 +62,78 @@ func TestConfigListJSONShape(t *testing.T) {
 			t.Fatalf("config list item %d should be an object, got %T", i, raw)
 		}
 		requireKeys(t, "config list item", obj, "category", "name", "source")
+	}
+}
+
+// writeConfigRoleWithUses seeds an installed role declaring a `uses` list so the
+// projection sites can be exercised end to end.
+func writeConfigRoleWithUses(t *testing.T, tmpDir string) {
+	t.Helper()
+	content := `roles: {
+	"publisher": {
+		prompt: "Publishes things."
+		uses: ["contexts:start/library/publishing"]
+	}
+}
+`
+	path := filepath.Join(tmpDir, ".start", "roles.cue")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing role-with-uses fixture: %v", err)
+	}
+}
+
+// configItemByName returns the decoded config-item object with the given name.
+func configItemByName(t *testing.T, arr []any, name string) map[string]any {
+	t.Helper()
+	for _, raw := range arr {
+		obj, ok := raw.(map[string]any)
+		if ok && obj["name"] == name {
+			return obj
+		}
+	}
+	t.Fatalf("config item %q not found in %v", name, arr)
+	return nil
+}
+
+// TestConfigListJSONShape_Uses asserts the `uses` array threads through the
+// collectConfigListItems projection into config list --json.
+func TestConfigListJSONShape_Uses(t *testing.T) {
+	tmpDir, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+	writeConfigRoleWithUses(t, tmpDir)
+
+	decoded, _ := captureJSON(t, stub, "config", "list", "role", "--json")
+	arr, ok := decoded.([]any)
+	if !ok {
+		t.Fatalf("config list role --json should decode to an array, got %T", decoded)
+	}
+	obj := configItemByName(t, arr, "publisher")
+	uses, ok := obj["uses"].([]any)
+	if !ok {
+		t.Fatalf("publisher item missing uses array; got keys %v", mapKeys(obj))
+	}
+	if len(uses) != 1 || uses[0] != "contexts:start/library/publishing" {
+		t.Errorf("uses = %v, want [contexts:start/library/publishing]", uses)
+	}
+}
+
+// TestConfigGetJSONShape_Uses asserts the `uses` array threads through the
+// separate buildConfigListItem projection into config get --json.
+func TestConfigGetJSONShape_Uses(t *testing.T) {
+	tmpDir, stub := setupStartTestConfigWithRegistry(t, stubLibraryIndex())
+	writeConfigRoleWithUses(t, tmpDir)
+
+	decoded, _ := captureJSON(t, stub, "config", "get", "publisher", "--json")
+	arr, ok := decoded.([]any)
+	if !ok {
+		t.Fatalf("config get publisher --json should decode to an array, got %T", decoded)
+	}
+	obj := configItemByName(t, arr, "publisher")
+	uses, ok := obj["uses"].([]any)
+	if !ok {
+		t.Fatalf("publisher item missing uses array; got keys %v", mapKeys(obj))
+	}
+	if len(uses) != 1 || uses[0] != "contexts:start/library/publishing" {
+		t.Errorf("uses = %v, want [contexts:start/library/publishing]", uses)
 	}
 }
 

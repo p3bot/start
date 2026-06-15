@@ -101,7 +101,7 @@ Array of config-item objects. Empty result is `[]`.
 ```
 [{ category, name, source,
    description?, bin?, command?, defaultModel?, file?, prompt?, role?,
-   required?, default?, optional?, models?, tags?, origin? }]
+   required?, default?, optional?, models?, tags?, uses?, origin? }]
 ```
 
 ### config settings [key]

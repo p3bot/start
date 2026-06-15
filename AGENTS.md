@@ -35,6 +35,16 @@ Testing key principles:
 - `registry.Client` is an interface; registry-touching commands obtain their client through a per-instance provider (`getProvider(cmd)()`) stored on the command context, not by calling `registry.NewClient()` directly. New registry-backed code should consume the interface through the provider so it stays stubbable. Two paths are not on the seam and still call `registry.NewClient()` directly: the resolver's production index source (`productionIndexSource` in `resolve.go`, the lone `registry.NewClient()` caller behind the resolver's index-source seam, powering `describe`/`get`/auto-install — the resolver holds no `cmd`), and first-run auto-setup (`internal/orchestration/autosetup.go` — it cannot import `cli`). Neither emits `--json`; migrate them only if they need offline stubbing
 - Offline `--json` coverage for `library`/`search`/`update`/`doctor`: `setupStartTestConfigWithRegistry(t, idx)` isolates config plus a stub client, and `captureJSON(t, stub, args...)` runs a command with the stub injected and returns decoded JSON. `doctor validate` is excluded from the offline path; its `--json` shape is asserted by a `//go:build registry` integration test run with `go test -tags=registry`
 
+## Commit Convention
+
+This repo uses Scoped Commits (https://scopedcommits.com).
+
+- Format: `<scope>: <description>`, optional body, optional trailers
+- Scope is the subsystem, module, or area touched (e.g. `cli`, `modules`, `doctor`, `docs`)
+- Multiple scopes are fine — list them comma-separated (e.g. `cli, modules: ...`)
+- No `feat`/`fix` type prefix; the scope and description carry the meaning
+- A single commit may span multiple scopes; do not split a change that belongs together
+
 ## Commands
 
 ```bash
@@ -54,7 +64,7 @@ start alias set pc task review  # Save an alias (value is the command without 's
 start <alias>                   # Run a saved alias (e.g. 'start pc')
 start search <term>             # Search installed config and the module registry
 start doctor                    # Diagnose installation and configuration
-start doctor validate           # Maintainer check: index/registry/tag consistency
+start doctor validate           # Maintainer check: index/registry/tag consistency + uses references
 start help schemas              # --json output shapes and exit-code reference
 start prompt                    # Compose and preview a prompt
 echo "summarise" | start        # Pipe text as a one-shot prompt (required contexts only)
@@ -196,6 +206,31 @@ The persistent `--refresh` flag is the single user-facing override of the
 cache-gating rule: it forces a live index resolve on the display commands (across
 default, `--json`, and `--export`) and ORs into `computeWantLive` on the
 resolution surfaces, and is an inert no-op on the already-live commands.
+
+### Module Cross-References (`uses`)
+
+A module may declare an optional `uses` list naming the other library modules it
+pulls in at runtime via `start get` (for example a task that runs
+`start get contexts:start/library/publishing`). Each entry is a fully-qualified
+colon-form address (`category:path`). The field is mirrored on all four config
+structs (`AgentConfig`/`RoleConfig`/`ContextConfig`/`TaskConfig`) and decoded
+permissively like `tags`; a module without `uses` behaves exactly as before.
+
+- It is preserved through every config writer: the install/update AST writer
+  (`formatModuleStruct`) and the four `writeXFile` string writers (via
+  `writeCUEUses`), so install, update, and any `start config` edit retain it.
+- It surfaces in `config list --json` and `config get --json` through the `Uses`
+  field on `ConfigListItem`, populated in both `collectConfigListItems` and
+  `buildConfigListItem`. `list --json` (the installed-inventory summary) omits it.
+- `start doctor validate` checks every declared `uses` entry: each must be a
+  fully-qualified colon-form address whose category is known and whose path
+  resolves to an index entry under that category, matched with the same
+  case-insensitive whole-name rule (`nameMatches`/`modeExact`) `start get` uses.
+  The declarations are read from the modules-repo clone (descending to the module
+  value via the shared `modules.DescendToModuleValue` helper), not installed
+  config. A malformed or unresolvable entry, or a per-module content load that
+  fails to build, becomes a per-module issue — never a propagated error — so the
+  declaring module fails itself while the rest of the walk continues.
 
 ### Architecture Principles
 

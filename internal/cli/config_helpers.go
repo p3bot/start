@@ -456,16 +456,18 @@ func truncatePrompt(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-func writeCUETags(sb *strings.Builder, tags []string) {
-	if len(tags) == 0 {
+// writeCUEStringList emits an indented `field: [...]` line, or nothing when the
+// list is empty so an absent list round-trips as absent.
+func writeCUEStringList(sb *strings.Builder, field string, items []string) {
+	if len(items) == 0 {
 		return
 	}
-	sb.WriteString("\t\ttags: [")
-	for i, tag := range tags {
+	fmt.Fprintf(sb, "\t\t%s: [", field)
+	for i, item := range items {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		fmt.Fprintf(sb, "%q", tag)
+		fmt.Fprintf(sb, "%q", item)
 	}
 	sb.WriteString("]\n")
 }
@@ -485,22 +487,24 @@ func writeCUEPrompt(sb *strings.Builder, prompt string) {
 	}
 }
 
-func extractTags(val cue.Value) []string {
-	tagsVal := val.LookupPath(cue.ParsePath("tags"))
-	if !tagsVal.Exists() {
+// extractStringList reads a CUE list field as a string slice, returning nil when
+// the field is absent or not a list so a missing field round-trips as absent.
+func extractStringList(val cue.Value, field string) []string {
+	listVal := val.LookupPath(cue.ParsePath(field))
+	if !listVal.Exists() {
 		return nil
 	}
-	tagIter, err := tagsVal.List()
+	iter, err := listVal.List()
 	if err != nil {
 		return nil
 	}
-	var tags []string
-	for tagIter.Next() {
-		if s, err := tagIter.Value().String(); err == nil {
-			tags = append(tags, s)
+	var items []string
+	for iter.Next() {
+		if s, err := iter.Value().String(); err == nil {
+			items = append(items, s)
 		}
 	}
-	return tags
+	return items
 }
 
 func scopeString(local bool) string {

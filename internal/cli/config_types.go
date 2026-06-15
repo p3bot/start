@@ -21,6 +21,7 @@ type AgentConfig struct {
 	Description  string            `json:"description,omitempty"`
 	Models       map[string]string `json:"models,omitempty"`
 	Tags         []string          `json:"tags,omitempty"`
+	Uses         []string          `json:"uses,omitempty"`   // Colon-form addresses of modules pulled in via `start get`
 	Source       string            `json:"source"`           // "global" or "local"
 	Origin       string            `json:"origin,omitempty"` // Registry module path when installed from registry
 }
@@ -43,7 +44,8 @@ func decodeAgentValue(val cue.Value) AgentConfig {
 		agent.Description, _ = v.String()
 	}
 
-	agent.Tags = extractTags(val)
+	agent.Tags = extractStringList(val, "tags")
+	agent.Uses = extractStringList(val, "uses")
 
 	agent.Models = internalcue.AgentModels(val)
 
@@ -126,7 +128,8 @@ func writeAgentsFile(path string, agents map[string]AgentConfig) error {
 		if agent.Description != "" {
 			fmt.Fprintf(&sb, "\t\tdescription: %q\n", agent.Description)
 		}
-		writeCUETags(&sb, agent.Tags)
+		writeCUEStringList(&sb, "tags", agent.Tags)
+		writeCUEStringList(&sb, "uses", agent.Uses)
 		if len(agent.Models) > 0 {
 			sb.WriteString("\t\tmodels: {\n")
 			var aliases []string
@@ -185,6 +188,7 @@ type RoleConfig struct {
 	Command     string   `json:"command,omitempty"`
 	Prompt      string   `json:"prompt,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	Uses        []string `json:"uses,omitempty"`     // Colon-form addresses of modules pulled in via `start get`
 	Optional    bool     `json:"optional,omitempty"` // If true, skip gracefully when file is missing
 	Source      string   `json:"source"`             // "global" or "local"
 	Origin      string   `json:"origin,omitempty"`   // Registry module path when installed from registry
@@ -208,7 +212,8 @@ func decodeRoleValue(val cue.Value) RoleConfig {
 		role.Prompt, _ = v.String()
 	}
 
-	role.Tags = extractTags(val)
+	role.Tags = extractStringList(val, "tags")
+	role.Uses = extractStringList(val, "uses")
 
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		role.Origin, _ = v.String()
@@ -282,7 +287,8 @@ func writeRolesFile(path string, roles map[string]RoleConfig, order []string) er
 			fmt.Fprintf(&sb, "\t\tcommand: %q\n", role.Command)
 		}
 		writeCUEPrompt(&sb, role.Prompt)
-		writeCUETags(&sb, role.Tags)
+		writeCUEStringList(&sb, "tags", role.Tags)
+		writeCUEStringList(&sb, "uses", role.Uses)
 		if role.Optional {
 			sb.WriteString("\t\toptional: true\n")
 		}
@@ -305,6 +311,7 @@ type ContextConfig struct {
 	Required    bool     `json:"required,omitempty"`
 	Default     bool     `json:"default,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	Uses        []string `json:"uses,omitempty"`   // Colon-form addresses of modules pulled in via `start get`
 	Source      string   `json:"source"`           // "global" or "local"
 	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
 }
@@ -333,7 +340,8 @@ func decodeContextValue(val cue.Value) ContextConfig {
 		ctx.Default, _ = v.Bool()
 	}
 
-	ctx.Tags = extractTags(val)
+	ctx.Tags = extractStringList(val, "tags")
+	ctx.Uses = extractStringList(val, "uses")
 
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		ctx.Origin, _ = v.String()
@@ -410,7 +418,8 @@ func writeContextsFile(path string, contexts map[string]ContextConfig, order []s
 		if ctx.Default {
 			sb.WriteString("\t\tdefault: true\n")
 		}
-		writeCUETags(&sb, ctx.Tags)
+		writeCUEStringList(&sb, "tags", ctx.Tags)
+		writeCUEStringList(&sb, "uses", ctx.Uses)
 
 		sb.WriteString("\t}\n")
 	}
@@ -429,6 +438,7 @@ type TaskConfig struct {
 	Prompt      string   `json:"prompt,omitempty"`
 	Role        string   `json:"role,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	Uses        []string `json:"uses,omitempty"`   // Colon-form addresses of modules pulled in via `start get`
 	Source      string   `json:"source"`           // "global" or "local"
 	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
 }
@@ -454,7 +464,8 @@ func decodeTaskValue(val cue.Value) TaskConfig {
 		task.Role, _ = v.String()
 	}
 
-	task.Tags = extractTags(val)
+	task.Tags = extractStringList(val, "tags")
+	task.Uses = extractStringList(val, "uses")
 
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		task.Origin, _ = v.String()
@@ -535,7 +546,8 @@ func writeTasksFile(path string, tasks map[string]TaskConfig) error {
 		if task.Role != "" {
 			fmt.Fprintf(&sb, "\t\trole: %q\n", task.Role)
 		}
-		writeCUETags(&sb, task.Tags)
+		writeCUEStringList(&sb, "tags", task.Tags)
+		writeCUEStringList(&sb, "uses", task.Uses)
 
 		sb.WriteString("\t}\n")
 	}

@@ -864,6 +864,41 @@ task: {
 	}
 }
 
+// TestExtractModuleContent_PreservesUses proves the install/update writer keeps a
+// module's `uses` declaration, which routes through formatModuleStruct.
+func TestExtractModuleContent_PreservesUses(t *testing.T) {
+	t.Parallel()
+
+	moduleDir := createTestModule(t, "task", `package task
+
+task: {
+	description: "Publish a release"
+	uses: ["contexts:start/library/publishing", "roles:go-expert"]
+	prompt: "Publish it."
+}
+`)
+
+	module := SearchResult{
+		Category: "tasks",
+		Name:     "publish",
+	}
+
+	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/task@v0.1.0", "")
+	if err != nil {
+		t.Fatalf("ExtractModuleContent() error: %v", err)
+	}
+	result := formatAST(t, astResult)
+
+	if !strings.Contains(result, "uses:") {
+		t.Errorf("missing uses field\nGot:\n%s", result)
+	}
+	for _, want := range []string{`"contexts:start/library/publishing"`, `"roles:go-expert"`} {
+		if !strings.Contains(result, want) {
+			t.Errorf("uses entry %s not written\nGot:\n%s", want, result)
+		}
+	}
+}
+
 func TestExtractModuleContent_Role(t *testing.T) {
 	t.Parallel()
 

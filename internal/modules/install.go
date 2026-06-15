@@ -113,6 +113,24 @@ func ModuleExists(cfg cue.Value, category, name string) bool {
 // originPath is stored in the origin field; roleName, if non-empty, replaces an inline
 // role struct with a string reference.
 func ExtractModuleContent(moduleDir string, module SearchResult, reg any, originPath, roleName string) (*ast.StructLit, error) {
+	v, err := BuildModuleValue(moduleDir, reg)
+	if err != nil {
+		return nil, err
+	}
+
+	moduleVal, ok := DescendToModuleValue(v, module.Category, module.Name)
+	if !ok {
+		singular := strings.TrimSuffix(module.Category, "s")
+		return nil, fmt.Errorf("module definition not found in module (tried %q)", singular)
+	}
+
+	return formatModuleStruct(moduleVal, module.Category, originPath, roleName)
+}
+
+// BuildModuleValue loads and builds the CUE instance rooted at moduleDir,
+// returning the built root value. reg, when a modconfig.Registry, resolves the
+// module's schema imports; pass nil for a module that imports no schema.
+func BuildModuleValue(moduleDir string, reg any) (cue.Value, error) {
 	cctx := cuecontext.New()
 
 	cfg := &load.Config{
@@ -125,30 +143,32 @@ func ExtractModuleContent(moduleDir string, module SearchResult, reg any, origin
 
 	insts := load.Instances([]string{"."}, cfg)
 	if len(insts) == 0 {
-		return nil, fmt.Errorf("no CUE instances found in %s", moduleDir)
+		return cue.Value{}, fmt.Errorf("no CUE instances found in %s", moduleDir)
 	}
 
 	inst := insts[0]
 	if inst.Err != nil {
-		return nil, fmt.Errorf("loading module: %w", inst.Err)
+		return cue.Value{}, fmt.Errorf("loading module: %w", inst.Err)
 	}
 
 	v := cctx.BuildInstance(inst)
 	if err := v.Err(); err != nil {
-		return nil, fmt.Errorf("building module: %w", err)
+		return cue.Value{}, fmt.Errorf("building module: %w", err)
 	}
+	return v, nil
+}
 
-	// Try singular field name (task/role/agent/context) first, then module name as key.
-	singular := strings.TrimSuffix(module.Category, "s")
-	moduleVal := v.LookupPath(cue.ParsePath(singular))
+// DescendToModuleValue locates a module's content within a built root value,
+// trying the singular category key (task/role/agent/context) first, then the
+// module name. This is where module fields live, so both content extraction and
+// the doctor uses check descend through here to avoid drifting on that location.
+func DescendToModuleValue(root cue.Value, category, name string) (cue.Value, bool) {
+	singular := strings.TrimSuffix(category, "s")
+	moduleVal := root.LookupPath(cue.ParsePath(singular))
 	if !moduleVal.Exists() {
-		moduleVal = v.LookupPath(cue.MakePath(cue.Str(module.Name)))
+		moduleVal = root.LookupPath(cue.MakePath(cue.Str(name)))
 	}
-	if !moduleVal.Exists() {
-		return nil, fmt.Errorf("module definition not found in module (tried %q)", singular)
-	}
-
-	return formatModuleStruct(moduleVal, module.Category, originPath, roleName)
+	return moduleVal, moduleVal.Exists()
 }
 
 // formatModuleStruct builds a CUE AST struct from a CUE value.
@@ -165,15 +185,15 @@ func formatModuleStruct(v cue.Value, category, originPath, roleName string) (*as
 	var fields []string
 	switch category {
 	case "tasks":
-		fields = []string{"description", "tags", "role", "file", "command", "prompt"}
+		fields = []string{"description", "tags", "uses", "role", "file", "command", "prompt"}
 	case "roles":
-		fields = []string{"description", "tags", "file", "command", "prompt", "optional"}
+		fields = []string{"description", "tags", "uses", "file", "command", "prompt", "optional"}
 	case "agents":
-		fields = []string{"description", "tags", "bin", "command", "default_model", "models"}
+		fields = []string{"description", "tags", "uses", "bin", "command", "default_model", "models"}
 	case "contexts":
-		fields = []string{"description", "tags", "file", "command", "prompt", "required", "default"}
+		fields = []string{"description", "tags", "uses", "file", "command", "prompt", "required", "default"}
 	default:
-		fields = []string{"description", "tags", "prompt"}
+		fields = []string{"description", "tags", "uses", "prompt"}
 	}
 
 	for _, field := range fields {

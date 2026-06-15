@@ -13,9 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"cuelang.org/go/mod/modconfig"
 	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/doctor"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 	"golang.org/x/mod/semver"
@@ -573,7 +575,7 @@ func validateModules(ctx context.Context, client registry.Client, idx *registry.
 
 		for _, name := range names {
 			entry := cat.entries[name]
-			m := validateOneModule(ctx, client, cat.name, name, entry, tags, cacheDir)
+			m := validateOneModule(ctx, client, idx, cat.name, name, entry, tags, cacheDir)
 			catResult.modules = append(catResult.modules, m)
 			if onModule != nil {
 				onModule()
@@ -597,9 +599,10 @@ func validateModules(ctx context.Context, client registry.Client, idx *registry.
 	return results
 }
 
-// validateOneModule runs checks 1–3 and the staleness check for a single indexed module.
-// Check 4 (filesystem orphan detection) is performed by the caller, validateModules.
-func validateOneModule(ctx context.Context, client registry.Client, category, name string, entry registry.IndexEntry, tags []string, cacheDir string) validateModuleResult {
+// validateOneModule runs checks 1–3, the staleness check, and the uses-reference
+// check for a single indexed module. Check 4 (filesystem orphan detection) is
+// performed by the caller, validateModules.
+func validateOneModule(ctx context.Context, client registry.Client, idx *registry.Index, category, name string, entry registry.IndexEntry, tags []string, cacheDir string) validateModuleResult {
 	m := validateModuleResult{
 		name:    name,
 		version: entry.Version,
@@ -673,10 +676,67 @@ func validateOneModule(ctx context.Context, client registry.Client, category, na
 		}
 	}
 
+	// uses references: every declared `uses` entry must resolve in the index.
+	if uses, err := loadModuleUses(cacheDir, category, name, client.Registry()); err != nil {
+		m.issues = append(m.issues, fmt.Sprintf("could not read `uses` declarations: %v", err))
+	} else {
+		m.issues = append(m.issues, validateUsesReferences(name, uses, idx)...)
+	}
+
 	if len(m.issues) > 0 {
 		m.status = validateModuleFail
 	}
 	return m
+}
+
+// loadModuleUses builds the module cloned at cacheDir/<category>/<name>, descends
+// to its module value, and returns the declared `uses` list. reg resolves the
+// module's schema imports. A build or descent failure is returned as an error so
+// the caller can record it as a per-module issue distinct from an unresolved
+// reference, rather than silently skipping the module.
+func loadModuleUses(cacheDir, category, name string, reg modconfig.Registry) ([]string, error) {
+	moduleDir := filepath.Join(cacheDir, category, name)
+	root, err := modules.BuildModuleValue(moduleDir, reg)
+	if err != nil {
+		return nil, err
+	}
+	moduleVal, ok := modules.DescendToModuleValue(root, category, name)
+	if !ok {
+		return nil, fmt.Errorf("no module value at %q or %q", strings.TrimSuffix(category, "s"), name)
+	}
+	return extractStringList(moduleVal, "uses"), nil
+}
+
+// validateUsesReferences returns an issue for each `uses` entry that is not a
+// fully-qualified colon-form address or that resolves to no module in the index.
+// Resolution uses the same case-insensitive whole-name match (modeExact) that
+// `start get` applies, so the check never disagrees with the path it guards.
+func validateUsesReferences(declaringModule string, uses []string, idx *registry.Index) []string {
+	var issues []string
+	for _, ref := range uses {
+		addr, err := parseAddress(ref)
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("module %q declares an invalid uses reference %q: %v", declaringModule, ref, err))
+			continue
+		}
+		if !addr.HasPrefix {
+			issues = append(issues, fmt.Sprintf("module %q declares uses reference %q which is not a fully-qualified category:path address", declaringModule, ref))
+			continue
+		}
+		if !usesPathResolves(registryEntries(idx, addr.Category), addr.Name) {
+			issues = append(issues, fmt.Sprintf("module %q declares uses reference %q which resolves to no module in the index", declaringModule, ref))
+		}
+	}
+	return issues
+}
+
+func usesPathResolves(entries map[string]registry.IndexEntry, path string) bool {
+	for key := range entries {
+		if nameMatches(path, key, modeExact) {
+			return true
+		}
+	}
+	return false
 }
 
 // validateFindFSModules returns the names of modules under the category
