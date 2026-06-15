@@ -807,7 +807,7 @@ func promptSelectConfigMatch(w io.Writer, r io.Reader, query string, matches []c
 		fmt.Fprintf(w, "%d items:\n\n", len(matches))
 	}
 	for i, m := range matches {
-		fmt.Fprintf(w, "  %2d. %s %s\n", i+1, m.Name, tui.Annotate("%s", m.Category))
+		fmt.Fprintf(w, "  %2d. %s %s\n", i+1, m.Name, tui.AnnotateCategory(m.Category))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", len(matches)))
@@ -840,7 +840,7 @@ func promptSelectConfigMatchesFromList(w io.Writer, r io.Reader, query string, m
 		fmt.Fprintf(w, "%d items:\n\n", len(matches))
 	}
 	for i, m := range matches {
-		fmt.Fprintf(w, "  %2d. %s %s\n", i+1, m.Name, tui.Annotate("%s", m.Category))
+		fmt.Fprintf(w, "  %2d. %s %s\n", i+1, m.Name, tui.AnnotateCategory(m.Category))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "CSV %s, range %s, or \"all\" supported\n",

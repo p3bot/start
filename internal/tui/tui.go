@@ -34,21 +34,30 @@ var (
 )
 
 // CategoryColor returns the colour for a module category (case-insensitive).
+// Both plural ("roles") and singular ("role") forms are accepted, since
+// callers carry the category in either form.
 func CategoryColor(category string) *color.Color {
 	switch strings.ToLower(category) {
-	case "agents":
+	case "agents", "agent":
 		return ColorAgents
-	case "roles":
+	case "roles", "role":
 		return ColorRoles
-	case "contexts":
+	case "contexts", "context":
 		return ColorContexts
-	case "tasks":
+	case "tasks", "task":
 		return ColorTasks
-	case "settings":
+	case "settings", "setting":
 		return ColorSettings
 	default:
 		return ColorDim
 	}
+}
+
+// AnnotateCategory wraps a category label in cyan parentheses with the
+// category's own colour, e.g. (role) in the roles colour. Unlike Annotate,
+// the inner text uses the category colour rather than dim.
+func AnnotateCategory(category string) string {
+	return ColorCyan.Sprint("(") + CategoryColor(category).Sprint(category) + ColorCyan.Sprint(")")
 }
 
 // Annotate returns text wrapped in cyan parentheses with dim content: (text)

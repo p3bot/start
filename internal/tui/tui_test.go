@@ -16,14 +16,19 @@ func TestCategoryColor(t *testing.T) {
 	}{
 		{"agents", ColorAgents},
 		{"AGENTS", ColorAgents},
+		{"agent", ColorAgents}, // singular form, as carried by selection menus
 		{"roles", ColorRoles},
 		{"Roles", ColorRoles},
+		{"role", ColorRoles},
 		{"contexts", ColorContexts},
 		{"CONTEXTS", ColorContexts},
+		{"context", ColorContexts},
 		{"tasks", ColorTasks},
 		{"Tasks", ColorTasks},
+		{"task", ColorTasks},
 		{"settings", ColorSettings},
 		{"Settings", ColorSettings},
+		{"setting", ColorSettings},
 		{"unknown", ColorDim},
 		{"", ColorDim},
 		{"prompts", ColorDim}, // not in switch, falls to default
@@ -37,6 +42,32 @@ func TestCategoryColor(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAnnotateCategory(t *testing.T) {
+	t.Parallel()
+
+	t.Run("wraps label in parentheses", func(t *testing.T) {
+		result := AnnotateCategory("role")
+		if !strings.Contains(result, "role") {
+			t.Errorf("AnnotateCategory(%q) = %q, want to contain the label", "role", result)
+		}
+		if !strings.Contains(result, "(") || !strings.Contains(result, ")") {
+			t.Errorf("AnnotateCategory(%q) = %q, want parentheses", "role", result)
+		}
+	})
+
+	t.Run("uses category colour for known categories", func(t *testing.T) {
+		// The label must be wrapped in cyan parens with the category's own
+		// colour applied to the inner text, not dim. Assert the exact
+		// composition so a regression to ColorDim is caught when colour is
+		// enabled; under the default NoColor the strings collapse to plain
+		// text and this pins the rendered structure.
+		want := ColorCyan.Sprint("(") + ColorTasks.Sprint("task") + ColorCyan.Sprint(")")
+		if result := AnnotateCategory("task"); result != want {
+			t.Errorf("AnnotateCategory(%q) = %q, want %q", "task", result, want)
+		}
+	})
 }
 
 func TestAnnotate(t *testing.T) {
