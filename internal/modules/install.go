@@ -11,9 +11,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
-	"cuelang.org/go/cue/format"
 	"cuelang.org/go/cue/load"
-	"cuelang.org/go/cue/parser"
 	"cuelang.org/go/mod/modconfig"
 	"cuelang.org/go/mod/modfile"
 	internalcue "github.com/start-cli/start/internal/cue"
@@ -124,7 +122,7 @@ func ExtractModuleContent(moduleDir string, module SearchResult, reg any, origin
 		return nil, fmt.Errorf("module definition not found in module (tried %q)", singular)
 	}
 
-	return formatModuleStruct(moduleVal, module.Category, originPath, roleName)
+	return FormatModuleStruct(moduleVal, module.Category, originPath, roleName)
 }
 
 // BuildModuleValue loads and builds the CUE instance rooted at moduleDir,
@@ -171,10 +169,12 @@ func DescendToModuleValue(root cue.Value, category, name string) (cue.Value, boo
 	return moduleVal, moduleVal.Exists()
 }
 
-// formatModuleStruct builds a CUE AST struct from a CUE value.
+// FormatModuleStruct builds a CUE AST entry struct from a built module value.
 // originPath is written as the origin field; roleName, if non-empty, replaces an
-// inline role struct with a string reference.
-func formatModuleStruct(v cue.Value, category, originPath, roleName string) (*ast.StructLit, error) {
+// inline role struct with a string reference. It iterates the shared
+// CategoryFieldOrder and renders the prompt through PromptExpr, so install output
+// stays byte-identical to the config add/edit writers for scalar and list fields.
+func FormatModuleStruct(v cue.Value, category, originPath, roleName string) (*ast.StructLit, error) {
 	s := &ast.StructLit{}
 
 	s.Elts = append(s.Elts, &ast.Field{
@@ -182,21 +182,7 @@ func formatModuleStruct(v cue.Value, category, originPath, roleName string) (*as
 		Value: ast.NewString(originPath),
 	})
 
-	var fields []string
-	switch category {
-	case "tasks":
-		fields = []string{"description", "tags", "uses", "role", "file", "command", "prompt"}
-	case "roles":
-		fields = []string{"description", "tags", "uses", "file", "command", "prompt", "optional"}
-	case "agents":
-		fields = []string{"description", "tags", "uses", "bin", "command", "default_model", "models"}
-	case "contexts":
-		fields = []string{"description", "tags", "uses", "file", "command", "prompt", "required", "default"}
-	default:
-		fields = []string{"description", "tags", "uses", "prompt"}
-	}
-
-	for _, field := range fields {
+	for _, field := range CategoryFieldOrder(category) {
 		if field == "role" && roleName != "" {
 			s.Elts = append(s.Elts, &ast.Field{
 				Label: ast.NewIdent("role"),
@@ -210,7 +196,7 @@ func formatModuleStruct(v cue.Value, category, originPath, roleName string) (*as
 			continue
 		}
 
-		expr, err := formatFieldExpr(fieldVal)
+		expr, err := fieldExprFor(field, fieldVal)
 		if err != nil {
 			return nil, fmt.Errorf("formatting field %q: %w", field, err)
 		}
@@ -221,6 +207,21 @@ func formatModuleStruct(v cue.Value, category, originPath, roleName string) (*as
 	}
 
 	return s, nil
+}
+
+// fieldExprFor converts a module field value into an AST expression. The prompt
+// field routes through the shared PromptExpr so install emits the same """
+// heredoc form the config add/edit writers do; every other field uses the
+// generic converter.
+func fieldExprFor(field string, v cue.Value) (ast.Expr, error) {
+	if field == "prompt" {
+		s, err := v.String()
+		if err != nil {
+			return nil, err
+		}
+		return PromptExpr(s), nil
+	}
+	return formatFieldExpr(v)
 }
 
 // formatFieldExpr converts a CUE value into an AST expression node.
@@ -361,112 +362,23 @@ func ModuleFromOrigin(origin string) string {
 	return origin
 }
 
-// writeModuleToConfig upserts the module content into the config file.
+// writeModuleToConfig upserts the module content into the config file through the
+// shared AST mutation layer, preserving the managed header, sibling entries, and
+// comments.
 func writeModuleToConfig(configPath string, module SearchResult, content ast.Expr, modulePath string) error {
-	var file *ast.File
-	if data, err := os.ReadFile(configPath); err == nil && len(data) > 0 {
-		file, err = parser.ParseFile(configPath, data, parser.ParseComments)
-		if err != nil {
-			return fmt.Errorf("parsing config file: %w", err)
-		}
-	}
-
-	moduleField := &ast.Field{
-		Label: ast.NewStringLabel(module.Name),
-		Value: content,
-	}
-
-	if file == nil {
-		categoryStruct := &ast.StructLit{
-			Elts: []ast.Decl{moduleField},
-		}
-		categoryField := &ast.Field{
-			Label: ast.NewIdent(module.Category),
-			Value: categoryStruct,
-		}
-		ast.AddComment(categoryField, &ast.CommentGroup{
-			Doc: true,
-			List: []*ast.Comment{
-				{Text: "// start configuration"},
-				{Text: "// Managed by 'start install'"},
-			},
-		})
-		file = &ast.File{Decls: []ast.Decl{categoryField}}
-	} else {
-		catField := findCategoryField(file, module.Category)
-		if catField != nil {
-			catStruct, ok := catField.Value.(*ast.StructLit)
-			if !ok {
-				return fmt.Errorf("category %q is not a struct", module.Category)
-			}
-			if existing := findModuleField(catStruct, module.Name); existing != nil {
-				existing.Value = content
-			} else {
-				catStruct.Elts = append(catStruct.Elts, moduleField)
-			}
-		} else {
-			categoryStruct := &ast.StructLit{
-				Elts: []ast.Decl{moduleField},
-			}
-			categoryField := &ast.Field{
-				Label: ast.NewIdent(module.Category),
-				Value: categoryStruct,
-			}
-			file.Decls = append(file.Decls, categoryField)
-		}
-	}
-
-	formatted, err := format.Node(file, format.Simplify())
-	if err != nil {
-		return fmt.Errorf("formatting config: %w", err)
-	}
-	return os.WriteFile(configPath, formatted, 0644)
+	return UpsertConfigModule(configPath, module.Category, module.Name, content)
 }
 
-func findCategoryField(file *ast.File, category string) *ast.Field {
-	for _, decl := range file.Decls {
-		field, ok := decl.(*ast.Field)
-		if !ok {
-			continue
-		}
-		name, _, err := ast.LabelName(field.Label)
-		if err != nil {
-			continue
-		}
-		if name == category {
-			return field
-		}
-	}
-	return nil
-}
-
-func findModuleField(s *ast.StructLit, name string) *ast.Field {
-	for _, elt := range s.Elts {
-		field, ok := elt.(*ast.Field)
-		if !ok {
-			continue
-		}
-		labelName, _, err := ast.LabelName(field.Label)
-		if err != nil {
-			continue
-		}
-		if labelName == name {
-			return field
-		}
-	}
-	return nil
-}
-
-// UpdateModuleInConfig replaces an existing module entry in the config file.
+// UpdateModuleInConfig replaces an existing module entry in the config file. It
+// differs from UpsertConfigModule in requiring the file, category, and entry to
+// already exist, since update only ever rewrites installed modules.
 func UpdateModuleInConfig(configPath, category, name string, newContent ast.Expr) error {
-	data, err := os.ReadFile(configPath)
+	file, err := parseConfigFile(configPath)
 	if err != nil {
-		return fmt.Errorf("reading config file: %w", err)
+		return err
 	}
-
-	file, err := parser.ParseFile(configPath, data, parser.ParseComments)
-	if err != nil {
-		return fmt.Errorf("parsing config file: %w", err)
+	if file == nil {
+		return fmt.Errorf("module %q not found in config", name)
 	}
 
 	catField := findCategoryField(file, category)
@@ -486,9 +398,5 @@ func UpdateModuleInConfig(configPath, category, name string, newContent ast.Expr
 
 	moduleField.Value = newContent
 
-	formatted, err := format.Node(file, format.Simplify())
-	if err != nil {
-		return fmt.Errorf("formatting config: %w", err)
-	}
-	return os.WriteFile(configPath, formatted, 0644)
+	return writeConfigFile(configPath, file)
 }

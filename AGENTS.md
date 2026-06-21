@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: 02-migrate-config-writers-onto-ast.md
+Active Project: None. 03 and 04 are delayed.
 
 When a project is complete, update this file to point to the next active project (or `none` if nothing is queued)
 
@@ -223,9 +223,12 @@ colon-form address (`category:path`). The field is mirrored on all four config
 structs (`AgentConfig`/`RoleConfig`/`ContextConfig`/`TaskConfig`) and decoded
 permissively like `tags`; a module without `uses` behaves exactly as before.
 
-- It is preserved through every config writer: the install/update AST writer
-  (`formatModuleStruct`) and the four `writeXFile` string writers (via
-  `writeCUEUses`), so install, update, and any `start config` edit retain it.
+- It is preserved through every config writer: install, update, add, edit, and
+  reorder all mutate config through one AST layer in `internal/modules`
+  (`UpsertConfigModule`/`ReorderConfigCategory`, with entry structs built by
+  `FormatModuleStruct` for install/update and the `internal/cli` struct builders
+  for add/edit). All iterate the shared `CategoryFieldOrder`, so `uses` and field
+  order are retained uniformly and the comment header survives every mutation.
 - It surfaces in `config list --json` and `config get --json` through the `Uses`
   field on `ConfigListItem`, populated in both `collectConfigListItems` and
   `buildConfigListItem`. `list --json` (the installed-inventory summary) omits it.

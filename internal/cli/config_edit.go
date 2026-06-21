@@ -135,10 +135,6 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 	// Edit in the dir where the agent actually lives.
 	configDir := paths.Dir(agent.Source == "local")
 	agentPath := filepath.Join(configDir, "agents.cue")
-	dirAgents, _, err := loadAgentsFromDir(configDir)
-	if err != nil {
-		return fmt.Errorf("loading agents: %w", err)
-	}
 
 	fmt.Fprintf(stdout, "Editing agent %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
@@ -181,15 +177,15 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 		return err
 	}
 
+	agent.Name = resolvedName
 	agent.Bin = newBin
 	agent.Command = newCommand
 	agent.DefaultModel = newDefaultModel
 	agent.Description = newDescription
 	agent.Models = newModels
 	agent.Tags = newTags
-	dirAgents[resolvedName] = agent
 
-	if err := writeAgentsFile(agentPath, dirAgents); err != nil {
+	if err := upsertAgent(agentPath, agent); err != nil {
 		return fmt.Errorf("writing agents file: %w", err)
 	}
 
@@ -214,10 +210,6 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 
 	configDir := paths.Dir(role.Source == "local")
 	rolePath := filepath.Join(configDir, "roles.cue")
-	dirRoles, order, err := loadRolesFromDir(configDir)
-	if err != nil {
-		return fmt.Errorf("loading roles: %w", err)
-	}
 
 	fmt.Fprintf(stdout, "Editing role %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
@@ -284,15 +276,15 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return err
 	}
 
+	role.Name = resolvedName
 	role.Description = newDescription
 	role.File = newFile
 	role.Command = newCommand
 	role.Prompt = newPrompt
 	role.Tags = newTags
 	role.Optional = newOptional
-	dirRoles[resolvedName] = role
 
-	if err := writeRolesFile(rolePath, dirRoles, order); err != nil {
+	if err := upsertRole(rolePath, role); err != nil {
 		return fmt.Errorf("writing roles file: %w", err)
 	}
 
@@ -317,10 +309,6 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 
 	configDir := paths.Dir(ctx.Source == "local")
 	contextPath := filepath.Join(configDir, "contexts.cue")
-	dirContexts, order, err := loadContextsFromDir(configDir)
-	if err != nil {
-		return fmt.Errorf("loading contexts: %w", err)
-	}
 
 	fmt.Fprintf(stdout, "Editing context %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
@@ -395,6 +383,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 		return err
 	}
 
+	ctx.Name = resolvedName
 	ctx.Description = newDescription
 	ctx.File = newFile
 	ctx.Command = newCommand
@@ -402,9 +391,8 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 	ctx.Required = newRequired
 	ctx.Default = newDefault
 	ctx.Tags = newTags
-	dirContexts[resolvedName] = ctx
 
-	if err := writeContextsFile(contextPath, dirContexts, order); err != nil {
+	if err := upsertContext(contextPath, ctx); err != nil {
 		return fmt.Errorf("writing contexts file: %w", err)
 	}
 
@@ -429,10 +417,6 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 
 	configDir := paths.Dir(task.Source == "local")
 	taskPath := filepath.Join(configDir, "tasks.cue")
-	dirTasks, _, err := loadTasksFromDir(configDir)
-	if err != nil {
-		return fmt.Errorf("loading tasks: %w", err)
-	}
 
 	fmt.Fprintf(stdout, "Editing task %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
@@ -482,15 +466,15 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 		return err
 	}
 
+	task.Name = resolvedName
 	task.Description = newDescription
 	task.File = newFile
 	task.Command = newCommand
 	task.Prompt = newPrompt
 	task.Role = newRole
 	task.Tags = newTags
-	dirTasks[resolvedName] = task
 
-	if err := writeTasksFile(taskPath, dirTasks); err != nil {
+	if err := upsertTask(taskPath, task); err != nil {
 		return fmt.Errorf("writing tasks file: %w", err)
 	}
 

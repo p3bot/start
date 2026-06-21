@@ -303,10 +303,9 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 	}
 }
 
-// TestWriteContextsFile_PreservesUsesAcrossEdit guards the writeXFile path: a
-// rewrite triggered by editing one module must not strip `uses` from the other
-// modules sharing the same file.
-func TestWriteContextsFile_PreservesUsesAcrossEdit(t *testing.T) {
+// TestUpsertContext_PreservesUsesAcrossEdit guards the AST writer: an edit to one
+// module must not strip `uses` from the other modules sharing the same file.
+func TestUpsertContext_PreservesUsesAcrossEdit(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	initial := `contexts: {
@@ -324,7 +323,7 @@ func TestWriteContextsFile_PreservesUsesAcrossEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	contexts, order, err := loadContextsFromDir(dir)
+	contexts, _, err := loadContextsFromDir(dir)
 	if err != nil {
 		t.Fatalf("loadContextsFromDir: %v", err)
 	}
@@ -332,10 +331,8 @@ func TestWriteContextsFile_PreservesUsesAcrossEdit(t *testing.T) {
 	// Simulate a `start config edit` to a different module in the same file.
 	alpha := contexts["alpha"]
 	alpha.Description = "Edited alpha."
-	contexts["alpha"] = alpha
-
-	if err := writeContextsFile(path, contexts, order); err != nil {
-		t.Fatalf("writeContextsFile: %v", err)
+	if err := upsertContext(path, alpha); err != nil {
+		t.Fatalf("upsertContext: %v", err)
 	}
 
 	reloaded, _, err := loadContextsFromDir(dir)

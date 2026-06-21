@@ -783,9 +783,9 @@ func TestFormatModuleStruct_RoleNameOverride(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			astResult, err := formatModuleStruct(v, "tasks", "github.com/test@v0.1.0", tt.roleName)
+			astResult, err := FormatModuleStruct(v, "tasks", "github.com/test@v0.1.0", tt.roleName)
 			if err != nil {
-				t.Fatalf("formatModuleStruct() error: %v", err)
+				t.Fatalf("FormatModuleStruct() error: %v", err)
 			}
 			result := formatAST(t, astResult)
 
@@ -865,7 +865,7 @@ task: {
 }
 
 // TestExtractModuleContent_PreservesUses proves the install/update writer keeps a
-// module's `uses` declaration, which routes through formatModuleStruct.
+// module's `uses` declaration, which routes through FormatModuleStruct.
 func TestExtractModuleContent_PreservesUses(t *testing.T) {
 	t.Parallel()
 

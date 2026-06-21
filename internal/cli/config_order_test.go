@@ -253,29 +253,16 @@ func TestRunReorderLoop_DoesNotMutateInput(t *testing.T) {
 	}
 }
 
-func TestWriteContextsFile_PreservesOrder(t *testing.T) {
+// Sequential upserts preserve insertion order rather than re-sorting entries,
+// the guarantee the legacy order-slice writer carried.
+func TestUpsertContext_PreservesInsertionOrder(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "contexts.cue")
 
-	contexts := map[string]ContextConfig{
-		"zebra": {
-			Name: "zebra",
-			File: "zebra.md",
-		},
-		"alpha": {
-			Name: "alpha",
-			File: "alpha.md",
-		},
-		"middle": {
-			Name: "middle",
-			File: "middle.md",
-		},
-	}
-
-	order := []string{"zebra", "alpha", "middle"}
-	err := writeContextsFile(path, contexts, order)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for _, name := range []string{"zebra", "alpha", "middle"} {
+		if err := upsertContext(path, ContextConfig{Name: name, File: name + ".md"}); err != nil {
+			t.Fatalf("upsertContext(%q): %v", name, err)
+		}
 	}
 
 	content, err := os.ReadFile(path)
@@ -284,43 +271,28 @@ func TestWriteContextsFile_PreservesOrder(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	zebraIdx := strings.Index(contentStr, `"zebra"`)
-	alphaIdx := strings.Index(contentStr, `"alpha"`)
-	middleIdx := strings.Index(contentStr, `"middle"`)
+	zebraIdx := strings.Index(contentStr, `zebra:`)
+	alphaIdx := strings.Index(contentStr, `alpha:`)
+	middleIdx := strings.Index(contentStr, `middle:`)
 
 	if zebraIdx == -1 || alphaIdx == -1 || middleIdx == -1 {
 		t.Fatalf("missing contexts in output: %s", contentStr)
 	}
 
 	if zebraIdx >= alphaIdx || alphaIdx >= middleIdx {
-		t.Errorf("order not preserved: zebra=%d, alpha=%d, middle=%d\n%s",
+		t.Errorf("insertion order not preserved: zebra=%d, alpha=%d, middle=%d\n%s",
 			zebraIdx, alphaIdx, middleIdx, contentStr)
 	}
 }
 
-func TestWriteRolesFile_PreservesOrder(t *testing.T) {
+func TestUpsertRole_PreservesInsertionOrder(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "roles.cue")
 
-	roles := map[string]RoleConfig{
-		"zebra": {
-			Name:   "zebra",
-			Prompt: "Zebra role",
-		},
-		"alpha": {
-			Name:   "alpha",
-			Prompt: "Alpha role",
-		},
-		"middle": {
-			Name:   "middle",
-			Prompt: "Middle role",
-		},
-	}
-
-	order := []string{"zebra", "alpha", "middle"}
-	err := writeRolesFile(path, roles, order)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for _, name := range []string{"zebra", "alpha", "middle"} {
+		if err := upsertRole(path, RoleConfig{Name: name, Prompt: name + " role"}); err != nil {
+			t.Fatalf("upsertRole(%q): %v", name, err)
+		}
 	}
 
 	content, err := os.ReadFile(path)
@@ -329,16 +301,16 @@ func TestWriteRolesFile_PreservesOrder(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	zebraIdx := strings.Index(contentStr, `"zebra"`)
-	alphaIdx := strings.Index(contentStr, `"alpha"`)
-	middleIdx := strings.Index(contentStr, `"middle"`)
+	zebraIdx := strings.Index(contentStr, `zebra:`)
+	alphaIdx := strings.Index(contentStr, `alpha:`)
+	middleIdx := strings.Index(contentStr, `middle:`)
 
 	if zebraIdx == -1 || alphaIdx == -1 || middleIdx == -1 {
 		t.Fatalf("missing roles in output: %s", contentStr)
 	}
 
 	if zebraIdx >= alphaIdx || alphaIdx >= middleIdx {
-		t.Errorf("order not preserved: zebra=%d, alpha=%d, middle=%d\n%s",
+		t.Errorf("insertion order not preserved: zebra=%d, alpha=%d, middle=%d\n%s",
 			zebraIdx, alphaIdx, middleIdx, contentStr)
 	}
 }
@@ -385,15 +357,17 @@ func TestWriteReadRoundTrip_Contexts(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "contexts.cue")
 
-	contexts := map[string]ContextConfig{
-		"gamma": {Name: "gamma", File: "gamma.md", Required: true},
-		"alpha": {Name: "alpha", File: "alpha.md", Default: true},
-		"beta":  {Name: "beta", File: "beta.md"},
+	contexts := []ContextConfig{
+		{Name: "gamma", File: "gamma.md", Required: true},
+		{Name: "alpha", File: "alpha.md", Default: true},
+		{Name: "beta", File: "beta.md"},
 	}
 	order := []string{"gamma", "alpha", "beta"}
 
-	if err := writeContextsFile(path, contexts, order); err != nil {
-		t.Fatalf("write failed: %v", err)
+	for _, ctx := range contexts {
+		if err := upsertContext(path, ctx); err != nil {
+			t.Fatalf("upsertContext(%q): %v", ctx.Name, err)
+		}
 	}
 
 	loaded, loadedOrder, err := loadContextsFromDir(tmpDir)
@@ -415,15 +389,17 @@ func TestWriteReadRoundTrip_Roles(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "roles.cue")
 
-	roles := map[string]RoleConfig{
-		"gamma": {Name: "gamma", Prompt: "Gamma role"},
-		"alpha": {Name: "alpha", Prompt: "Alpha role"},
-		"beta":  {Name: "beta", Prompt: "Beta role"},
+	roles := []RoleConfig{
+		{Name: "gamma", Prompt: "Gamma role"},
+		{Name: "alpha", Prompt: "Alpha role"},
+		{Name: "beta", Prompt: "Beta role"},
 	}
 	order := []string{"gamma", "alpha", "beta"}
 
-	if err := writeRolesFile(path, roles, order); err != nil {
-		t.Fatalf("write failed: %v", err)
+	for _, role := range roles {
+		if err := upsertRole(path, role); err != nil {
+			t.Fatalf("upsertRole(%q): %v", role.Name, err)
+		}
 	}
 
 	loaded, loadedOrder, err := loadRolesFromDir(tmpDir)
@@ -486,9 +462,9 @@ func TestConfigContextOrder_Command(t *testing.T) {
 	contentStr := string(content)
 
 	// After moving alpha up: alpha, zebra, middle
-	alphaIdx := strings.Index(contentStr, `"alpha"`)
-	zebraIdx := strings.Index(contentStr, `"zebra"`)
-	middleIdx := strings.Index(contentStr, `"middle"`)
+	alphaIdx := strings.Index(contentStr, `alpha:`)
+	zebraIdx := strings.Index(contentStr, `zebra:`)
+	middleIdx := strings.Index(contentStr, `middle:`)
 
 	if alphaIdx >= zebraIdx || zebraIdx >= middleIdx {
 		t.Errorf("expected order alpha < zebra < middle, got alpha=%d, zebra=%d, middle=%d\n%s",
@@ -536,8 +512,8 @@ func TestConfigRoleOrder_Command(t *testing.T) {
 	contentStr := string(content)
 
 	// After moving alpha up: alpha, zebra
-	alphaIdx := strings.Index(contentStr, `"alpha"`)
-	zebraIdx := strings.Index(contentStr, `"zebra"`)
+	alphaIdx := strings.Index(contentStr, `alpha:`)
+	zebraIdx := strings.Index(contentStr, `zebra:`)
 
 	if alphaIdx >= zebraIdx {
 		t.Errorf("expected alpha before zebra, got alpha=%d, zebra=%d\n%s",
@@ -584,7 +560,8 @@ func TestConfigContextOrder_Cancel(t *testing.T) {
 	}
 	contentStr := string(content)
 
-	// Original order: zebra, alpha
+	// Cancel must leave the file byte-for-byte unmodified, including its original
+	// quoted-name form.
 	zebraIdx := strings.Index(contentStr, `"zebra"`)
 	alphaIdx := strings.Index(contentStr, `"alpha"`)
 
@@ -682,9 +659,9 @@ func TestConfigContextAdd_PreservesOrder(t *testing.T) {
 	}
 	contentStr := string(content)
 
-	zebraIdx := strings.Index(contentStr, `"zebra"`)
-	alphaIdx := strings.Index(contentStr, `"alpha"`)
-	betaIdx := strings.Index(contentStr, `"beta"`)
+	zebraIdx := strings.Index(contentStr, `zebra:`)
+	alphaIdx := strings.Index(contentStr, `alpha:`)
+	betaIdx := strings.Index(contentStr, `beta:`)
 
 	if zebraIdx >= alphaIdx || alphaIdx >= betaIdx {
 		t.Errorf("expected order zebra < alpha < beta, got zebra=%d, alpha=%d, beta=%d\n%s",
@@ -727,9 +704,9 @@ func TestConfigRoleAdd_PreservesOrder(t *testing.T) {
 	}
 	contentStr := string(content)
 
-	zebraIdx := strings.Index(contentStr, `"zebra"`)
-	alphaIdx := strings.Index(contentStr, `"alpha"`)
-	betaIdx := strings.Index(contentStr, `"beta"`)
+	zebraIdx := strings.Index(contentStr, `zebra:`)
+	alphaIdx := strings.Index(contentStr, `alpha:`)
+	betaIdx := strings.Index(contentStr, `beta:`)
 
 	if zebraIdx >= alphaIdx || alphaIdx >= betaIdx {
 		t.Errorf("expected order zebra < alpha < beta, got zebra=%d, alpha=%d, beta=%d\n%s",

@@ -287,10 +287,10 @@ func TestConfigContext_FullWorkflow(t *testing.T) {
 		}
 
 		content, _ := os.ReadFile(filepath.Join(globalDir, "contexts.cue"))
-		if !strings.Contains(string(content), `"project"`) {
+		if !strings.Contains(normWS(string(content)), "project:") {
 			t.Errorf("contexts.cue missing project: %s", content)
 		}
-		if !strings.Contains(string(content), "required: true") {
+		if !strings.Contains(normWS(string(content)), "required: true") {
 			t.Errorf("contexts.cue missing required flag: %s", content)
 		}
 	})
@@ -384,7 +384,7 @@ func TestConfigTask_FullWorkflow(t *testing.T) {
 		}
 
 		content, _ := os.ReadFile(filepath.Join(globalDir, "tasks.cue"))
-		if !strings.Contains(string(content), `"review"`) {
+		if !strings.Contains(normWS(string(content)), "review:") {
 			t.Errorf("tasks.cue missing review: %s", content)
 		}
 		if !strings.Contains(string(content), `role:`) {
@@ -805,12 +805,12 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		}
 
 		agentContent, _ := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
-		if !strings.Contains(string(agentContent), `"shared"`) {
+		if !strings.Contains(normWS(string(agentContent)), "shared:") {
 			t.Errorf("shared agent should be untouched: %s", agentContent)
 		}
 
 		roleContent, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-		if !strings.Contains(string(roleContent), `"shared"`) {
+		if !strings.Contains(normWS(string(roleContent)), "shared:") {
 			t.Errorf("shared role should be untouched: %s", roleContent)
 		}
 	})
@@ -969,7 +969,7 @@ func TestConfigRoleAdd_OptionalWithFileSource(t *testing.T) {
 	}
 
 	content, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-	if !strings.Contains(string(content), "optional: true") {
+	if !strings.Contains(normWS(string(content)), "optional: true") {
 		t.Errorf("roles.cue missing optional: true: %s", content)
 	}
 }
@@ -1020,7 +1020,7 @@ func TestConfigRoleEdit_OptionalPrompt(t *testing.T) {
 	}
 
 	content, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-	if !strings.Contains(string(content), "optional: true") {
+	if !strings.Contains(normWS(string(content)), "optional: true") {
 		t.Errorf("roles.cue missing optional: true after edit: %s", content)
 	}
 }

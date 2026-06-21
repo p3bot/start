@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/start-cli/start/internal/config"
+	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -131,7 +132,7 @@ func reorderContexts(stdout io.Writer, stdin io.Reader, local bool) error {
 		return nil
 	}
 
-	if err := writeContextsFile(contextPath, contexts, newOrder); err != nil {
+	if err := modules.ReorderConfigCategory(contextPath, "contexts", newOrder); err != nil {
 		return fmt.Errorf("writing contexts file: %w", err)
 	}
 
@@ -179,7 +180,7 @@ func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 		return nil
 	}
 
-	if err := writeRolesFile(rolePath, roles, newOrder); err != nil {
+	if err := modules.ReorderConfigCategory(rolePath, "roles", newOrder); err != nil {
 		return fmt.Errorf("writing roles file: %w", err)
 	}
 

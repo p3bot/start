@@ -479,26 +479,34 @@ func TestConfigList_SettingsDefaults(t *testing.T) {
 	}
 }
 
-func TestWriteAgentsFile(t *testing.T) {
+// managedHeaderMarker is the install-managed header line both install and the
+// config add path write to a freshly created file.
+const managedHeaderMarker = "Managed by 'start install'"
+
+// normWS collapses every run of whitespace to a single space, so assertions
+// survive format.Simplify()'s value alignment and single-field struct collapsing
+// (e.g. `required:    true` and `contexts: project: {`).
+func normWS(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+func TestUpsertAgent(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "agents.cue")
 
-	agents := map[string]AgentConfig{
-		"claude": {
-			Name:         "claude",
-			Bin:          "claude",
-			Command:      `claude "{{.prompt}}"`,
-			DefaultModel: "sonnet",
-			Description:  "Anthropic Claude",
-			Models: map[string]string{
-				"sonnet": "claude-sonnet-4-20250514",
-				"opus":   "claude-opus-4-20250514",
-			},
+	agent := AgentConfig{
+		Name:         "claude",
+		Bin:          "claude",
+		Command:      `claude "{{.prompt}}"`,
+		DefaultModel: "sonnet",
+		Description:  "Anthropic Claude",
+		Models: map[string]string{
+			"sonnet": "claude-sonnet-4-20250514",
+			"opus":   "claude-opus-4-20250514",
 		},
 	}
 
-	err := writeAgentsFile(path, agents)
-	if err != nil {
+	if err := upsertAgent(path, agent); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -508,34 +516,24 @@ func TestWriteAgentsFile(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, `"claude"`) {
-		t.Errorf("expected file to contain 'claude', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "bin:") {
-		t.Errorf("expected file to contain 'bin:', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "models:") {
-		t.Errorf("expected file to contain 'models:', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "Auto-generated") {
-		t.Errorf("expected file to contain 'Auto-generated' header, got: %s", contentStr)
+	for _, want := range []string{`"claude"`, "bin:", "models:", managedHeaderMarker} {
+		if !strings.Contains(contentStr, want) {
+			t.Errorf("expected file to contain %q, got:\n%s", want, contentStr)
+		}
 	}
 }
 
-func TestWriteRolesFile(t *testing.T) {
+func TestUpsertRole(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "roles.cue")
 
-	roles := map[string]RoleConfig{
-		"go-expert": {
-			Name:        "go-expert",
-			Description: "Go programming expert",
-			File:        "~/.config/start/roles/go-expert.md",
-		},
+	role := RoleConfig{
+		Name:        "go-expert",
+		Description: "Go programming expert",
+		File:        "~/.config/start/roles/go-expert.md",
 	}
 
-	err := writeRolesFile(path, roles, []string{"go-expert"})
-	if err != nil {
+	if err := upsertRole(path, role); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -545,29 +543,25 @@ func TestWriteRolesFile(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, `"go-expert"`) {
-		t.Errorf("expected file to contain 'go-expert', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "file:") {
-		t.Errorf("expected file to contain 'file:', got: %s", contentStr)
+	for _, want := range []string{`"go-expert"`, "file:", managedHeaderMarker} {
+		if !strings.Contains(contentStr, want) {
+			t.Errorf("expected file to contain %q, got:\n%s", want, contentStr)
+		}
 	}
 }
 
-func TestWriteContextsFile(t *testing.T) {
+func TestUpsertContext(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "contexts.cue")
 
-	contexts := map[string]ContextConfig{
-		"project": {
-			Name:        "project",
-			Description: "Project context",
-			File:        "PROJECT.md",
-			Required:    true,
-		},
+	ctx := ContextConfig{
+		Name:        "project",
+		Description: "Project context",
+		File:        "PROJECT.md",
+		Required:    true,
 	}
 
-	err := writeContextsFile(path, contexts, []string{"project"})
-	if err != nil {
+	if err := upsertContext(path, ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -576,30 +570,26 @@ func TestWriteContextsFile(t *testing.T) {
 		t.Fatalf("failed to read file: %v", err)
 	}
 
-	contentStr := string(content)
-	if !strings.Contains(contentStr, `"project"`) {
-		t.Errorf("expected file to contain 'project', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "required: true") {
-		t.Errorf("expected file to contain 'required: true', got: %s", contentStr)
+	contentStr := normWS(string(content))
+	for _, want := range []string{"project:", "required: true", managedHeaderMarker} {
+		if !strings.Contains(contentStr, want) {
+			t.Errorf("expected file to contain %q, got:\n%s", want, content)
+		}
 	}
 }
 
-func TestWriteTasksFile(t *testing.T) {
+func TestUpsertTask(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "tasks.cue")
 
-	tasks := map[string]TaskConfig{
-		"review": {
-			Name:        "review",
-			Description: "Code review",
-			Prompt:      "Review this code for bugs",
-			Role:        "code-reviewer",
-		},
+	task := TaskConfig{
+		Name:        "review",
+		Description: "Code review",
+		Prompt:      "Review this code for bugs",
+		Role:        "code-reviewer",
 	}
 
-	err := writeTasksFile(path, tasks)
-	if err != nil {
+	if err := upsertTask(path, task); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -608,15 +598,11 @@ func TestWriteTasksFile(t *testing.T) {
 		t.Fatalf("failed to read file: %v", err)
 	}
 
-	contentStr := string(content)
-	if !strings.Contains(contentStr, `"review"`) {
-		t.Errorf("expected file to contain 'review', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "prompt:") {
-		t.Errorf("expected file to contain 'prompt:', got: %s", contentStr)
-	}
-	if !strings.Contains(contentStr, "role:") {
-		t.Errorf("expected file to contain 'role:', got: %s", contentStr)
+	contentStr := normWS(string(content))
+	for _, want := range []string{"review:", "prompt:", "role:", managedHeaderMarker} {
+		if !strings.Contains(contentStr, want) {
+			t.Errorf("expected file to contain %q, got:\n%s", want, content)
+		}
 	}
 }
 

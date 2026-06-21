@@ -456,37 +456,6 @@ func truncatePrompt(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-// writeCUEStringList emits an indented `field: [...]` line, or nothing when the
-// list is empty so an absent list round-trips as absent.
-func writeCUEStringList(sb *strings.Builder, field string, items []string) {
-	if len(items) == 0 {
-		return
-	}
-	fmt.Fprintf(sb, "\t\t%s: [", field)
-	for i, item := range items {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		fmt.Fprintf(sb, "%q", item)
-	}
-	sb.WriteString("]\n")
-}
-
-func writeCUEPrompt(sb *strings.Builder, prompt string) {
-	if prompt == "" {
-		return
-	}
-	if strings.Contains(prompt, "\n") || len(prompt) > 80 {
-		sb.WriteString("\t\tprompt: \"\"\"\n")
-		for line := range strings.SplitSeq(prompt, "\n") {
-			fmt.Fprintf(sb, "\t\t\t%s\n", line)
-		}
-		sb.WriteString("\t\t\t\"\"\"\n")
-	} else {
-		fmt.Fprintf(sb, "\t\tprompt: %q\n", prompt)
-	}
-}
-
 // extractStringList reads a CUE list field as a string slice, returning nil when
 // the field is absent or not a list so a missing field round-trips as absent.
 func extractStringList(val cue.Value, field string) []string {

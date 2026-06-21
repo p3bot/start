@@ -155,10 +155,8 @@ func configAgentAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("agent %q already exists in %s config", name, scopeName)
 	}
 
-	existingAgents[name] = agent
-
 	agentPath := filepath.Join(configDir, "agents.cue")
-	if err := writeAgentsFile(agentPath, existingAgents); err != nil {
+	if err := upsertAgent(agentPath, agent); err != nil {
 		return fmt.Errorf("writing agents file: %w", err)
 	}
 
@@ -243,7 +241,7 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	existingRoles, existingOrder, err := loadRolesFromDir(configDir)
+	existingRoles, _, err := loadRolesFromDir(configDir)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("loading existing roles: %w", err)
 	}
@@ -252,10 +250,8 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("role %q already exists in %s config", name, scopeName)
 	}
 
-	existingRoles[name] = role
-
 	rolePath := filepath.Join(configDir, "roles.cue")
-	if err := writeRolesFile(rolePath, existingRoles, append(existingOrder, name)); err != nil {
+	if err := upsertRole(rolePath, role); err != nil {
 		return fmt.Errorf("writing roles file: %w", err)
 	}
 
@@ -351,7 +347,7 @@ func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	existingContexts, existingOrder, err := loadContextsFromDir(configDir)
+	existingContexts, _, err := loadContextsFromDir(configDir)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("loading existing contexts: %w", err)
 	}
@@ -360,10 +356,8 @@ func configContextAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("context %q already exists in %s config", name, scopeName)
 	}
 
-	existingContexts[name] = ctx
-
 	contextPath := filepath.Join(configDir, "contexts.cue")
-	if err := writeContextsFile(contextPath, existingContexts, append(existingOrder, name)); err != nil {
+	if err := upsertContext(contextPath, ctx); err != nil {
 		return fmt.Errorf("writing contexts file: %w", err)
 	}
 
@@ -450,10 +444,8 @@ func configTaskAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("task %q already exists in %s config", name, scopeName)
 	}
 
-	existingTasks[name] = task
-
 	taskPath := filepath.Join(configDir, "tasks.cue")
-	if err := writeTasksFile(taskPath, existingTasks); err != nil {
+	if err := upsertTask(taskPath, task); err != nil {
 		return fmt.Errorf("writing tasks file: %w", err)
 	}
 
