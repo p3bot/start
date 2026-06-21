@@ -658,25 +658,31 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("remove with ambiguous query and --force removes all matches", func(t *testing.T) {
-		// "review" matches golang/review/architecture and golang/review/code
+	t.Run("remove with ambiguous query errors even with --force", func(t *testing.T) {
+		// "golang/review" prefix-matches architecture and code; the dropped
+		// --force-removes-all behaviour is now a non-TTY ambiguity error.
 		cmd := NewRootCmd()
+		cmd.SetIn(strings.NewReader(""))
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"config", "remove", "golang/review", "--force"})
 
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("ambiguous remove with --force failed: %v", err)
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected ambiguity error for ambiguous remove with --force")
+		}
+		if !strings.Contains(err.Error(), "ambiguous") {
+			t.Errorf("expected 'ambiguous' error, got: %v", err)
 		}
 
 		content, _ := os.ReadFile(filepath.Join(globalDir, "tasks.cue"))
 		s := string(content)
-		if strings.Contains(s, "golang/review/architecture") {
-			t.Errorf("architecture should be removed: %s", s)
+		if !strings.Contains(s, "golang/review/architecture") {
+			t.Errorf("architecture should be untouched: %s", s)
 		}
-		if strings.Contains(s, "golang/review/code") {
-			t.Errorf("code should be removed: %s", s)
+		if !strings.Contains(s, "golang/review/code") {
+			t.Errorf("code should be untouched: %s", s)
 		}
 	})
 
@@ -713,14 +719,14 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for ambiguous remove without --force in non-interactive mode")
 		}
-		if !strings.Contains(err.Error(), "--force") {
-			t.Errorf("expected '--force' hint in error, got: %v", err)
+		if !strings.Contains(err.Error(), "ambiguous") {
+			t.Errorf("expected 'ambiguous' error, got: %v", err)
 		}
 	})
 }
 
 func TestConfigRemove_MultipleArgs(t *testing.T) {
-	t.Run("task remove ambiguous query with --force expands all", func(t *testing.T) {
+	t.Run("task remove ambiguous query with --force errors and removes nothing", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		chdir(t, tmpDir)
@@ -741,34 +747,32 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 			}
 		}
 
-		// Ambiguous query with --force should remove all three golang/review/* tasks
+		// The dropped --force-removes-all behaviour is now an ambiguity error.
 		cmd := NewRootCmd()
+		cmd.SetIn(strings.NewReader(""))
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"config", "remove", "golang/review", "--force"})
 
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("ambiguous remove with --force failed: %v", err)
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected ambiguity error for ambiguous remove with --force")
+		}
+		if !strings.Contains(err.Error(), "ambiguous") {
+			t.Errorf("expected 'ambiguous' error, got: %v", err)
 		}
 
 		content, _ := os.ReadFile(filepath.Join(globalDir, "tasks.cue"))
 		s := string(content)
-		if strings.Contains(s, "golang/review/architecture") {
-			t.Errorf("architecture should be removed: %s", s)
-		}
-		if strings.Contains(s, "golang/review/code") {
-			t.Errorf("code should be removed: %s", s)
-		}
-		if strings.Contains(s, "golang/review/security") {
-			t.Errorf("security should be removed: %s", s)
-		}
-		if !strings.Contains(s, "confluence/read-doc") {
-			t.Errorf("read-doc should still exist: %s", s)
+		for _, name := range []string{"golang/review/architecture", "golang/review/code", "golang/review/security", "confluence/read-doc"} {
+			if !strings.Contains(s, name) {
+				t.Errorf("%s should be untouched: %s", name, s)
+			}
 		}
 	})
 
-	t.Run("cross-category remove with --force removes all matches", func(t *testing.T) {
+	t.Run("cross-category ambiguous remove with --force errors and removes nothing", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		chdir(t, tmpDir)
@@ -786,23 +790,28 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		}
 
 		cmd := NewRootCmd()
+		cmd.SetIn(strings.NewReader(""))
 		stdout := &bytes.Buffer{}
 		cmd.SetOut(stdout)
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"config", "remove", "shared", "--force"})
 
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("cross-category remove failed: %v", err)
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected ambiguity error for cross-category ambiguous remove")
+		}
+		if !strings.Contains(err.Error(), "ambiguous") {
+			t.Errorf("expected 'ambiguous' error, got: %v", err)
 		}
 
 		agentContent, _ := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
-		if strings.Contains(string(agentContent), `"shared"`) {
-			t.Errorf("shared agent should be removed: %s", agentContent)
+		if !strings.Contains(string(agentContent), `"shared"`) {
+			t.Errorf("shared agent should be untouched: %s", agentContent)
 		}
 
 		roleContent, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-		if strings.Contains(string(roleContent), `"shared"`) {
-			t.Errorf("shared role should be removed: %s", roleContent)
+		if !strings.Contains(string(roleContent), `"shared"`) {
+			t.Errorf("shared role should be untouched: %s", roleContent)
 		}
 	})
 

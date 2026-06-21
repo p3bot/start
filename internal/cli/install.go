@@ -53,7 +53,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 	prompted := false
 	if len(args) == 0 {
-		query, err := promptSearchQuery(cmd.OutOrStdout(), cmd.InOrStdin())
+		query, err := promptSearchQuery(cmd.OutOrStdout(), cmd.InOrStdin(), 3)
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 				return usageError(fmt.Errorf("query %q must be at least 3 characters", q))
 			}
 			fmt.Fprintf(w, "Query %q must be at least 3 characters\n", q)
-			input, err := promptSearchQuery(w, stdin)
+			input, err := promptSearchQuery(w, stdin, 3)
 			if err != nil {
 				return err
 			}

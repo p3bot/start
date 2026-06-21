@@ -10,7 +10,7 @@ Active development. The CLI is fully implemented with commands for agent launchi
 
 When an active project is set, continue by reading it. `none` means no project is queued.
 
-Active Project: 01-module-uses-field-support.md
+Active Project: 02-migrate-config-writers-onto-ast.md
 
 When a project is complete, update this file to point to the next active project (or `none` if nothing is queued)
 
@@ -55,6 +55,7 @@ start describe                  # List all installed modules grouped by category
 start describe <name>           # Inspect a module; auto-installs if needed (TTY: Markdown file body styled)
 start get <name>                # Output module content to stdout (pipe-clean; TTY: Markdown styled)
 start install <pkg>             # Install a module from the library
+start uninstall <name>          # Remove installed modules (aliases: remove, rm); --force skips confirm
 start list                      # List installed modules
 start library                   # Show the available module library
 start update                    # Update installed modules
@@ -144,10 +145,16 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 ### Resolution Logic
 
 One name-only engine (`engine.go`) resolves every module-selecting surface —
-`start task`, `--role`, `--context`, `--agent`, and the cross-category
-`start get`/`start describe` — against installed config and the registry index as
-two equal sources, de-duplicated by `category:name` (installed wins). The match
-rule, specified in `docs/module-resolution.md`, is:
+`start task`, `--role`, `--context`, `--agent`, the cross-category
+`start get`/`start describe`, and the installed-only `start uninstall`/
+`start config remove` — against installed config and the registry index as
+two equal sources, de-duplicated by `category:name` (installed wins). The
+removal surfaces reuse the same exact→fallback reduction over a source-agnostic
+matcher (`selector.match` / `matchSource` in `engine.go`, wired to the
+installed-only `installedMatcher` in `internal/cli/removal.go`), but draw
+candidates from one scope's installed config only: no registry, no auto-install,
+and floor 0 so one- and two-character queries resolve. The match rule, specified
+in `docs/module-resolution.md`, is:
 
 1. Interpret the identifier. A leading `./`, `/`, `~`, or `~/` is a filesystem
    path, and an `http(s)://` scheme a remote locator, each read directly (no

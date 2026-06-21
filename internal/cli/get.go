@@ -144,7 +144,7 @@ func getResolveQuery(args []string, stderr io.Writer, stdin io.Reader) (string, 
 		if !isTerminal(stdin) {
 			return "", usageError(fmt.Errorf("name required in non-interactive mode"))
 		}
-		return promptSearchQuery(stderr, stdin)
+		return promptSearchQuery(stderr, stdin, 3)
 	}
 
 	// The three-character floor lives in the resolver, exempting the exact tier;

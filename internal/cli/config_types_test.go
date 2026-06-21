@@ -375,6 +375,7 @@ func TestConfigList_ObjectFormAgent_JSON_EmitsAliases(t *testing.T) {
 	}
 	if objform == nil {
 		t.Fatalf("objform not in config list items; got %v", items)
+		return
 	}
 
 	wantModels := map[string]string{

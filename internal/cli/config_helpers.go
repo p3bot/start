@@ -833,57 +833,12 @@ func promptSelectConfigMatch(w io.Writer, r io.Reader, query string, matches []c
 	return matches[n-1], nil
 }
 
-// promptSelectConfigMatchesFromList multi-selects matches, or returns nil if cancelled.
-func promptSelectConfigMatchesFromList(w io.Writer, r io.Reader, query string, matches []configMatch) ([]configMatch, error) {
-	if len(matches) == 0 {
-		return nil, nil
-	}
-	if query != "" {
-		fmt.Fprintf(w, "Found %d items matching %q:\n\n", len(matches), query)
-	} else {
-		fmt.Fprintf(w, "%d items:\n\n", len(matches))
-	}
-	for i, m := range matches {
-		fmt.Fprintf(w, "  %2d. %s %s\n", i+1, m.Name, tui.AnnotateCategory(m.Category))
-	}
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "CSV %s, range %s, or \"all\" supported\n",
-		tui.Annotate("1,2,3"), tui.Annotate("1-3"))
-	fmt.Fprintf(w, "Select %s: ", tui.Annotate("1-%d", len(matches)))
 
-	reader := bufio.NewReader(r)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return nil, fmt.Errorf("reading input: %w", err)
-	}
-	input = strings.TrimSpace(strings.ToLower(input))
-
-	if input == "" {
-		fmt.Fprintln(w, "Cancelled.")
-		return nil, nil
-	}
-	if input == "all" {
-		return matches, nil
-	}
-
-	indices, err := parseSelectionInput(input, len(matches))
-	if err != nil {
-		return nil, err
-	}
-	if len(indices) == 0 {
-		fmt.Fprintln(w, "Cancelled.")
-		return nil, nil
-	}
-	selected := make([]configMatch, len(indices))
-	for i, idx := range indices {
-		selected[i] = matches[idx]
-	}
-	return selected, nil
-}
-
-// promptSearchQuery loops until a query of at least 3 characters is entered;
-// returns "" and nil on empty input, or an error in non-interactive mode.
-func promptSearchQuery(w io.Writer, r io.Reader) (string, error) {
+// promptSearchQuery loops until a query of at least minLen characters is
+// entered; returns "" and nil on empty input, or an error in non-interactive
+// mode. Install passes 3 to bound its registry-wide search; uninstall passes 1,
+// accepting any non-empty query since it resolves against installed modules.
+func promptSearchQuery(w io.Writer, r io.Reader, minLen int) (string, error) {
 	if !isTerminal(r) {
 		return "", usageError(fmt.Errorf("query required in non-interactive mode"))
 	}
@@ -898,8 +853,8 @@ func promptSearchQuery(w io.Writer, r io.Reader) (string, error) {
 		if input == "" {
 			return "", nil
 		}
-		if len(input) < 3 {
-			fmt.Fprintln(w, "Query must be at least 3 characters")
+		if len(input) < minLen {
+			fmt.Fprintf(w, "Query must be at least %d characters\n", minLen)
 			continue
 		}
 		return input, nil

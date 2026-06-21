@@ -2,14 +2,12 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -39,72 +37,24 @@ func runConfigRemove(cmd *cobra.Command, args []string) error {
 	stdin := cmd.InOrStdin()
 	stdout := cmd.OutOrStdout()
 	local := getFlags(cmd).Local
-	skipConfirm, _ := cmd.Flags().GetBool("force")
+	force, _ := cmd.Flags().GetBool("force")
 
 	if len(args) == 0 {
 		if !isTerminal(stdin) {
 			return usageError(fmt.Errorf("interactive remove requires a terminal"))
 		}
-		return runConfigRemoveInteractive(stdin, stdout, local, skipConfirm, getFlags(cmd).Quiet)
+		return runConfigRemoveInteractive(stdin, stdout, cmd.ErrOrStderr(), local, force, getFlags(cmd).Quiet)
 	}
 
-	fmt.Fprintln(stdout)
-	query := args[0]
-	matches, err := searchAllConfigCategories(query, config.ScopeFromLocal(local))
+	return runRemoval(cmd, args, local, force)
+}
+
+func runConfigRemoveInteractive(stdin io.Reader, stdout, stderr io.Writer, local bool, skipConfirm bool, quiet bool) error {
+	_, defaultAgent, err := loadRemovalConfig(local)
 	if err != nil {
 		return err
 	}
 
-	if len(matches) == 0 {
-		return notFoundError(fmt.Errorf("%q not found", query))
-	}
-
-	var toRemove []configMatch
-	if len(matches) == 1 {
-		toRemove = matches
-	} else if skipConfirm {
-		toRemove = matches
-	} else {
-		if !isTerminal(stdin) {
-			return usageError(fmt.Errorf("--force flag required in non-interactive mode for ambiguous query %q", query))
-		}
-		selected, err := promptSelectConfigMatchesFromList(stdout, stdin, query, matches)
-		if err != nil {
-			return err
-		}
-		if len(selected) == 0 {
-			return nil // user cancelled
-		}
-		toRemove = selected
-	}
-
-	if !skipConfirm {
-		if !isTerminal(stdin) {
-			return usageError(fmt.Errorf("--force flag required in non-interactive mode"))
-		}
-		confirmed, err := confirmConfigRemoval(stdout, stdin, toRemove, local)
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			return nil
-		}
-	}
-
-	flags := getFlags(cmd)
-	for _, m := range toRemove {
-		if err := removeConfigItem(m, local); err != nil {
-			return fmt.Errorf("removing %s %q: %w", m.Category, m.Name, err)
-		}
-		if !flags.Quiet {
-			fmt.Fprintf(stdout, "Removed %s %q\n", m.Category, m.Name)
-		}
-	}
-
-	return nil
-}
-
-func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, skipConfirm bool, quiet bool) error {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "Remove:")
 	category, err := promptSelectCategory(stdout, stdin, allConfigCategories)
@@ -112,7 +62,7 @@ func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, s
 		return err
 	}
 
-	names, err := loadNamesForCategory(category, config.ScopeFromLocal(local))
+	names, err := loadNamesForCategory(category, removalScope(local))
 	if err != nil {
 		return err
 	}
@@ -143,16 +93,7 @@ func runConfigRemoveInteractive(stdin io.Reader, stdout io.Writer, local bool, s
 		}
 	}
 
-	for _, m := range toRemove {
-		if err := removeConfigItem(m, local); err != nil {
-			return fmt.Errorf("removing %s %q: %w", m.Category, m.Name, err)
-		}
-		if !quiet {
-			fmt.Fprintf(stdout, "Removed %s %q\n", m.Category, m.Name)
-		}
-	}
-
-	return nil
+	return errors.Join(removeResolvedItems(stdout, stderr, toRemove, local, quiet, defaultAgent)...)
 }
 
 // Returns false (without error) when the user declines.
@@ -182,102 +123,14 @@ func confirmConfigRemoval(w io.Writer, r io.Reader, items []configMatch, local b
 	return true, nil
 }
 
+// removeConfigItem is the per-category removal dispatch seam. All four config
+// categories share the AST config-entry removal today; the skills project will
+// register its bundle-deletion path here, so the seam must not assume
+// config-entry removal is universal.
 func removeConfigItem(m configMatch, local bool) error {
 	switch m.Category {
-	case "agent":
-		return removeAgent(m.Name, local)
-	case "role":
-		return removeRole(m.Name, local)
-	case "context":
-		return removeContext(m.Name, local)
-	case "task":
-		return removeTask(m.Name, local)
+	case "agent", "role", "context", "task":
+		return removeConfigEntry(m.Category, m.Name, local)
 	}
 	return fmt.Errorf("unknown category %q", m.Category)
-}
-
-func removeAgent(name string, local bool) error {
-	paths, err := config.ResolvePaths("")
-	if err != nil {
-		return fmt.Errorf("resolving config paths: %w", err)
-	}
-	configDir := paths.Dir(local)
-
-	agents, _, err := loadAgentsFromDir(configDir)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("loading agents: %w", err)
-	}
-
-	delete(agents, name)
-
-	agentPath := filepath.Join(configDir, "agents.cue")
-	return writeAgentsFile(agentPath, agents)
-}
-
-// Preserves order of the remaining roles.
-func removeRole(name string, local bool) error {
-	paths, err := config.ResolvePaths("")
-	if err != nil {
-		return fmt.Errorf("resolving config paths: %w", err)
-	}
-	configDir := paths.Dir(local)
-
-	roles, order, err := loadRolesFromDir(configDir)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("loading roles: %w", err)
-	}
-
-	delete(roles, name)
-	newOrder := make([]string, 0, len(order))
-	for _, n := range order {
-		if n != name {
-			newOrder = append(newOrder, n)
-		}
-	}
-
-	rolePath := filepath.Join(configDir, "roles.cue")
-	return writeRolesFile(rolePath, roles, newOrder)
-}
-
-// Preserves order of the remaining contexts.
-func removeContext(name string, local bool) error {
-	paths, err := config.ResolvePaths("")
-	if err != nil {
-		return fmt.Errorf("resolving config paths: %w", err)
-	}
-	configDir := paths.Dir(local)
-
-	contexts, order, err := loadContextsFromDir(configDir)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("loading contexts: %w", err)
-	}
-
-	delete(contexts, name)
-	newOrder := make([]string, 0, len(order))
-	for _, n := range order {
-		if n != name {
-			newOrder = append(newOrder, n)
-		}
-	}
-
-	contextPath := filepath.Join(configDir, "contexts.cue")
-	return writeContextsFile(contextPath, contexts, newOrder)
-}
-
-func removeTask(name string, local bool) error {
-	paths, err := config.ResolvePaths("")
-	if err != nil {
-		return fmt.Errorf("resolving config paths: %w", err)
-	}
-	configDir := paths.Dir(local)
-
-	tasks, _, err := loadTasksFromDir(configDir)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("loading tasks: %w", err)
-	}
-
-	delete(tasks, name)
-
-	taskPath := filepath.Join(configDir, "tasks.cue")
-	return writeTasksFile(taskPath, tasks)
 }

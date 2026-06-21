@@ -222,7 +222,7 @@ func runDescribeListing(cmd *cobra.Command) error {
 	}
 
 	if isTerminal(stdin) {
-		query, err := promptSearchQuery(w, stdin)
+		query, err := promptSearchQuery(w, stdin, 3)
 		if err != nil {
 			return err
 		}

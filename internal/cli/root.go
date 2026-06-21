@@ -160,6 +160,7 @@ Examples:
 	addPromptCommand(cmd)
 	addTaskCommand(cmd)
 	addInstallCommand(cmd)
+	addUninstallCommand(cmd)
 	addListCommand(cmd)
 	addUpdateCommand(cmd)
 	addLibraryCommand(cmd)

@@ -39,3 +39,6 @@ start config remove claude
 start config open agent
 start config order role
 ```
+
+Removal defaults to global scope; `--local` resolves and removes within `./.start/`
+only. `start uninstall` is the top-level equivalent.

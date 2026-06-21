@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -148,9 +149,9 @@ func interpretSurface(input string, scope resolveScope) (surfaceInterpretation, 
 }
 
 // resolve turns an identifier into an outcome through the unified match rule:
-// locator bypass, category-prefix interpretation, the exact-whole-name tier,
-// the three-character floor, then the fallback tier, reducing to a single
-// decision and installing a chosen registry-only match.
+// locator bypass, category-prefix interpretation, then the shared exact→fallback
+// matcher over installed-plus-registry candidates, installing a chosen
+// registry-only match. The fallback floor is three characters.
 func (r *resolver) resolve(input string, scope resolveScope) (resolveOutcome, error) {
 	interp, err := interpretSurface(input, scope)
 	if err != nil {
@@ -170,38 +171,83 @@ func (r *resolver) resolve(input string, scope resolveScope) (resolveOutcome, er
 		return resolveOutcome{}, notFoundError(fmt.Errorf("%s %q not found", scope.displayType, input))
 	}
 
-	cats := interp.cats
-	mode := interp.mode
-	name := interp.name
-
-	// Exact tier first, exempt from the floor.
-	match, resolved, err := r.resolveExact(name, cats, scope)
-	if err != nil {
-		return resolveOutcome{}, err
-	}
-	if resolved {
-		return resolveOutcome{match: match}, nil
-	}
-
-	// Fallback tier: floor counts the name only, both modes. When the index was
-	// unreachable the exact tier could not confirm absence, so a short name is a
-	// transient (retry) condition rather than a usage violation — the same
-	// certainty split resolveFallback applies below.
-	if len(name) < 3 {
-		if r.indexErr != nil {
-			return resolveOutcome{}, fmt.Errorf("%s %q: registry unavailable: %w", scope.displayType, name, r.indexErr)
-		}
-		return resolveOutcome{}, usageError(fmt.Errorf("query %q must be at least 3 characters", name))
-	}
-	return r.resolveFallback(name, cats, mode, scope)
+	return r.selector().match(r, interp.name, interp.cats, interp.mode, scope, 3)
 }
 
-// resolveExact runs the exact-whole-name tier over the scoped categories. A lone
-// installed exact resolves directly without the registry on category-specific
-// surfaces (names are unique within a category); cross-category surfaces always
-// consult the index to detect a same-name twin in another category. More than
-// one exact falls to selection.
-func (r *resolver) resolveExact(name string, cats []describeCategory, scope resolveScope) (ModuleMatch, bool, error) {
+// matchSource supplies match candidates and finalisation for the shared matcher,
+// decoupling the exact→fallback reduction from where candidates come from. The
+// registry-backed resolver merges installed-plus-registry candidates and
+// auto-installs on finalize; the installed-only removal path (installedMatcher)
+// lists one scope's installed modules and finalizes to identity, never touching
+// the registry.
+type matchSource interface {
+	// exactCandidates returns the merged exact-whole-name candidate set.
+	exactCandidates(name string, cats []describeCategory, scope resolveScope) []ModuleMatch
+	// fallbackCandidates returns the merged substring/prefix candidate set.
+	fallbackCandidates(name string, cats []describeCategory, mode matchMode, scope resolveScope) []ModuleMatch
+	// finalize is applied to the single chosen match before it is returned.
+	finalize(ModuleMatch) (ModuleMatch, error)
+	// unreachableErr is non-nil when the source could not confirm a module's
+	// absence (the registry was unreachable), turning a zero-match or sub-floor
+	// result into a transient retry error rather than a confirmed not-found.
+	unreachableErr() error
+}
+
+// match runs the shared exact→fallback reduction over src: the exact-whole-name
+// tier first (floor-exempt), then the substring/prefix fallback under mode, each
+// reduced to a single decision by reduceMatch. floor bounds the fallback tier
+// (the resolver passes 3, removal passes 0); a sub-floor name is a usage error
+// unless the source could not confirm absence, in which case it is transient.
+func (s *selector) match(src matchSource, name string, cats []describeCategory, mode matchMode, scope resolveScope, floor int) (resolveOutcome, error) {
+	exact := src.exactCandidates(name, cats, scope)
+	if m, resolved, err := s.reduceMatch(exact, scope, name, src.finalize); resolved || err != nil {
+		return resolveOutcome{match: m}, err
+	}
+
+	if len(name) < floor {
+		if e := src.unreachableErr(); e != nil {
+			return resolveOutcome{}, fmt.Errorf("%s %q: registry unavailable: %w", scope.displayType, name, e)
+		}
+		return resolveOutcome{}, usageError(fmt.Errorf("query %q must be at least %d characters", name, floor))
+	}
+
+	fallback := src.fallbackCandidates(name, cats, mode, scope)
+	if m, resolved, err := s.reduceMatch(fallback, scope, name, src.finalize); resolved || err != nil {
+		return resolveOutcome{match: m}, err
+	}
+	if e := src.unreachableErr(); e != nil {
+		return resolveOutcome{}, fmt.Errorf("%s %q: registry unavailable: %w", scope.displayType, name, e)
+	}
+	return resolveOutcome{}, notFoundError(fmt.Errorf("%s %q not found", scope.displayType, name))
+}
+
+// reduceMatch reduces a candidate set to one finalized decision: zero matches
+// report unresolved (resolved=false) for the caller's floor/not-found handling,
+// a lone match finalizes directly, and multiple matches go through the selection
+// menu (TTY) or the ambiguity error (non-TTY) before finalisation.
+func (s *selector) reduceMatch(matches []ModuleMatch, scope resolveScope, query string, finalize func(ModuleMatch) (ModuleMatch, error)) (ModuleMatch, bool, error) {
+	switch len(matches) {
+	case 0:
+		return ModuleMatch{}, false, nil
+	case 1:
+		m, err := finalize(matches[0])
+		return m, err == nil, err
+	default:
+		selected, err := s.selectMatch(matches, scope, query)
+		if err != nil {
+			return ModuleMatch{}, false, err
+		}
+		m, err := finalize(selected)
+		return m, err == nil, err
+	}
+}
+
+// exactCandidates gathers the exact-whole-name tier across the scoped
+// categories. A lone installed exact resolves directly without the registry on
+// category-specific surfaces (names are unique within a category); cross-category
+// surfaces always consult the index to detect a same-name twin in another
+// category.
+func (r *resolver) exactCandidates(name string, cats []describeCategory, scope resolveScope) []ModuleMatch {
 	var installedExact []ModuleMatch
 	for _, cat := range cats {
 		installedExact = append(installedExact, r.collectInstalled(cat.key, cat.category, name, modeExact)...)
@@ -209,7 +255,7 @@ func (r *resolver) resolveExact(name string, cats []describeCategory, scope reso
 
 	if !scope.crossCategory && len(installedExact) == 1 {
 		debugf(r.stderr, r.flags, dbgResolve, "%s %q: exact installed match", scope.displayType, name)
-		return installedExact[0], true, nil
+		return installedExact
 	}
 
 	var registryExact []ModuleMatch
@@ -218,35 +264,12 @@ func (r *resolver) resolveExact(name string, cats []describeCategory, scope reso
 			registryExact = append(registryExact, collectRegistry(registryEntries(index, cat.category), cat.category, name, modeExact)...)
 		}
 	}
-
-	exact := mergeMatches(installedExact, registryExact)
-	switch len(exact) {
-	case 0:
-		return ModuleMatch{}, false, nil
-	case 1:
-		m, err := r.use(exact[0])
-		if err != nil {
-			return ModuleMatch{}, false, err
-		}
-		return m, true, nil
-	default:
-		selected, err := r.selectMatch(exact, scope, name)
-		if err != nil {
-			return ModuleMatch{}, false, err
-		}
-		m, err := r.use(selected)
-		if err != nil {
-			return ModuleMatch{}, false, err
-		}
-		return m, true, nil
-	}
+	return mergeMatches(installedExact, registryExact)
 }
 
-// resolveFallback runs the fallback tier over the scoped categories under mode,
-// reducing the merged match set to one decision. Zero matches are a not-found
-// error when the index was reachable, and a transient (retry) error when it was
-// not, since absence cannot be confirmed.
-func (r *resolver) resolveFallback(name string, cats []describeCategory, mode matchMode, scope resolveScope) (resolveOutcome, error) {
+// fallbackCandidates gathers the substring/prefix tier across the scoped
+// categories from installed config plus the registry index.
+func (r *resolver) fallbackCandidates(name string, cats []describeCategory, mode matchMode, scope resolveScope) []ModuleMatch {
 	var installed []ModuleMatch
 	for _, cat := range cats {
 		installed = append(installed, r.collectInstalled(cat.key, cat.category, name, mode)...)
@@ -262,44 +285,39 @@ func (r *resolver) resolveFallback(name string, cats []describeCategory, mode ma
 	matches := mergeMatches(installed, reg)
 	debugf(r.stderr, r.flags, dbgResolve, "%s %q: %d installed, %d registry, %d total matches",
 		scope.displayType, name, len(installed), len(reg), len(matches))
-
-	switch len(matches) {
-	case 0:
-		if r.indexErr != nil {
-			return resolveOutcome{}, fmt.Errorf("%s %q: registry unavailable: %w", scope.displayType, name, r.indexErr)
-		}
-		return resolveOutcome{}, notFoundError(fmt.Errorf("%s %q not found", scope.displayType, name))
-	case 1:
-		m, err := r.use(matches[0])
-		if err != nil {
-			return resolveOutcome{}, err
-		}
-		return resolveOutcome{match: m}, nil
-	default:
-		selected, err := r.selectMatch(matches, scope, name)
-		if err != nil {
-			return resolveOutcome{}, err
-		}
-		m, err := r.use(selected)
-		if err != nil {
-			return resolveOutcome{}, err
-		}
-		return resolveOutcome{match: m}, nil
-	}
+	return matches
 }
 
-// use installs a registry-only match (a no-op for an installed one) and returns
-// it as the resolved decision.
-func (r *resolver) use(m ModuleMatch) (ModuleMatch, error) {
+// finalize installs a chosen registry-only match (a no-op for an installed one).
+func (r *resolver) finalize(m ModuleMatch) (ModuleMatch, error) {
 	if err := r.installIfRegistry(m); err != nil {
 		return ModuleMatch{}, err
 	}
 	return m, nil
 }
 
+// unreachableErr reports the recorded registry-fetch failure, if any, so the
+// matcher can treat a zero-match result as transient rather than confirmed.
+func (r *resolver) unreachableErr() error {
+	return r.indexErr
+}
+
+// selector builds the interactive selection context from the resolver's IO.
+func (r *resolver) selector() *selector {
+	return &selector{stdin: r.stdin, stdout: r.stdout, stderr: r.stderr, flags: r.flags}
+}
+
 // collectInstalled returns matches under cueKey whose names satisfy mode.
 func (r *resolver) collectInstalled(cueKey, category, query string, mode matchMode) []ModuleMatch {
-	catVal := r.cfg.Value.LookupPath(cue.ParsePath(cueKey))
+	return collectInstalledFrom(r.cfg.Value, cueKey, category, query, mode)
+}
+
+// collectInstalledFrom returns matches under cueKey in cfg whose names satisfy
+// mode. It is the registry-free installed gather shared by the resolver and the
+// installed-only removal matcher; a zero cfg (no config loaded) yields no
+// matches.
+func collectInstalledFrom(cfg cue.Value, cueKey, category, query string, mode matchMode) []ModuleMatch {
+	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {
 		return nil
 	}
@@ -365,15 +383,27 @@ func matchLabel(m ModuleMatch, scope resolveScope) string {
 	return m.Name
 }
 
+// selector owns the interactive reduction of a candidate set to one match — the
+// TTY selection menu and the non-TTY ambiguity error. It carries only the IO and
+// flags selection needs, so the registry-free removal path and the
+// registry-backed resolver share one selection rule without sharing the
+// resolver's index machinery.
+type selector struct {
+	stdin  io.Reader
+	stdout io.Writer
+	stderr io.Writer
+	flags  *Flags
+}
+
 // selectMatch reduces more than one match to one: a selection menu on a TTY, an
 // error listing the matches otherwise. The listed forms are valid arguments
 // that round-trip back to the same entry.
-func (r *resolver) selectMatch(matches []ModuleMatch, scope resolveScope, query string) (ModuleMatch, error) {
+func (s *selector) selectMatch(matches []ModuleMatch, scope resolveScope, query string) (ModuleMatch, error) {
 	sort.SliceStable(matches, func(i, j int) bool {
 		return matchLabel(matches[i], scope) < matchLabel(matches[j], scope)
 	})
 
-	if !isTerminal(r.stdin) {
+	if !isTerminal(s.stdin) {
 		labels := make([]string, len(matches))
 		for i, m := range matches {
 			labels[i] = matchLabel(m, scope)
@@ -384,7 +414,7 @@ func (r *resolver) selectMatch(matches []ModuleMatch, scope resolveScope, query 
 
 	displayCount := min(len(matches), maxModuleResults)
 
-	fmt.Fprintf(r.stdout, "Found %d %ss matching %q:\n\n", len(matches), scope.displayType, query)
+	fmt.Fprintf(s.stdout, "Found %d %ss matching %q:\n\n", len(matches), scope.displayType, query)
 
 	maxLabelLen := 0
 	for i := range displayCount {
@@ -400,16 +430,16 @@ func (r *resolver) selectMatch(matches []ModuleMatch, scope resolveScope, query 
 		if m.Source == ModuleSourceInstalled {
 			sourceColor = tui.ColorInstalled
 		}
-		fmt.Fprintf(r.stdout, "  %2d. %s%s%s\n", i+1, label, padding, sourceColor.Sprint(m.Source))
+		fmt.Fprintf(s.stdout, "  %2d. %s%s%s\n", i+1, label, padding, sourceColor.Sprint(m.Source))
 	}
 	if displayCount < len(matches) {
-		fmt.Fprintf(r.stdout, "\nShowing %d of %d matches. Refine search for more specific results.\n", displayCount, len(matches))
+		fmt.Fprintf(s.stdout, "\nShowing %d of %d matches. Refine search for more specific results.\n", displayCount, len(matches))
 	}
 
-	fmt.Fprintln(r.stdout)
-	fmt.Fprintf(r.stdout, "Select %s: ", tui.Annotate("1-%d", displayCount))
+	fmt.Fprintln(s.stdout)
+	fmt.Fprintf(s.stdout, "Select %s: ", tui.Annotate("1-%d", displayCount))
 
-	input, err := bufio.NewReader(r.stdin).ReadString('\n')
+	input, err := bufio.NewReader(s.stdin).ReadString('\n')
 	if err != nil {
 		return ModuleMatch{}, fmt.Errorf("reading input: %w", err)
 	}
@@ -417,7 +447,7 @@ func (r *resolver) selectMatch(matches []ModuleMatch, scope resolveScope, query 
 
 	if choice, err := strconv.Atoi(input); err == nil {
 		if choice >= 1 && choice <= displayCount {
-			fmt.Fprintln(r.stdout)
+			fmt.Fprintln(s.stdout)
 			return matches[choice-1], nil
 		}
 		return ModuleMatch{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, displayCount)
@@ -427,7 +457,7 @@ func (r *resolver) selectMatch(matches []ModuleMatch, scope resolveScope, query 
 	if err != nil {
 		return ModuleMatch{}, err
 	}
-	fmt.Fprintln(r.stdout)
+	fmt.Fprintln(s.stdout)
 	return selected, nil
 }
 

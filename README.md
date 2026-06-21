@@ -214,7 +214,7 @@ start config add
 # Edit an item by name
 start config edit claude
 
-# Remove an item
+# Remove an item (equivalent to the top-level `start uninstall`)
 start config remove claude --force
 
 # Show raw config fields for an item
@@ -307,6 +307,13 @@ start describe golang/assistant
 start install golang/teacher
 start install review/git-diff
 
+# Remove installed modules (aliases: remove, rm)
+start uninstall golang/teacher
+start uninstall claude review/git-diff   # multiple at once
+start uninstall agents:claude            # category-qualified
+start uninstall claude --force           # skip the confirmation prompt
+start uninstall claude --local           # target ./.start/ instead of global
+
 # List installed modules
 start list
 
@@ -345,7 +352,7 @@ start config edit gemini/interactive
 start config get
 start config get claude
 
-# Remove an item
+# Remove an item (equivalent to the top-level `start uninstall`)
 start config remove claude
 start config remove claude --force
 

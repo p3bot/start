@@ -14,6 +14,12 @@ for matches, apply one match rule, and act on the result.
 | `--context <id>` (`-c`) | flag value, repeatable | contexts |
 | `--agent <id>` (`-a`) | flag value | agents |
 | `start get <id>`, `start describe <id>` | positional argument | all four |
+| `start uninstall <id>` | positional argument, repeatable | all four |
+| `start config remove <id>` | positional argument, repeatable | all four |
+
+The last two are installed-only surfaces; they reuse the engine's match rule
+over installed config alone and differ from the rest as set out under
+Installed-only surfaces below.
 
 Model resolution (`--model`) is out of scope. A model is resolved against the
 selected agent's `models` map, not against config and registry modules.
@@ -128,6 +134,34 @@ matches how the rest of `start` treats an unreachable registry (`install`,
 `update`, and `search` with no local match all report the same transient error).
 Scripts and pipes that must resolve a registry module should install it ahead of
 time.
+
+## Installed-only surfaces
+
+`start uninstall` and `start config remove` resolve through the same engine, but
+their candidates come from installed config alone. They share the exact-tier-
+then-fallback reduction and the cross-category-versus-`category:name` distinction
+described above, and differ from the registry-backed surfaces in five ways:
+
+- Installed-only: candidates are the selected scope's installed modules. The
+  registry index is never fetched, and a registry-only name is never auto-
+  installed — it is simply not found.
+- Scope-bound: resolution and removal act within exactly one scope — global by
+  default, local under `--local`. A module present only in the other scope is not
+  found. (This differs from the registry-backed surfaces, which match against the
+  merged global-and-local config.)
+- No floor: the three-character fallback floor is dropped (floor 0), so one- and
+  two-character substring or prefix queries resolve. The floor exists only to
+  bound the registry-wide search on `install`; removal searches a small installed
+  set where it is unnecessary.
+- No locator: a filesystem path or `http(s)://` URL is rejected — it cannot name
+  an installed module.
+- Otherwise identical: a bare query is a cross-category substring search, a
+  `category:name` query a category-scoped prefix search, and the exact-whole-name
+  tier runs ahead of both, exactly as for the registry-backed surfaces.
+
+Code: `internal/cli/removal.go` (`installedMatcher`, `matchInstalled`,
+`removalResolveScope`, `removalScope`) over the shared `selector.match` /
+`matchSource` seam in `internal/cli/engine.go`, with the floor passed as 0.
 
 ## Input forms
 

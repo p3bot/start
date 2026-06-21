@@ -73,7 +73,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		if query != "" {
 			fmt.Fprintln(w, "Query must be at least 3 characters")
 		}
-		input, promptErr := promptSearchQuery(w, stdin)
+		input, promptErr := promptSearchQuery(w, stdin, 3)
 		if promptErr != nil {
 			return promptErr
 		}

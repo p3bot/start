@@ -47,6 +47,9 @@ start config settings timeout 120
 start search golang
 start search --tag review
 start install golang/code-review
+start uninstall golang/code-review
+start uninstall claude --force
+start uninstall agents:claude --local
 start list
 start library
 start update

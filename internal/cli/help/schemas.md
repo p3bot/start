@@ -19,8 +19,8 @@ non-zero exit code from the table below.
 Nine commands accept `--json`: `list`, `library`, `search`, `update`, `doctor`,
 `doctor validate`, `config get`, `config list`, `config settings`.
 
-Content and launch commands (`get`, `prompt`, `task`, `describe`, `install`) do
-not take `--json`.
+Content and launch commands (`get`, `prompt`, `task`, `describe`, `install`,
+`uninstall`) do not take `--json`.
 
 ## Output Shapes
 
