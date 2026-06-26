@@ -341,6 +341,35 @@ func TestSearchCommandValidation(t *testing.T) {
 		}
 	})
 
+	// The 3-character floor is measured against the name, excluding the
+	// "category:" prefix, so a short scoped name is rejected the same as a short
+	// bare query — the prefix does not pad it over the threshold.
+	t.Run("category prefix with short name returns error", func(t *testing.T) {
+		t.Parallel()
+		cmd := NewRootCmd()
+		cmd.SetArgs([]string{"search", "roles:go"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error for short scoped query")
+		}
+		if !strings.Contains(err.Error(), "3 characters") {
+			t.Errorf("error should mention 3 characters, got: %s", err.Error())
+		}
+	})
+
+	t.Run("unknown category prefix returns error", func(t *testing.T) {
+		t.Parallel()
+		cmd := NewRootCmd()
+		cmd.SetArgs([]string{"search", "bogus:golang"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error for unknown category prefix")
+		}
+		if !strings.Contains(err.Error(), "unknown category") {
+			t.Errorf("error should mention unknown category, got: %s", err.Error())
+		}
+	})
+
 	t.Run("find alias is registered", func(t *testing.T) {
 		t.Parallel()
 		cmd := NewRootCmd()

@@ -802,7 +802,6 @@ func promptSelectConfigMatch(w io.Writer, r io.Reader, query string, matches []c
 	return matches[n-1], nil
 }
 
-
 // promptSearchQuery loops until a query of at least minLen characters is
 // entered; returns "" and nil on empty input, or an error in non-interactive
 // mode. Install passes 3 to bound its registry-wide search; uninstall passes 1,
@@ -822,7 +821,15 @@ func promptSearchQuery(w io.Writer, r io.Reader, minLen int) (string, error) {
 		if input == "" {
 			return "", nil
 		}
-		if len(input) < minLen {
+		// Measure the floor against the name, excluding any "category:" prefix,
+		// to match the non-interactive search/install paths. An unknown category
+		// is reported and re-prompted rather than aborting the session.
+		_, name, err := modules.SplitCategoryQuery(input)
+		if err != nil {
+			fmt.Fprintf(w, "%s\n", err)
+			continue
+		}
+		if len(name) < minLen {
 			fmt.Fprintf(w, "Query must be at least %d characters\n", minLen)
 			continue
 		}

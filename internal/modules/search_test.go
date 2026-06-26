@@ -1,11 +1,13 @@
 package modules
 
 import (
+	"errors"
 	"regexp"
 	"slices"
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/start-cli/start/internal/fault"
 	"github.com/start-cli/start/internal/registry"
 )
 
@@ -250,6 +252,28 @@ func TestSearchIndex(t *testing.T) {
 		{
 			name:      "empty query returns nil",
 			query:     "",
+			wantCount: 0,
+		},
+		{
+			name:      "category prefix scopes to that category",
+			query:     "roles:golang",
+			wantCount: 2,
+			wantFirst: "roles/golang/assistant",
+		},
+		{
+			name:      "category prefix excludes other categories",
+			query:     "roles:claude",
+			wantCount: 0,
+		},
+		{
+			name:      "category prefix with full path name",
+			query:     "agents:ai/claude",
+			wantCount: 1,
+			wantFirst: "agents/ai/claude",
+		},
+		{
+			name:      "category prefix with empty remainder returns nil",
+			query:     "roles:",
 			wantCount: 0,
 		},
 	}
@@ -723,6 +747,29 @@ func TestSearchInstalledConfig(t *testing.T) {
 			query:     "claude google",
 			wantCount: 0,
 		},
+		{
+			name:      "category prefix matching this category",
+			cueKey:    "agents",
+			category:  "agents",
+			query:     "agents:claude",
+			wantCount: 1,
+			wantFirst: "claude",
+		},
+		{
+			name:      "category prefix for another category self-skips",
+			cueKey:    "agents",
+			category:  "agents",
+			query:     "roles:golang",
+			wantCount: 0,
+		},
+		{
+			name:      "category prefix scoping the role call",
+			cueKey:    "roles",
+			category:  "roles",
+			query:     "roles:golang",
+			wantCount: 1,
+			wantFirst: "golang/assistant",
+		},
 	}
 
 	for _, tt := range tests {
@@ -749,6 +796,35 @@ func TestSearchInstalledConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+// An unknown category prefix is a usage fault on both search surfaces, so the
+// CLI maps it to exit 2 the way get/describe/--role reject a bad category.
+func TestSearchCategoryPrefixUnknownCategory(t *testing.T) {
+	t.Parallel()
+
+	index := &registry.Index{
+		Roles: map[string]registry.IndexEntry{
+			"golang/assistant": {Description: "Go programming expert"},
+		},
+	}
+	cfg := cuecontext.New().CompileString(`{
+		roles: {"golang/assistant": {description: "Go programming expert"}}
+	}`)
+
+	t.Run("SearchIndex", func(t *testing.T) {
+		_, err := SearchIndex(index, "bogus:golang", nil)
+		if !errors.Is(err, fault.ErrUsage) {
+			t.Errorf("SearchIndex() error = %v, want fault.ErrUsage", err)
+		}
+	})
+
+	t.Run("SearchInstalledConfig", func(t *testing.T) {
+		_, err := SearchInstalledConfig(cfg, "roles", "roles", "bogus:golang", nil)
+		if !errors.Is(err, fault.ErrUsage) {
+			t.Errorf("SearchInstalledConfig() error = %v, want fault.ErrUsage", err)
+		}
+	})
 }
 
 func TestExtractIndexEntryFromCUE(t *testing.T) {

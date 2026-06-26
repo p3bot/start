@@ -39,6 +39,10 @@ comma-separated. Total query must be at least 3 characters.
 Terms support regex patterns (e.g. '^home', 'expert$', 'go.*review').
 Results are grouped by source (local, global, registry) and category.
 
+Prefix a query with a category to scope the search to it
+(e.g. 'roles:golang', 'contexts:cwd'). The category prefix is excluded from the
+3-character minimum. An unknown category is an error.
+
 Use --tag to filter by tags. Tags can be used alone or combined with a query.`,
 		Args: cobra.MinimumNArgs(0),
 		RunE: runSearch,
@@ -60,7 +64,17 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	tagFlags, _ := cmd.Flags().GetStringSlice("tag")
 	tags := modules.ParseSearchTerms(strings.Join(tagFlags, ","))
 
-	terms := modules.ParseSearchPatterns(query)
+	// Split off any "category:" prefix and validate the 3-character floor against
+	// the name only — the prefix scopes the search and is excluded from the count,
+	// matching the resolution engine's floor rule. An unknown category fails fast
+	// here as a usage fault rather than surfacing later from the search call. The
+	// full query (prefix included) is still passed to the search functions, which
+	// re-split internally to apply the scope.
+	_, name, err := modules.SplitCategoryQuery(query)
+	if err != nil {
+		return err
+	}
+	terms := modules.ParseSearchPatterns(name)
 	if err := modules.ValidateSearchQuery(terms, tags); err != nil {
 		if jsonFlag {
 			return usageError(err)
@@ -81,7 +95,11 @@ func runSearch(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		query = input
-		terms = modules.ParseSearchPatterns(query)
+		_, name, err = modules.SplitCategoryQuery(query)
+		if err != nil {
+			return err
+		}
+		terms = modules.ParseSearchPatterns(name)
 	}
 
 	if len(terms) > 0 {

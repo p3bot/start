@@ -8,8 +8,39 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/start-cli/start/internal/fault"
 	"github.com/start-cli/start/internal/registry"
 )
+
+// searchCategories lists the four module categories in display order. It is the
+// modules-package source of truth for category-prefix validation, mirroring the
+// CLI's describeCategories ordering so error messages match across surfaces.
+var searchCategories = []string{"agents", "roles", "contexts", "tasks"}
+
+// SplitCategoryQuery peels an optional "category:" prefix off a search query so
+// install and search honour the same category:name addressing the resolution
+// engine uses. With no colon the whole input is the query and category is "".
+// With a colon the prefix must name a known category — an unknown one is a usage
+// fault (exit 2), matching how get/describe/--role reject a bad category — and
+// the remainder becomes the query, scoped to that category. Comparison is
+// case-sensitive against the lowercase category names, consistent with the CLI's
+// parseAddress. Module names never contain a colon (lowercase kebab-case with
+// slashes), so a colon is always a category delimiter, never part of a name.
+//
+// The CLI also calls this to measure its 3-character floor against the returned
+// query (the name only, prefix excluded), keeping search and install consistent
+// with the engine's floor rule; SearchIndex and SearchInstalledConfig re-split
+// internally so they stay correct regardless of any caller-side split.
+func SplitCategoryQuery(input string) (category, query string, err error) {
+	before, after, ok := strings.Cut(input, ":")
+	if !ok {
+		return "", input, nil
+	}
+	if !slices.Contains(searchCategories, before) {
+		return "", "", fault.Usage(fmt.Errorf("unknown category %q (valid: %s)", before, strings.Join(searchCategories, ", ")))
+	}
+	return before, after, nil
+}
 
 // SearchResult holds a matched index entry with its category and name.
 type SearchResult struct {
@@ -90,6 +121,11 @@ func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchRe
 		return nil, nil
 	}
 
+	category, query, err := SplitCategoryQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
 	terms := ParseSearchPatterns(query)
 	if len(terms) == 0 && len(tags) == 0 {
 		return nil, nil
@@ -97,19 +133,29 @@ func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchRe
 
 	var patterns []*regexp.Regexp
 	if len(terms) > 0 {
-		var err error
 		patterns, err = CompileSearchTerms(terms)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	var results []SearchResult
+	scoped := []struct {
+		name    string
+		entries map[string]registry.IndexEntry
+	}{
+		{"agents", index.Agents},
+		{"roles", index.Roles},
+		{"contexts", index.Contexts},
+		{"tasks", index.Tasks},
+	}
 
-	results = append(results, searchCategory("agents", index.Agents, patterns, tags)...)
-	results = append(results, searchCategory("roles", index.Roles, patterns, tags)...)
-	results = append(results, searchCategory("contexts", index.Contexts, patterns, tags)...)
-	results = append(results, searchCategory("tasks", index.Tasks, patterns, tags)...)
+	var results []SearchResult
+	for _, c := range scoped {
+		if category != "" && c.name != category {
+			continue
+		}
+		results = append(results, searchCategory(c.name, c.entries, patterns, tags)...)
+	}
 
 	// Sort by category order, then name.
 	sort.Slice(results, func(i, j int) bool {
@@ -188,6 +234,16 @@ func matchesPatterns(name string, entry registry.IndexEntry, patterns []*regexp.
 // SearchInstalledConfig searches installed config entries under cueKey (e.g. "agents"),
 // matching them the same way as the registry index search.
 func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags []string) ([]SearchResult, error) {
+	scopeCat, query, err := SplitCategoryQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	// A category-scoped query restricts the installed search to its category;
+	// this per-category call self-skips when the scope names another one.
+	if scopeCat != "" && scopeCat != category {
+		return nil, nil
+	}
+
 	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
 	if !catVal.Exists() {
 		return nil, nil

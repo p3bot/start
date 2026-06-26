@@ -35,6 +35,8 @@ func addInstallCommand(parent *cobra.Command) {
 
 Searches the registry index for matching modules. If multiple matches are found,
 prompts for selection. Use a direct path (e.g., "golang/code-review") for exact match.
+Prefix the query with a category (e.g., "roles:golang/code-review") to scope the
+search to that category; an unknown category is an error.
 
 Multiple queries can be provided to install several modules at once.
 
@@ -68,7 +70,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	stdin := cmd.InOrStdin()
 	var validated []string
 	for _, q := range args {
-		if len(q) < 3 {
+		// Measure the 3-character floor against the name only; a "category:"
+		// prefix scopes the install and is excluded from the count, consistent
+		// with search and the resolution engine. An unknown category fails fast
+		// as a usage fault before the index is fetched.
+		_, name, err := modules.SplitCategoryQuery(q)
+		if err != nil {
+			return err
+		}
+		if len(name) < 3 {
 			if !isTerminal(stdin) {
 				return usageError(fmt.Errorf("query %q must be at least 3 characters", q))
 			}
