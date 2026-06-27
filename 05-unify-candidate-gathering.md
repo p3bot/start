@@ -224,7 +224,14 @@ shared result type accordingly.
    enumeration is not routed through the candidate primitive.
 5. `start search` enumerates candidates through the shared primitive and applies
    its own regex and tag matcher over the full unfiltered set, with no
-   change to its output.
+   change to its output. The shared candidate type is the internal gathering
+   representation only: `search` projects the matched candidates back to
+   `modules.SearchResult` (its existing `searchSection.Results` element type) for
+   display and `--json`, so the documented `search --json` shape — an array of
+   `{label, path?, results: [{category, name, entry}]}` sections, guarded by the
+   schema drift test — is preserved exactly. The candidate type's extra source/scope
+   fields are used to assign candidates to the local/global/registry sections and to
+   drive the installed★ marker, not serialised into the output.
 6. Each migrated surface produces its empty-result outcome at a single not-found
    point suitable for a later suggestion hook.
 7. The duplicate matchers retired by the migration are deleted, not left dormant.
@@ -294,8 +301,11 @@ shared result type accordingly.
    installed-and-registry candidates with their source/scope tags so its local,
    global, and registry sections (and the installed★ marker on registry rows) come
    straight from the gathered set, and layering its regex / tag policy on
-   top. Do not apply the resolution merge/de-dup here. Assert identical search
-   output before and after.
+   top. Do not apply the resolution merge/de-dup here. Keep `modules.SearchResult`
+   as the section element type that `search` serialises: convert the matched
+   candidates to it rather than serialising the candidate type, so the `search
+   --json` shape is unchanged. Assert identical search output before and after,
+   including the `--json` shape under the existing drift guard.
 7. Ensure each migrated surface routes its empty result through one not-found
    point. Do not add suggestion output here; just make the seam clean.
 8. Remove dead matchers and update `docs/module-resolution.md` and `AGENTS.md`.
