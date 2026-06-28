@@ -21,6 +21,11 @@ The last two are installed-only surfaces; they reuse the engine's match rule
 over installed config alone and differ from the rest as set out under
 Installed-only surfaces below.
 
+`start config get` and `start config edit` also apply the same literal name-only
+match rule over installed config, but return the full match set rather than
+reducing to one, so they are documented separately under Config inspection
+surfaces below rather than listed here.
+
 Model resolution (`--model`) is out of scope. A model is resolved against the
 selected agent's `models` map, not against config and registry modules.
 
@@ -121,6 +126,19 @@ both sources is one match; the installed entry is used and no install occurs, so
 A match that exists only in the registry is installed on selection (single match:
 install then use; menu: install the chosen entry).
 
+The enumeration of these two sources is a single shared primitive
+(`modules.GatherCandidates`) used by every module-selecting surface. It returns
+the full candidate set tagged by source and config scope with each entry's
+index metadata retained, un-deduplicated and unfiltered; each surface layers its
+own matcher on top. Resolution, removal, and the config-inspection surfaces use
+the literal name-only matcher (`MatchByName`); `start search` and `start install`
+use a regex/tag matcher (`MatchSearch`) over the same candidates, matching names,
+descriptions, and tags; `start update` matches its installed inventory by name or
+category. The installed-over-registry merge and `category:name` de-duplication
+described below are a resolution-only step layered after gathering, not part of
+the primitive. What is unified is the gathering beneath the surfaces, not the
+match rule on top.
+
 The registry index is fetched lazily and its absence is non-fatal: when the index
 cannot be reached, resolution proceeds against installed config alone. The
 guarantees above about registry-only modules — exact-match install-then-use and
@@ -162,6 +180,29 @@ described above, and differ from the registry-backed surfaces in five ways:
 Code: `internal/cli/removal.go` (`installedMatcher`, `matchInstalled`,
 `removalResolveScope`, `removalScope`) over the shared `selector.match` /
 `matchSource` seam in `internal/cli/engine.go`, with the floor passed as 0.
+
+## Config inspection surfaces
+
+`start config get` and `start config edit` select an installed entry to display
+or edit. They gather candidates through the same shared primitive and apply the
+engine's literal, case-insensitive, name-only rule — the exact-whole-name tier
+first, then a substring fallback — across all four categories of installed config
+in the chosen scope. (`config get` reads the merged config by default, or the
+single scope under `--global` / `--local`; `config edit` reads merged or, under
+`--local`, local.) They are not regex matchers: matching is the same literal
+exact-then-substring rule every other name-only surface uses. They differ from
+the resolution surfaces in two ways:
+
+- Full match set, not one: a query keeps every literal-name match rather than
+  reducing to a single module. `config get --json` emits the set as an array; a
+  genuine multi-match menus on a TTY (and errors on a pipe), and `config edit`
+  selects one from the same set. The exact tier still short-circuits the
+  substring fallback, so a bare name that is also a prefix of installed siblings
+  (`claude` alongside `claude/edit`) resolves to just that name; the siblings
+  stay reachable via a non-exact substring query.
+- No registry, no floor, bare names only: like the installed-only removal
+  surfaces they never fetch the registry and impose no three-character floor;
+  the query is a bare cross-category name (no `category:` prefix).
 
 ## Input forms
 

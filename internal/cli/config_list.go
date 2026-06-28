@@ -40,7 +40,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		if err != nil {
 			return item, err
 		}
-		_, agent, err := resolveInstalledName(agents, "agent", m.Name)
+		_, agent, err := lookupInstalledName(agents, "agent", m.Name)
 		if err != nil {
 			return item, err
 		}
@@ -58,7 +58,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		if err != nil {
 			return item, err
 		}
-		_, role, err := resolveInstalledName(roles, "role", m.Name)
+		_, role, err := lookupInstalledName(roles, "role", m.Name)
 		if err != nil {
 			return item, err
 		}
@@ -76,7 +76,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		if err != nil {
 			return item, err
 		}
-		_, ctx, err := resolveInstalledName(contexts, "context", m.Name)
+		_, ctx, err := lookupInstalledName(contexts, "context", m.Name)
 		if err != nil {
 			return item, err
 		}
@@ -95,7 +95,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		if err != nil {
 			return item, err
 		}
-		_, task, err := resolveInstalledName(tasks, "task", m.Name)
+		_, task, err := lookupInstalledName(tasks, "task", m.Name)
 		if err != nil {
 			return item, err
 		}
@@ -287,7 +287,7 @@ func listAgents(w io.Writer, stderr io.Writer, scope config.Scope) error {
 	}
 
 	defaultAgent := ""
-	if cfg, err := loadConfigForScope(scope); err == nil {
+	if cfg, err := loadScopeConfigValue(scope); err == nil {
 		defaultAgent = getDefaultAgentFromConfig(cfg)
 	}
 

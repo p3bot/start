@@ -99,7 +99,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	tui.ColorDim.Fprintf(w, ": %d\n", len(agents))
 	if len(agents) > 0 {
 		defaultAgent := ""
-		if cfg, err := loadConfigForScope(scope); err == nil {
+		if cfg, err := loadScopeConfigValue(scope); err == nil {
 			defaultAgent = getDefaultAgentFromConfig(cfg)
 		}
 		for _, name := range agentOrder {

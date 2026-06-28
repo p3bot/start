@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -14,6 +15,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/start-cli/start/internal/config"
+	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/tui"
 )
@@ -483,80 +485,62 @@ func scopeString(local bool) string {
 	return "global"
 }
 
-// scoreAndSortNames returns keys matching at least one pattern, sorted by score
-// (descending) then name. Each matching pattern adds weight, so keys matching
-// more query terms rank higher.
-func scoreAndSortNames[T any](items map[string]T, patterns []*regexp.Regexp) []string {
-	type match struct {
-		name  string
-		score int
+// loadScopeConfigValue loads the merged config value for scope, tolerating a
+// scope with no config directory or no CUE files by returning a zero value
+// (against which every lookup yields nothing) so callers treat absent config as
+// empty rather than an error. A genuine parse/load failure still propagates.
+func loadScopeConfigValue(scope config.Scope) (cue.Value, error) {
+	paths, err := config.ResolvePaths("")
+	if err != nil {
+		return cue.Value{}, fmt.Errorf("resolving config paths: %w", err)
 	}
-	var matches []match
-
-	for name := range items {
-		score := 0
-		for _, pattern := range patterns {
-			if pattern.MatchString(name) {
-				score += 3
-			}
-		}
-		if score > 0 {
-			matches = append(matches, match{name: name, score: score})
-		}
+	dirs := paths.ForScope(scope)
+	if len(dirs) == 0 {
+		return cue.Value{}, nil
 	}
-
-	sort.Slice(matches, func(i, j int) bool {
-		if matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score
+	result, err := internalcue.NewLoader().Load(dirs)
+	if err != nil {
+		if errors.Is(err, internalcue.ErrNoCUEFiles) {
+			return cue.Value{}, nil
 		}
-		return matches[i].name < matches[j].name
-	})
-
-	names := make([]string, len(matches))
-	for i, m := range matches {
-		names[i] = m.name
+		return cue.Value{}, err
 	}
-	return names
+	return result.Value, nil
 }
 
-// resolveAllMatchingNames returns every match for an ambiguous query rather than
-// erroring (unlike resolveInstalledName); zero matches returns a "not found" error.
-func resolveAllMatchingNames[T any](items map[string]T, typeName, query string) ([]string, error) {
-	// Fast path on exact match, but only when the query contains "/" or has no
-	// "query/" siblings; if siblings exist (e.g. "claude" alongside "claude/edit"),
-	// fall through to the regex search so all are returned.
-	if _, ok := items[query]; ok {
-		if strings.Contains(query, "/") {
-			return []string{query}, nil
-		}
-		prefix := query + "/"
-		hasSiblings := false
-		for name := range items {
-			if strings.HasPrefix(name, prefix) {
-				hasSiblings = true
-				break
-			}
-		}
-		if !hasSiblings {
-			return []string{query}, nil
-		}
-	}
-
-	terms := modules.ParseSearchPatterns(query)
-	if len(terms) == 0 {
-		return nil, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
-	}
-
-	patterns, err := modules.CompileSearchTerms(terms)
+// matchConfigByName enumerates installed candidates across all four categories
+// in scope through the shared gathering primitive, then applies the engine's
+// literal name-only rule — the exact-whole-name tier first and, only when it is
+// empty, the substring fallback — returning the full match set (not reduced to
+// one) ordered by category then name. The exact tier short-circuits the
+// substring fallback, so a bare exact name that is also a prefix of installed
+// siblings resolves to that one name.
+func matchConfigByName(query string, scope config.Scope) ([]configMatch, error) {
+	cfg, err := loadScopeConfigValue(scope)
 	if err != nil {
-		return nil, notFoundError(fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err))
+		return nil, err
 	}
+	cands := modules.GatherCandidates(
+		categoryKeys(describeCategories),
+		[]modules.InstalledSource{{Config: cfg, Scope: scope}},
+		nil,
+	)
+	matched := modules.MatchByName(cands, query, modeExact)
+	if len(matched) == 0 {
+		matched = modules.MatchByName(cands, query, modeSubstring)
+	}
+	sort.SliceStable(matched, func(i, j int) bool {
+		if matched[i].Category != matched[j].Category {
+			return modules.CategoryOrder(matched[i].Category) < modules.CategoryOrder(matched[j].Category)
+		}
+		return matched[i].Name < matched[j].Name
+	})
 
-	names := scoreAndSortNames(items, patterns)
-	if len(names) == 0 {
-		return nil, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
+	results := make([]configMatch, 0, len(matched))
+	for _, c := range matched {
+		results = append(results, configMatch{Name: c.Name, Category: strings.TrimSuffix(c.Category, "s")})
 	}
-	return names, nil
+	return results, nil
 }
 
 // parseSelectionInput parses comma-separated numbers and/or ranges (e.g.
@@ -723,54 +707,6 @@ type configMatch struct {
 	Category string // "agent", "role", "context", or "task"
 }
 
-// searchAllConfigCategories searches all four categories; zero matches is not an
-// error, so the returned slice may be empty.
-func searchAllConfigCategories(query string, scope config.Scope) ([]configMatch, error) {
-	var results []configMatch
-
-	agents, _, err := loadAgentsForScope(scope)
-	if err != nil {
-		return nil, fmt.Errorf("loading agents: %w", err)
-	}
-	if names, _ := resolveAllMatchingNames(agents, "agent", query); len(names) > 0 {
-		for _, name := range names {
-			results = append(results, configMatch{Name: name, Category: "agent"})
-		}
-	}
-
-	roles, _, err := loadRolesForScope(scope)
-	if err != nil {
-		return nil, fmt.Errorf("loading roles: %w", err)
-	}
-	if names, _ := resolveAllMatchingNames(roles, "role", query); len(names) > 0 {
-		for _, name := range names {
-			results = append(results, configMatch{Name: name, Category: "role"})
-		}
-	}
-
-	contexts, _, err := loadContextsForScope(scope)
-	if err != nil {
-		return nil, fmt.Errorf("loading contexts: %w", err)
-	}
-	if names, _ := resolveAllMatchingNames(contexts, "context", query); len(names) > 0 {
-		for _, name := range names {
-			results = append(results, configMatch{Name: name, Category: "context"})
-		}
-	}
-
-	tasks, _, err := loadTasksForScope(scope)
-	if err != nil {
-		return nil, fmt.Errorf("loading tasks: %w", err)
-	}
-	if names, _ := resolveAllMatchingNames(tasks, "task", query); len(names) > 0 {
-		for _, name := range names {
-			results = append(results, configMatch{Name: name, Category: "task"})
-		}
-	}
-
-	return results, nil
-}
-
 // promptSelectConfigMatch returns the picked match, or a zero configMatch{} and
 // nil if cancelled.
 func promptSelectConfigMatch(w io.Writer, r io.Reader, query string, matches []configMatch) (configMatch, error) {
@@ -837,33 +773,15 @@ func promptSearchQuery(w io.Writer, r io.Reader, minLen int) (string, error) {
 	}
 }
 
-// resolveInstalledName resolves a name by exact match then regex search. Zero
-// matches returns "not found"; multiple matches returns an "ambiguous" error.
-func resolveInstalledName[T any](items map[string]T, typeName, query string) (string, T, error) {
+// lookupInstalledName looks up an already-resolved exact name in items, returning
+// not-found when absent. Its callers (the config get/edit print and edit paths
+// and the config list / config get --json builders) all pass a name the shared
+// matcher already reduced to an exact installed entry, so no fuzzy matching
+// remains here.
+func lookupInstalledName[T any](items map[string]T, typeName, name string) (string, T, error) {
+	if val, ok := items[name]; ok {
+		return name, val, nil
+	}
 	var zero T
-
-	if val, ok := items[query]; ok {
-		return query, val, nil
-	}
-
-	terms := modules.ParseSearchPatterns(query)
-	if len(terms) == 0 {
-		return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
-	}
-
-	patterns, err := modules.CompileSearchTerms(terms)
-	if err != nil {
-		return "", zero, notFoundError(fmt.Errorf("%s %q not found (invalid pattern: %w)", typeName, query, err))
-	}
-
-	names := scoreAndSortNames(items, patterns)
-	switch len(names) {
-	case 0:
-		return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, query))
-	case 1:
-		return names[0], items[names[0]], nil
-	default:
-		return "", zero, usageError(fmt.Errorf("ambiguous %s %q matches multiple entries: %s",
-			typeName, query, strings.Join(names, ", ")))
-	}
+	return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, name))
 }

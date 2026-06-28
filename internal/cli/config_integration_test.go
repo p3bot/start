@@ -619,12 +619,14 @@ func TestConfigTask_SubstringResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("edit with substring interactively", func(t *testing.T) {
-		// Interactive edit of "confluence/read-doc":
+	t.Run("edit by resolved name interactively", func(t *testing.T) {
+		// Edit-by-category receives the already-resolved exact name (the shared
+		// matcher reduces the query upstream in runConfigEdit), so it is exercised
+		// here with the canonical name rather than a substring.
 		// Prompts: description, keep current content? (Enter=Y), role (Enter=keep ""), tags (Enter=keep nil)
 		stdout := &bytes.Buffer{}
-		if err := configTaskEdit(slowStdin("Updated description\n\n\n\n"), stdout, false, "read-doc"); err != nil {
-			t.Fatalf("edit with substring failed: %v", err)
+		if err := configTaskEdit(slowStdin("Updated description\n\n\n\n"), stdout, false, "confluence/read-doc"); err != nil {
+			t.Fatalf("edit by resolved name failed: %v", err)
 		}
 
 		cmd2 := NewRootCmd()

@@ -132,6 +132,7 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 
 | File | Purpose |
 | ---- | ------- |
+| `internal/modules/candidates.go` | Shared candidate-gathering primitive (`GatherCandidates`) and matchers (`MatchByName` literal name-only, `MatchSearch` regex/tag) consumed by every selecting surface |
 | `internal/cli/engine.go` | Unified name-only resolution engine (exact tier → floor → substring/prefix fallback) shared by all surfaces |
 | `internal/cli/resolve.go` | Resolver state, surface entry points (`resolveAgent`/`resolveRole`/`resolveContexts`), registry fetch and auto-install |
 | `internal/cli/root.go` | Root command factory with all subcommands registered |
@@ -180,6 +181,37 @@ lazily and its absence is non-fatal: an uninstalled name is not-found when the
 index is reachable, and a transient (retry) error when it is unreachable, since
 absence cannot be confirmed. Model resolution (`--model`) is out of scope; it
 keeps the search-style match against the agent's `models` map.
+
+### Candidate Gathering
+
+Beneath the per-surface match rules, one shared primitive in `internal/modules`
+(`GatherCandidates`) enumerates the candidate set for a scope and a
+caller-selected set of sources (installed-only, registry-only, or both), tagging
+each candidate by source and config scope and retaining its index entry
+(description, tags, origin) — installed entries via `extractIndexEntryFromCUE`,
+registry entries from the index — un-deduplicated and unfiltered. Installed
+sources are passed as a list of (config value, scope) pairs, so `search` feeds
+its separate local and global configs as two while the merged-config resolver
+feeds one. Each surface layers its own matcher on top: the resolution surfaces,
+the installed-only `start uninstall`/`start config remove`, and the
+config-inspection `start config get`/`start config edit` use the literal
+name-only matcher (`MatchByName`); `start search` and `start install` use the
+regex/tag matcher (`MatchSearch`) over the same candidates, matching names,
+descriptions, and tags; `start update` keeps its `collectInstalledModules`
+inventory (which carries version/config-file metadata the primitive does not) and
+matches it by shared name (`NameMatches`) or category substring. The
+installed-over-registry merge and `category:name` de-duplication (`mergeMatches`)
+is a resolution-only step layered after gathering, not part of the primitive, so
+`search` keeps its local/global/registry sections and `install` keeps each
+candidate's registry entry. `start config get`/`start config edit` apply the
+literal exact-then-substring rule across all installed categories and return the
+full match set rather than reducing to one — `config get --json` stays an array
+and a genuine multi-match menus on a TTY — and the exact tier short-circuits the
+substring fallback, so a bare exact name that is a prefix of installed siblings
+(`claude` alongside `claude/edit`) resolves to just that name. The shared
+candidate type lives in `internal/modules` and is reconciled with the engine's
+`ModuleMatch` as a type alias so both packages share one representation without
+an import cycle.
 
 ### Index Caching and Liveness
 

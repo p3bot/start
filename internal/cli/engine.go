@@ -9,38 +9,29 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/start-cli/start/internal/config"
 	"github.com/start-cli/start/internal/modules"
 	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
-// matchMode selects how a candidate name is compared against the query. The
-// exact tier always uses modeExact; the fallback tier uses modeSubstring for a
-// bare term and modePrefix for a category-qualified one. Matching is literal
-// (no regex) and case-insensitive throughout.
-type matchMode int
+// matchMode and its constants are the resolution layer's names for the shared
+// literal name-only match modes in internal/modules. The exact tier always uses
+// modeExact; the fallback tier uses modeSubstring for a bare term and modePrefix
+// for a category-qualified one. Matching is literal (no regex) and
+// case-insensitive throughout.
+type matchMode = modules.MatchMode
 
 const (
-	modeExact matchMode = iota
-	modeSubstring
-	modePrefix
+	modeExact     = modules.ModeExact
+	modeSubstring = modules.ModeSubstring
+	modePrefix    = modules.ModePrefix
 )
 
-// nameMatches reports whether candidate matches query under mode, comparing
-// case-insensitively over the names only. Both operands are lower-cased so the
-// slash in a path-shaped name is an ordinary character, not a separator.
+// nameMatches reports whether candidate matches query under mode, deferring to
+// the shared matcher so every name-only surface compares names identically.
 func nameMatches(query, candidate string, mode matchMode) bool {
-	q := strings.ToLower(query)
-	c := strings.ToLower(candidate)
-	switch mode {
-	case modeExact:
-		return q == c
-	case modePrefix:
-		return strings.HasPrefix(c, q)
-	default:
-		return strings.Contains(c, q)
-	}
+	return modules.NameMatches(query, candidate, mode)
 }
 
 // resolveScope parameterises the unified resolver for one surface: which
@@ -248,10 +239,8 @@ func (s *selector) reduceMatch(matches []ModuleMatch, scope resolveScope, query 
 // surfaces always consult the index to detect a same-name twin in another
 // category.
 func (r *resolver) exactCandidates(name string, cats []describeCategory, scope resolveScope) []ModuleMatch {
-	var installedExact []ModuleMatch
-	for _, cat := range cats {
-		installedExact = append(installedExact, r.collectInstalled(cat.key, cat.category, name, modeExact)...)
-	}
+	keys := categoryKeys(cats)
+	installedExact := modules.MatchByName(modules.GatherCandidates(keys, r.installedSources(), nil), name, modeExact)
 
 	if !scope.crossCategory && len(installedExact) == 1 {
 		debugf(r.stderr, r.flags, dbgResolve, "%s %q: exact installed match", scope.displayType, name)
@@ -260,9 +249,7 @@ func (r *resolver) exactCandidates(name string, cats []describeCategory, scope r
 
 	var registryExact []ModuleMatch
 	if index, _, _ := r.ensureIndex(); index != nil {
-		for _, cat := range cats {
-			registryExact = append(registryExact, collectRegistry(registryEntries(index, cat.category), cat.category, name, modeExact)...)
-		}
+		registryExact = modules.MatchByName(modules.GatherCandidates(keys, nil, index), name, modeExact)
 	}
 	return mergeMatches(installedExact, registryExact)
 }
@@ -270,16 +257,12 @@ func (r *resolver) exactCandidates(name string, cats []describeCategory, scope r
 // fallbackCandidates gathers the substring/prefix tier across the scoped
 // categories from installed config plus the registry index.
 func (r *resolver) fallbackCandidates(name string, cats []describeCategory, mode matchMode, scope resolveScope) []ModuleMatch {
-	var installed []ModuleMatch
-	for _, cat := range cats {
-		installed = append(installed, r.collectInstalled(cat.key, cat.category, name, mode)...)
-	}
+	keys := categoryKeys(cats)
+	installed := modules.MatchByName(modules.GatherCandidates(keys, r.installedSources(), nil), name, mode)
 
 	var reg []ModuleMatch
 	if index, _, _ := r.ensureIndex(); index != nil {
-		for _, cat := range cats {
-			reg = append(reg, collectRegistry(registryEntries(index, cat.category), cat.category, name, mode)...)
-		}
+		reg = modules.MatchByName(modules.GatherCandidates(keys, nil, index), name, mode)
 	}
 
 	matches := mergeMatches(installed, reg)
@@ -307,43 +290,36 @@ func (r *resolver) selector() *selector {
 	return &selector{stdin: r.stdin, stdout: r.stdout, stderr: r.stderr, flags: r.flags}
 }
 
-// collectInstalled returns matches under cueKey whose names satisfy mode.
-func (r *resolver) collectInstalled(cueKey, category, query string, mode matchMode) []ModuleMatch {
-	return collectInstalledFrom(r.cfg.Value, cueKey, category, query, mode)
+// categoryKeys projects the scoped describeCategories to the plain category
+// strings the gathering primitive enumerates over.
+func categoryKeys(cats []describeCategory) []string {
+	keys := make([]string, len(cats))
+	for i, cat := range cats {
+		keys[i] = cat.category
+	}
+	return keys
 }
 
-// collectInstalledFrom returns matches under cueKey in cfg whose names satisfy
+// installedSources wraps the resolver's single merged config (local overriding
+// global) as the one installed source the gathering primitive enumerates; the
+// per-candidate scope tag is irrelevant to resolution.
+func (r *resolver) installedSources() []modules.InstalledSource {
+	return []modules.InstalledSource{{Config: r.cfg.Value, Scope: config.ScopeMerged}}
+}
+
+// collectInstalled returns installed matches under category whose names satisfy
+// mode, gathered from the resolver's merged config.
+func (r *resolver) collectInstalled(category, query string, mode matchMode) []ModuleMatch {
+	return collectInstalledFrom(r.cfg.Value, category, query, mode)
+}
+
+// collectInstalledFrom returns matches under category in cfg whose names satisfy
 // mode. It is the registry-free installed gather shared by the resolver and the
-// installed-only removal matcher; a zero cfg (no config loaded) yields no
-// matches.
-func collectInstalledFrom(cfg cue.Value, cueKey, category, query string, mode matchMode) []ModuleMatch {
-	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
-	if !catVal.Exists() {
-		return nil
-	}
-	iter, err := catVal.Fields()
-	if err != nil {
-		return nil
-	}
-	var out []ModuleMatch
-	for iter.Next() {
-		name := iter.Selector().Unquoted()
-		if nameMatches(query, name, mode) {
-			out = append(out, ModuleMatch{Name: name, Category: category, Source: ModuleSourceInstalled})
-		}
-	}
-	return out
-}
-
-// collectRegistry returns registry entries whose names satisfy mode.
-func collectRegistry(entries map[string]registry.IndexEntry, category, query string, mode matchMode) []ModuleMatch {
-	var out []ModuleMatch
-	for name, entry := range entries {
-		if nameMatches(query, name, mode) {
-			out = append(out, ModuleMatch{Name: name, Category: category, Source: ModuleSourceRegistry, Entry: entry})
-		}
-	}
-	return out
+// installed-only removal matcher, layering the literal name matcher over the
+// shared gathering primitive; a zero cfg (no config loaded) yields no matches.
+func collectInstalledFrom(cfg cue.Value, category, query string, mode matchMode) []ModuleMatch {
+	cands := modules.GatherCandidates([]string{category}, []modules.InstalledSource{{Config: cfg, Scope: config.ScopeMerged}}, nil)
+	return modules.MatchByName(cands, query, mode)
 }
 
 // mergeMatches de-duplicates by category:name with the installed entry winning,

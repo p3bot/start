@@ -46,7 +46,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintln(stdout)
 	query := args[0]
-	matches, err := searchAllConfigCategories(query, config.ScopeFromLocal(local))
+	matches, err := matchConfigByName(query, config.ScopeFromLocal(local))
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 	if err != nil {
 		return fmt.Errorf("loading agents: %w", err)
 	}
-	resolvedName, agent, err := resolveInstalledName(allAgents, "agent", name)
+	resolvedName, agent, err := lookupInstalledName(allAgents, "agent", name)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
 	}
-	resolvedName, role, err := resolveInstalledName(allRoles, "role", name)
+	resolvedName, role, err := lookupInstalledName(allRoles, "role", name)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func configContextEdit(stdin io.Reader, stdout io.Writer, local bool, name strin
 	if err != nil {
 		return fmt.Errorf("loading contexts: %w", err)
 	}
-	resolvedName, ctx, err := resolveInstalledName(allContexts, "context", name)
+	resolvedName, ctx, err := lookupInstalledName(allContexts, "context", name)
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 	if err != nil {
 		return fmt.Errorf("loading tasks: %w", err)
 	}
-	resolvedName, task, err := resolveInstalledName(allTasks, "task", name)
+	resolvedName, task, err := lookupInstalledName(allTasks, "task", name)
 	if err != nil {
 		return err
 	}

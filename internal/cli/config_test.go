@@ -2080,6 +2080,134 @@ tasks: {
 	}
 }
 
+// TestConfigGetJSON_ExactPrefixSibling locks the deliberate behaviour change from
+// the candidate-gathering unification: a bare exact name that is also a prefix of
+// installed siblings resolves to that one name, because the exact tier
+// short-circuits the substring fallback (the old regex path returned both).
+func TestConfigGetJSON_ExactPrefixSibling(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	globalDir := filepath.Join(tmpDir, "start")
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// "claude" is an exact agent name and a prefix of the sibling "claude/edit".
+	agentsContent := `agents: {
+	"claude": {
+		bin: "claude"
+		command: "claude \"{{.prompt}}\""
+		description: "Anthropic Claude"
+	}
+	"claude/edit": {
+		bin: "claude"
+		command: "claude edit \"{{.prompt}}\""
+		description: "Claude edit mode"
+	}
+}`
+	if err := os.WriteFile(filepath.Join(globalDir, "agents.cue"), []byte(agentsContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"config", "get", "claude", "--json"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var items []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &items); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected exact tier to short-circuit to one match, got %d: %s", len(items), stdout.String())
+	}
+	if items[0]["name"] != "claude" {
+		t.Errorf("name = %q, want %q", items[0]["name"], "claude")
+	}
+
+	// The sibling stays reachable via a non-exact substring query.
+	cmd2 := NewRootCmd()
+	stdout2 := &bytes.Buffer{}
+	cmd2.SetOut(stdout2)
+	cmd2.SetErr(&bytes.Buffer{})
+	cmd2.SetArgs([]string{"config", "get", "claude/", "--json"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var siblings []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout2.String())), &siblings); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout2.String())
+	}
+	if len(siblings) != 1 || siblings[0]["name"] != "claude/edit" {
+		t.Fatalf("expected substring query to reach the sibling, got %s", stdout2.String())
+	}
+}
+
+// TestConfigGetJSON_ExactShadowsCrossCategorySubstring locks the cross-category
+// reach of the exact-tier short-circuit: an exact whole-name match in one
+// category suppresses a substring-only match in another. "review" is an exact
+// task name and a substring of the "code-review" role, so only the exact task is
+// returned — broader than the same-category prefix-sibling case above.
+func TestConfigGetJSON_ExactShadowsCrossCategorySubstring(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	globalDir := filepath.Join(tmpDir, "start")
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	tasksContent := `tasks: {
+	"review": {
+		prompt: "Review this code"
+		description: "Code review task"
+	}
+}`
+	if err := os.WriteFile(filepath.Join(globalDir, "tasks.cue"), []byte(tasksContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	rolesContent := `roles: {
+	"code-review": {
+		prompt: "You review code"
+		description: "Code review role"
+	}
+}`
+	if err := os.WriteFile(filepath.Join(globalDir, "roles.cue"), []byte(rolesContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	chdir(t, tmpDir)
+
+	cmd := NewRootCmd()
+	stdout := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"config", "get", "review", "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var items []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &items); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout.String())
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected the exact task to suppress the cross-category substring role, got %d: %s", len(items), stdout.String())
+	}
+	if items[0]["name"] != "review" || items[0]["category"] != "task" {
+		t.Errorf("got name=%v category=%v, want review/task", items[0]["name"], items[0]["category"])
+	}
+}
+
 func TestConfigGetJSON_WithMatch(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)

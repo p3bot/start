@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -29,8 +28,8 @@ var searchCategories = []string{"agents", "roles", "contexts", "tasks"}
 //
 // The CLI also calls this to measure its 3-character floor against the returned
 // query (the name only, prefix excluded), keeping search and install consistent
-// with the engine's floor rule; SearchIndex and SearchInstalledConfig re-split
-// internally so they stay correct regardless of any caller-side split.
+// with the engine's floor rule; MatchSearch re-splits internally so it stays
+// correct regardless of any caller-side split.
 func SplitCategoryQuery(input string) (category, query string, err error) {
 	before, after, ok := strings.Cut(input, ":")
 	if !ok {
@@ -114,91 +113,6 @@ func ValidateSearchQuery(terms, tags []string) error {
 	return nil
 }
 
-// SearchIndex searches all index categories. Query terms are regex patterns with AND
-// semantics; tags (if any) additionally require an OR tag match.
-func SearchIndex(index *registry.Index, query string, tags []string) ([]SearchResult, error) {
-	if index == nil {
-		return nil, nil
-	}
-
-	category, query, err := SplitCategoryQuery(query)
-	if err != nil {
-		return nil, err
-	}
-
-	terms := ParseSearchPatterns(query)
-	if len(terms) == 0 && len(tags) == 0 {
-		return nil, nil
-	}
-
-	var patterns []*regexp.Regexp
-	if len(terms) > 0 {
-		patterns, err = CompileSearchTerms(terms)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	scoped := []struct {
-		name    string
-		entries map[string]registry.IndexEntry
-	}{
-		{"agents", index.Agents},
-		{"roles", index.Roles},
-		{"contexts", index.Contexts},
-		{"tasks", index.Tasks},
-	}
-
-	var results []SearchResult
-	for _, c := range scoped {
-		if category != "" && c.name != category {
-			continue
-		}
-		results = append(results, searchCategory(c.name, c.entries, patterns, tags)...)
-	}
-
-	// Sort by category order, then name.
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].Category != results[j].Category {
-			return CategoryOrder(results[i].Category) < CategoryOrder(results[j].Category)
-		}
-		return results[i].Name < results[j].Name
-	})
-
-	return results, nil
-}
-
-// searchCategory searches a single category map for matching entries.
-// The three branches stay explicit rather than collapsed into a single
-// matchesPatterns(...) && matchesAnyTag(...): tags-only mode has nil patterns
-// (matchesPatterns reports false) and patterns-only mode has nil tags
-// (matchesAnyTag reports false), so a merged expression would wrongly exclude both.
-func searchCategory(category string, entries map[string]registry.IndexEntry, patterns []*regexp.Regexp, tags []string) []SearchResult {
-	var results []SearchResult
-
-	for name, entry := range entries {
-		var match bool
-		switch {
-		case len(patterns) > 0 && len(tags) > 0:
-			match = matchesPatterns(name, entry, patterns) && matchesAnyTag(entry.Tags, tags)
-		case len(tags) > 0:
-			match = matchesAnyTag(entry.Tags, tags)
-		default:
-			match = matchesPatterns(name, entry, patterns)
-		}
-
-		if match {
-			results = append(results, SearchResult{
-				Category: category,
-				Name:     name,
-				Entry:    entry,
-			})
-		}
-	}
-
-	return results
-}
-
 // matchesAnyTag reports whether any entry tag case-insensitively equals any filter tag.
 func matchesAnyTag(entryTags, filterTags []string) bool {
 	for _, ft := range filterTags {
@@ -229,62 +143,6 @@ func matchesPatterns(name string, entry registry.IndexEntry, patterns []*regexp.
 	}
 
 	return true
-}
-
-// SearchInstalledConfig searches installed config entries under cueKey (e.g. "agents"),
-// matching them the same way as the registry index search.
-func SearchInstalledConfig(cfg cue.Value, cueKey, category, query string, tags []string) ([]SearchResult, error) {
-	scopeCat, query, err := SplitCategoryQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	// A category-scoped query restricts the installed search to its category;
-	// this per-category call self-skips when the scope names another one.
-	if scopeCat != "" && scopeCat != category {
-		return nil, nil
-	}
-
-	catVal := cfg.LookupPath(cue.ParsePath(cueKey))
-	if !catVal.Exists() {
-		return nil, nil
-	}
-
-	iter, err := catVal.Fields()
-	if err != nil {
-		return nil, fmt.Errorf("iterating %s fields: %w", cueKey, err)
-	}
-
-	terms := ParseSearchPatterns(query)
-	if len(terms) == 0 && len(tags) == 0 {
-		return nil, nil
-	}
-
-	var patterns []*regexp.Regexp
-	if len(terms) > 0 {
-		patterns, err = CompileSearchTerms(terms)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	entries := make(map[string]registry.IndexEntry)
-	for iter.Next() {
-		name := iter.Selector().Unquoted()
-		entries[name] = extractIndexEntryFromCUE(iter.Value())
-	}
-
-	results := searchCategory(category, entries, patterns, tags)
-
-	sortResults(results)
-
-	return results, nil
-}
-
-// sortResults sorts by name ascending.
-func sortResults(results []SearchResult) {
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Name < results[j].Name
-	})
 }
 
 // extractIndexEntryFromCUE extracts description, tags, and origin from a CUE value

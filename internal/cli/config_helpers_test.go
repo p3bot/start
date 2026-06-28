@@ -6,13 +6,10 @@ import (
 	"testing"
 )
 
-func TestResolveInstalledName(t *testing.T) {
+func TestLookupInstalledName(t *testing.T) {
 	items := map[string]string{
-		"cwd/dotai/create-role":      "Create a role",
-		"golang/review/architecture": "Architecture review",
-		"golang/review/code":         "Code review",
-		"confluence/read-doc":        "Read Confluence doc",
-		"gitlab/review-pipeline":     "Review pipeline",
+		"cwd/dotai/create-role": "Create a role",
+		"confluence/read-doc":   "Read Confluence doc",
 	}
 
 	tests := []struct {
@@ -29,56 +26,22 @@ func TestResolveInstalledName(t *testing.T) {
 			wantVal: "Create a role",
 		},
 		{
-			name:    "unique substring",
+			// lookupInstalledName is exact-only: its callers pass a name the shared
+			// matcher already reduced, so a substring no longer resolves here.
+			name:    "substring does not resolve",
 			query:   "create-role",
-			wantKey: "cwd/dotai/create-role",
-			wantVal: "Create a role",
-		},
-		{
-			name:    "unique substring read-doc",
-			query:   "read-doc",
-			wantKey: "confluence/read-doc",
-			wantVal: "Read Confluence doc",
-		},
-		{
-			name:    "unique regex anchor",
-			query:   "^confluence",
-			wantKey: "confluence/read-doc",
-			wantVal: "Read Confluence doc",
-		},
-		{
-			name:    "unique substring pipeline",
-			query:   "pipeline",
-			wantKey: "gitlab/review-pipeline",
-			wantVal: "Review pipeline",
-		},
-		{
-			name:    "case insensitive match",
-			query:   "CREATE-ROLE",
-			wantKey: "cwd/dotai/create-role",
-			wantVal: "Create a role",
-		},
-		{
-			name:    "ambiguous match",
-			query:   "review",
-			wantErr: "ambiguous",
+			wantErr: "not found",
 		},
 		{
 			name:    "no match",
 			query:   "nonexistent",
 			wantErr: "not found",
 		},
-		{
-			name:    "regex dot matches separator",
-			query:   "golang.review.architecture",
-			wantKey: "golang/review/architecture",
-			wantVal: "Architecture review",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key, val, err := resolveInstalledName(items, "task", tt.query)
+			key, val, err := lookupInstalledName(items, "task", tt.query)
 
 			if tt.wantErr != "" {
 				if err == nil {
@@ -103,85 +66,16 @@ func TestResolveInstalledName(t *testing.T) {
 	}
 }
 
-func TestResolveInstalledName_AmbiguousListsMatches(t *testing.T) {
-	items := map[string]string{
-		"golang/review/architecture": "Architecture review",
-		"golang/review/code":         "Code review",
-	}
-
-	_, _, err := resolveInstalledName(items, "task", "review")
-	if err == nil {
-		t.Fatal("expected error for ambiguous match")
-	}
-
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "golang/review/architecture") {
-		t.Errorf("error should list 'golang/review/architecture': %s", errMsg)
-	}
-	if !strings.Contains(errMsg, "golang/review/code") {
-		t.Errorf("error should list 'golang/review/code': %s", errMsg)
-	}
-}
-
-func TestResolveInstalledName_EmptyMap(t *testing.T) {
+func TestLookupInstalledName_EmptyMap(t *testing.T) {
 	items := map[string]string{}
 
-	_, _, err := resolveInstalledName(items, "agent", "anything")
+	_, _, err := lookupInstalledName(items, "agent", "anything")
 	if err == nil {
 		t.Fatal("expected error for empty map")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
-}
-
-func TestResolveAllMatchingNames(t *testing.T) {
-	items := map[string]string{
-		"golang/review/architecture": "Architecture review",
-		"golang/review/code":         "Code review",
-		"golang/review/security":     "Security review",
-		"confluence/read-doc":        "Read Confluence doc",
-	}
-
-	t.Run("exact match returns one", func(t *testing.T) {
-		names, err := resolveAllMatchingNames(items, "task", "confluence/read-doc")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(names) != 1 || names[0] != "confluence/read-doc" {
-			t.Errorf("got %v, want [confluence/read-doc]", names)
-		}
-	})
-
-	t.Run("ambiguous query returns all matches", func(t *testing.T) {
-		names, err := resolveAllMatchingNames(items, "task", "golang/review")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(names) != 3 {
-			t.Errorf("got %d matches, want 3: %v", len(names), names)
-		}
-	})
-
-	t.Run("unique substring returns one", func(t *testing.T) {
-		names, err := resolveAllMatchingNames(items, "task", "read-doc")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(names) != 1 || names[0] != "confluence/read-doc" {
-			t.Errorf("got %v, want [confluence/read-doc]", names)
-		}
-	})
-
-	t.Run("no match returns error", func(t *testing.T) {
-		_, err := resolveAllMatchingNames(items, "task", "nonexistent")
-		if err == nil {
-			t.Fatal("expected error for no match")
-		}
-		if !strings.Contains(err.Error(), "not found") {
-			t.Errorf("expected 'not found' error, got: %v", err)
-		}
-	})
 }
 
 func TestParseSelectionInput(t *testing.T) {

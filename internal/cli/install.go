@@ -151,10 +151,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 func installModule(ctx context.Context, cmd *cobra.Command, prog *tui.Progress, client registry.Client, index *registry.Index, query, configDir, scopeName string, flags *Flags, cfg cue.Value) error {
 	w := cmd.OutOrStdout()
 
-	results, err := modules.SearchIndex(index, query, nil)
+	// Install enumerates registry candidates through the shared primitive and
+	// applies search's regex/tag matcher on top, so it keeps matching names,
+	// descriptions, and tags while staying registry-first.
+	cands := modules.GatherCandidates(categoryKeys(describeCategories), nil, index)
+	matched, err := modules.MatchSearch(cands, query, nil)
 	if err != nil {
 		return err
 	}
+	results := modules.ResultsFromCandidates(matched)
 	if len(results) == 0 {
 		// notFoundError tags for exit 3 while errNoModules stays reachable via
 		// errors.Is for runInstall's interactive empty-result message.

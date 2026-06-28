@@ -16,21 +16,19 @@ import (
 	"github.com/start-cli/start/internal/registry"
 )
 
-// ModuleSource indicates where a module was found.
-type ModuleSource string
-
+// ModuleSourceInstalled and ModuleSourceRegistry are the resolution layer's
+// names for the shared modules.Source values, so the registry-free removal
+// matcher and the registry-backed resolver tag candidates in the same units as
+// the gathering primitive without an import cycle.
 const (
-	ModuleSourceInstalled ModuleSource = "installed"
-	ModuleSourceRegistry  ModuleSource = "registry"
+	ModuleSourceInstalled = modules.SourceInstalled
+	ModuleSourceRegistry  = modules.SourceRegistry
 )
 
-// ModuleMatch represents a single matched module during resolution.
-type ModuleMatch struct {
-	Name     string
-	Category string
-	Source   ModuleSource
-	Entry    registry.IndexEntry
-}
+// ModuleMatch is one matched module during resolution. It is the shared
+// modules.Candidate; resolution ignores its Scope and (for installed matches)
+// its Entry, which the gathering primitive populates for the discovery surfaces.
+type ModuleMatch = modules.Candidate
 
 // maxModuleResults is the maximum number of results to display in interactive selection.
 const maxModuleResults = 20
@@ -156,10 +154,10 @@ func (r *resolver) surfaceHasInstalledMatch(interp surfaceInterpretation) bool {
 		return true
 	}
 	for _, cat := range interp.cats {
-		if len(r.collectInstalled(cat.key, cat.category, interp.name, modeExact)) > 0 {
+		if len(r.collectInstalled(cat.category, interp.name, modeExact)) > 0 {
 			return true
 		}
-		if len(r.collectInstalled(cat.key, cat.category, interp.name, interp.mode)) > 0 {
+		if len(r.collectInstalled(cat.category, interp.name, interp.mode)) > 0 {
 			return true
 		}
 	}
@@ -232,21 +230,6 @@ func (r *resolver) resolveSingle(name string, scope resolveScope) (string, error
 		return outcome.locator, nil
 	}
 	return outcome.match.Name, nil
-}
-
-func registryEntries(index *registry.Index, category string) map[string]registry.IndexEntry {
-	switch category {
-	case "agents":
-		return index.Agents
-	case "roles":
-		return index.Roles
-	case "contexts":
-		return index.Contexts
-	case "tasks":
-		return index.Tasks
-	default:
-		return nil
-	}
 }
 
 // resolveModelName resolves a model name against agent.Models: exact match,

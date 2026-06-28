@@ -110,10 +110,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	if query != "" {
+		// The name half uses the shared literal name matcher (substring,
+		// case-insensitive); the category half keeps its own substring match so a
+		// full or partial category query still selects every installed module in
+		// that category.
 		var filtered []InstalledModule
 		queryLower := strings.ToLower(query)
 		for _, a := range installed {
-			if strings.Contains(strings.ToLower(a.Name), queryLower) ||
+			if modules.NameMatches(query, a.Name, modules.ModeSubstring) ||
 				strings.Contains(strings.ToLower(a.Category), queryLower) {
 				filtered = append(filtered, a)
 			}

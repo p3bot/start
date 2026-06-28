@@ -723,20 +723,20 @@ func validateUsesReferences(declaringModule string, uses []string, idx *registry
 			issues = append(issues, fmt.Sprintf("module %q declares uses reference %q which is not a fully-qualified category:path address", declaringModule, ref))
 			continue
 		}
-		if !usesPathResolves(registryEntries(idx, addr.Category), addr.Name) {
+		if !usesPathResolves(idx, addr.Category, addr.Name) {
 			issues = append(issues, fmt.Sprintf("module %q declares uses reference %q which resolves to no module in the index", declaringModule, ref))
 		}
 	}
 	return issues
 }
 
-func usesPathResolves(entries map[string]registry.IndexEntry, path string) bool {
-	for key := range entries {
-		if nameMatches(path, key, modeExact) {
-			return true
-		}
-	}
-	return false
+// usesPathResolves reports whether path resolves to an index entry under
+// category. It routes through the shared gather+match primitive so the
+// uses-check applies the same case-insensitive whole-name (modeExact) rule
+// `start get` uses, over the same enumerated registry candidates.
+func usesPathResolves(idx *registry.Index, category, path string) bool {
+	cands := modules.GatherCandidates([]string{category}, nil, idx)
+	return len(modules.MatchByName(cands, path, modeExact)) > 0
 }
 
 // validateFindFSModules returns the names of modules under the category

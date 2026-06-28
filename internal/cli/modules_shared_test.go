@@ -100,13 +100,16 @@ func TestSearchIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := modules.SearchIndex(index, tt.query, nil)
+			matched, err := modules.MatchSearch(
+				modules.GatherCandidates([]string{"agents", "roles", "contexts", "tasks"}, nil, index),
+				tt.query, nil)
 			if err != nil {
-				t.Fatalf("modules.SearchIndex() error: %v", err)
+				t.Fatalf("modules.MatchSearch() error: %v", err)
 			}
+			results := modules.ResultsFromCandidates(matched)
 
 			if len(results) != tt.wantCount {
-				t.Errorf("modules.SearchIndex() returned %d results, want %d", len(results), tt.wantCount)
+				t.Errorf("modules.MatchSearch() returned %d results, want %d", len(results), tt.wantCount)
 			}
 
 			if tt.wantFirst != "" && len(results) > 0 {

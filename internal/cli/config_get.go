@@ -65,7 +65,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	}
 
 	query := args[0]
-	matches, err := searchAllConfigCategories(query, scope)
+	matches, err := matchConfigByName(query, scope)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func printAgentGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	resolvedName, agent, err := resolveInstalledName(agents, "agent", name)
+	resolvedName, agent, err := lookupInstalledName(agents, "agent", name)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func printRoleGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	resolvedName, role, err := resolveInstalledName(roles, "role", name)
+	resolvedName, role, err := lookupInstalledName(roles, "role", name)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func printContextGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	resolvedName, ctx, err := resolveInstalledName(contexts, "context", name)
+	resolvedName, ctx, err := lookupInstalledName(contexts, "context", name)
 	if err != nil {
 		return err
 	}
@@ -248,7 +248,7 @@ func printTaskGet(w io.Writer, scope config.Scope, name string) error {
 		return err
 	}
 
-	resolvedName, task, err := resolveInstalledName(tasks, "task", name)
+	resolvedName, task, err := lookupInstalledName(tasks, "task", name)
 	if err != nil {
 		return err
 	}

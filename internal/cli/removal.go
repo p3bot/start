@@ -28,7 +28,7 @@ type installedMatcher struct {
 func (m *installedMatcher) exactCandidates(name string, cats []describeCategory, _ resolveScope) []ModuleMatch {
 	var out []ModuleMatch
 	for _, cat := range cats {
-		out = append(out, collectInstalledFrom(m.cfg, cat.key, cat.category, name, modeExact)...)
+		out = append(out, collectInstalledFrom(m.cfg, cat.category, name, modeExact)...)
 	}
 	return mergeMatches(out, nil)
 }
@@ -36,7 +36,7 @@ func (m *installedMatcher) exactCandidates(name string, cats []describeCategory,
 func (m *installedMatcher) fallbackCandidates(name string, cats []describeCategory, mode matchMode, scope resolveScope) []ModuleMatch {
 	var out []ModuleMatch
 	for _, cat := range cats {
-		out = append(out, collectInstalledFrom(m.cfg, cat.key, cat.category, name, mode)...)
+		out = append(out, collectInstalledFrom(m.cfg, cat.category, name, mode)...)
 	}
 	matches := mergeMatches(out, nil)
 	debugf(m.stderr, m.flags, dbgResolve, "%s %q: %d installed matches", scope.displayType, name, len(matches))

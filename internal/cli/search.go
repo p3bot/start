@@ -13,6 +13,7 @@ import (
 	"github.com/start-cli/start/internal/config"
 	internalcue "github.com/start-cli/start/internal/cue"
 	"github.com/start-cli/start/internal/modules"
+	"github.com/start-cli/start/internal/registry"
 	"github.com/start-cli/start/internal/tui"
 )
 
@@ -114,71 +115,37 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	loader := internalcue.NewLoader()
-	categories := []struct {
-		cueKey   string
-		category string
-	}{
-		{internalcue.KeyAgents, "agents"},
-		{internalcue.KeyRoles, "roles"},
-		{internalcue.KeyContexts, "contexts"},
-		{internalcue.KeyTasks, "tasks"},
-	}
-
-	var sections []searchSection
-
 	stderr := cmd.ErrOrStderr()
 
+	// Installed sources are gathered per scope so a per-scope load failure warns
+	// and is skipped without losing the others; the resolved index (or nil, on a
+	// registry outage) is the registry source. All three feed one gathering
+	// primitive; the regex/tag matcher and the per-scope bucketing are layered on
+	// top of the single candidate set.
+	var installedSources []modules.InstalledSource
 	if paths.LocalExists {
 		cfg, err := loader.LoadSingle(paths.Local)
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
 			printWarning(stderr, "failed to load local config: %s", err)
 		} else if err == nil {
-			var results []modules.SearchResult
-			for _, cat := range categories {
-				catResults, err := modules.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
-				if err != nil {
-					return err
-				}
-				results = append(results, catResults...)
-			}
-			if len(results) > 0 {
-				sections = append(sections, searchSection{
-					Label:   "local",
-					Path:    "./.start",
-					Results: results,
-				})
-			}
+			installedSources = append(installedSources, modules.InstalledSource{Config: cfg, Scope: config.ScopeLocal})
 		}
 	}
-
 	if paths.GlobalExists {
 		cfg, err := loader.LoadSingle(paths.Global)
 		if err != nil && !errors.Is(err, internalcue.ErrNoCUEFiles) {
 			printWarning(stderr, "failed to load global config: %s", err)
 		} else if err == nil {
-			var results []modules.SearchResult
-			for _, cat := range categories {
-				catResults, err := modules.SearchInstalledConfig(cfg, cat.cueKey, cat.category, query, tags)
-				if err != nil {
-					return err
-				}
-				results = append(results, catResults...)
-			}
-			if len(results) > 0 {
-				sections = append(sections, searchSection{
-					Label:   "global",
-					Path:    shortenHome(paths.Global),
-					Results: results,
-				})
-			}
+			installedSources = append(installedSources, modules.InstalledSource{Config: cfg, Scope: config.ScopeGlobal})
 		}
 	}
 
-	// Search registry; degrade gracefully if unavailable. Cache-gated under the
-	// shared rule: a fresh cache resolves the index version offline (unless
-	// --refresh), so a follow-up FetchIndex of that canonical version makes no
-	// metadata request.
+	// Resolve the registry index; degrade gracefully if unavailable. Cache-gated
+	// under the shared rule: a fresh cache resolves the index version offline
+	// (unless --refresh), so a follow-up FetchIndex of that canonical version
+	// makes no metadata request. A nil index means no registry candidates.
 	var registryErr error
+	var index *registry.Index
 	ctx := context.Background()
 	flags := getFlags(cmd)
 	client, err := getProvider(cmd)()
@@ -186,24 +153,19 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		registryErr = err
 	} else if version, vErr := resolveDisplayIndexVersion(ctx, client, resolveLibraryIndexPath(), stderr, flags); vErr != nil {
 		registryErr = vErr
+	} else if idx, _, fErr := client.FetchIndex(ctx, version); fErr != nil {
+		registryErr = fErr
 	} else {
-		index, _, err := client.FetchIndex(ctx, version)
-		if err != nil {
-			registryErr = err
-		} else {
-			results, err := modules.SearchIndex(index, query, tags)
-			if err != nil {
-				return err
-			}
-			if len(results) > 0 {
-				sections = append(sections, searchSection{
-					Label:         "registry",
-					Results:       results,
-					ShowInstalled: true,
-				})
-			}
-		}
+		index = idx
 	}
+
+	cands := modules.GatherCandidates(categoryKeys(describeCategories), installedSources, index)
+	matched, err := modules.MatchSearch(cands, query, tags)
+	if err != nil {
+		return err
+	}
+
+	sections := buildSearchSections(matched, paths)
 
 	displayQuery := query
 	if displayQuery == "" && len(tags) > 0 {
@@ -255,6 +217,37 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// buildSearchSections buckets matched candidates into the local, global, and
+// registry sections in display order, projecting each bucket to SearchResult.
+// Empty buckets are dropped, preserving the documented section shape. The source
+// and scope tags drive the bucketing; the registry section carries ShowInstalled
+// so installed registry rows are marked.
+func buildSearchSections(matched []modules.Candidate, paths config.Paths) []searchSection {
+	var local, global, reg []modules.Candidate
+	for _, c := range matched {
+		switch {
+		case c.Source == modules.SourceRegistry:
+			reg = append(reg, c)
+		case c.Scope == config.ScopeLocal:
+			local = append(local, c)
+		case c.Scope == config.ScopeGlobal:
+			global = append(global, c)
+		}
+	}
+
+	var sections []searchSection
+	if len(local) > 0 {
+		sections = append(sections, searchSection{Label: "local", Path: "./.start", Results: modules.ResultsFromCandidates(local)})
+	}
+	if len(global) > 0 {
+		sections = append(sections, searchSection{Label: "global", Path: shortenHome(paths.Global), Results: modules.ResultsFromCandidates(global)})
+	}
+	if len(reg) > 0 {
+		sections = append(sections, searchSection{Label: "registry", Results: modules.ResultsFromCandidates(reg), ShowInstalled: true})
+	}
+	return sections
 }
 
 // printSearchSections prints search results grouped by section and category.

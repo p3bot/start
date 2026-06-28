@@ -91,26 +91,6 @@ func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 	return agents, order, nil
 }
 
-func loadConfigForScope(scope config.Scope) (cue.Value, error) {
-	paths, err := config.ResolvePaths("")
-	if err != nil {
-		return cue.Value{}, err
-	}
-
-	dirs := paths.ForScope(scope)
-	if len(dirs) == 0 {
-		return cue.Value{}, fmt.Errorf("no config found")
-	}
-
-	loader := internalcue.NewLoader()
-	result, err := loader.Load(dirs)
-	if err != nil {
-		return cue.Value{}, err
-	}
-
-	return result.Value, nil
-}
-
 func getDefaultAgentFromConfig(cfg cue.Value) string {
 	val := cfg.LookupPath(cue.ParsePath("settings.default_agent"))
 	if val.Exists() {
