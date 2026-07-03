@@ -127,14 +127,18 @@ A match that exists only in the registry is installed on selection (single match
 install then use; menu: install the chosen entry).
 
 The enumeration of these two sources is a single shared primitive
-(`modules.GatherCandidates`) used by every module-selecting surface. It returns
+(`modules.GatherCandidates`) used by every module-selecting surface except
+`start update`. It returns
 the full candidate set tagged by source and config scope with each entry's
 index metadata retained, un-deduplicated and unfiltered; each surface layers its
 own matcher on top. Resolution, removal, and the config-inspection surfaces use
 the literal name-only matcher (`MatchByName`); `start search` and `start install`
 use a regex/tag matcher (`MatchSearch`) over the same candidates, matching names,
-descriptions, and tags; `start update` matches its installed inventory by name or
-category. The installed-over-registry merge and `category:name` de-duplication
+descriptions, and tags. `start update` is the one surface not on the primitive:
+it keeps its own installed inventory (`collectInstalledModules`, which carries
+version and config-file metadata the primitive does not) and matches it by
+shared name or category substring. The installed-over-registry merge and
+`category:name` de-duplication
 described below are a resolution-only step layered after gathering, not part of
 the primitive. What is unified is the gathering beneath the surfaces, not the
 match rule on top.
@@ -234,7 +238,10 @@ Notes:
   filesystem, a URL by fetch — and the search procedure is skipped entirely. This
   applies to every surface that yields a document body: the `--role` and `--context`
   flags, `start task`, and the cross-category `get`/`describe`, which read and
-  display the content directly. The sole exception is `--agent`: it accepts neither
+  display the content directly. (Mechanically, `start task` intercepts the
+  locator itself before invoking the engine rather than using the engine's
+  locator bypass; the observable behaviour is identical.) The sole exception is
+  `--agent`: it accepts neither
   a filesystem path nor a URL, because an agent is a structured configuration rather
   than a document body, so a locator supplied to `--agent` is an error.
 - A remote fetch is bounded: it follows the response under a timeout and a size
@@ -289,6 +296,11 @@ category; on the cross-category surfaces (`get`, `describe`) it is shown as
 `category:name`, because the category is what distinguishes the matches. Accept
 either the entry number or a typed name. A typed name that uniquely identifies one
 shown entry selects it.
+
+The menu shows at most 20 matches; a larger set is truncated with a
+"Showing N of M matches" note advising a more specific query. Number and
+typed-name selection operate over the shown entries only, so a match beyond the
+cap must be reached by refining the query.
 
 Without a TTY, return an error that lists the matches in the same form — bare
 names on a category-specific surface, `category:name` on a cross-category one —

@@ -13,7 +13,7 @@ package schemas
 // - If only file and command, file wins (command can be injected)
 // - If only one field, that field determines the output
 //
-// See: docs/design/utd-pattern.md for complete documentation
+// See: docs/utd-pattern.md for complete documentation
 #UTD: {
 	// Content source fields (at least one required)
 	file?:    string // Path to file (provides {{.file}}, {{.file_contents}})

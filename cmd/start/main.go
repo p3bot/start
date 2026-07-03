@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatih/color"
 	"github.com/start-cli/start/internal/cli"
+	"github.com/start-cli/start/internal/tui"
 )
 
 func main() {
 	if err := cli.Execute(); err != nil {
 		if !cli.IsSilentError(err) {
-			red := color.New(color.FgRed)
-			red.Fprint(os.Stderr, "Error: ")
+			tui.ColorError.Fprint(os.Stderr, "Error: ")
 			fmt.Fprintln(os.Stderr, err)
 		}
 		os.Exit(cli.ExitCodeFromError(err))
