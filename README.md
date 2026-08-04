@@ -31,6 +31,7 @@ Every time you open an AI coding session you provide the same background: what t
 ```bash
 # Install
 brew tap p3bot/tap
+brew trust p3bot/tap
 brew install p3bot/tap/start
 
 # Auto-setup detects your installed AI agent and writes initial config
@@ -56,6 +57,7 @@ start prompt "Explain this error message: 404 Not Found"
 
 ```bash
 brew tap p3bot/tap
+brew trust p3bot/tap
 brew install p3bot/tap/start
 ```
 
