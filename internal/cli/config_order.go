@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/tui"
 )
 
 func addConfigOrderCommand(parent *cobra.Command) {

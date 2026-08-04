@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/tui"
 )
 
 // fetchIndex centralises the registry-client + fetch + cache-write trio shared

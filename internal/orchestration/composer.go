@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/fault"
-	"github.com/start-cli/start/internal/temp"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/fault"
+	"github.com/p3bot/start/internal/temp"
 	"golang.org/x/mod/semver"
 )
 

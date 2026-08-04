@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/tui"
 )
 
 // fprintDim writes text dim with cyan parentheses. Byte iteration is safe

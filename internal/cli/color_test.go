@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/start-cli/start/internal/fault"
+	"github.com/p3bot/start/internal/fault"
 )
 
 // TestResolveColorMode covers the --color precedence rules. Cases mutate

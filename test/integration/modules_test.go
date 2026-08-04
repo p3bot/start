@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/cli"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/cli"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // Note: Tests below use os.Chdir (process-global state). Do not add t.Parallel()
@@ -30,25 +30,25 @@ agents: {
 	claude: {
 		bin: "claude"
 		command: "{{.bin}} --model {{.model}}"
-		origin: "github.com/start-cli/library/agents/ai/claude@v1.0.0"
+		origin: "github.com/p3bot/library/agents/ai/claude@v1.0.0"
 	}
 }
 
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
-		origin: "github.com/start-cli/library/roles/assistant@v1.0.0"
+		origin: "github.com/p3bot/library/roles/assistant@v1.0.0"
 	}
 	reviewer: {
 		prompt: "You are a code reviewer."
-		origin: "github.com/start-cli/library/roles/reviewer@v1.0.0"
+		origin: "github.com/p3bot/library/roles/reviewer@v1.0.0"
 	}
 }
 
 tasks: {
 	review: {
 		prompt: "Review this code."
-		origin: "github.com/start-cli/library/tasks/review@v1.0.0"
+		origin: "github.com/p3bot/library/tasks/review@v1.0.0"
 	}
 }
 `
@@ -112,13 +112,13 @@ agents: {
 	claude: {
 		bin: "claude"
 		command: "{{.bin}}"
-		origin: "github.com/start-cli/library/agents/ai/claude@v1.0.0"
+		origin: "github.com/p3bot/library/agents/ai/claude@v1.0.0"
 	}
 }
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
-		origin: "github.com/start-cli/library/roles/assistant@v1.0.0"
+		origin: "github.com/p3bot/library/roles/assistant@v1.0.0"
 	}
 }
 `
@@ -195,14 +195,14 @@ agents: {
 	claude: {
 		bin: "claude"
 		command: "{{.bin}}"
-		origin: "github.com/start-cli/library/agents/ai/claude@v1.0.0"
+		origin: "github.com/p3bot/library/agents/ai/claude@v1.0.0"
 	}
 }
 
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
-		origin: "github.com/start-cli/library/roles/assistant@v1.0.0"
+		origin: "github.com/p3bot/library/roles/assistant@v1.0.0"
 	}
 }
 `

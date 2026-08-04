@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/shell"
+	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/shell"
 )
 
 func TestSettingDefault(t *testing.T) {

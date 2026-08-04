@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/doctor"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/doctor"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestValidateDeriveRepoURL(t *testing.T) {
@@ -25,13 +25,13 @@ func TestValidateDeriveRepoURL(t *testing.T) {
 	}{
 		{
 			name:  "default index path",
-			input: "github.com/start-cli/library/index@v1",
-			want:  "https://github.com/start-cli/library",
+			input: "github.com/p3bot/library/index@v1",
+			want:  "https://github.com/p3bot/library",
 		},
 		{
 			name:  "canonical version",
-			input: "github.com/start-cli/library/index@v1.0.1",
-			want:  "https://github.com/start-cli/library",
+			input: "github.com/p3bot/library/index@v1.0.1",
+			want:  "https://github.com/p3bot/library",
 		},
 		{
 			name:  "custom org",
@@ -70,7 +70,7 @@ func TestValidateCacheDirName(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"https://github.com/start-cli/library", "start-cli-library"},
+		{"https://github.com/p3bot/library", "p3bot-library"},
 		{"https://github.com/example/custom-library", "example-custom-library"},
 		{"https://github.com/myorg/my-modules", "myorg-my-modules"},
 	}
@@ -191,9 +191,9 @@ func TestIndexVersionFromPath(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"github.com/start-cli/library/index@v1.0.1", "v1.0.1"},
-		{"github.com/start-cli/library/index@v1", ""}, // major only — not canonical
-		{"github.com/start-cli/library/index@v1.0.0", "v1.0.0"},
+		{"github.com/p3bot/library/index@v1.0.1", "v1.0.1"},
+		{"github.com/p3bot/library/index@v1", ""}, // major only — not canonical
+		{"github.com/p3bot/library/index@v1.0.0", "v1.0.0"},
 		{"no-version-here", ""},
 	}
 	for _, tt := range tests {
@@ -415,10 +415,10 @@ func TestValidateUsesReferences(t *testing.T) {
 
 	idx := &registry.Index{
 		Contexts: map[string]registry.IndexEntry{
-			"start/library/publishing": {Module: "github.com/start-cli/library/contexts/start/library/publishing@v1"},
+			"start/library/publishing": {Module: "github.com/p3bot/library/contexts/start/library/publishing@v1"},
 		},
 		Roles: map[string]registry.IndexEntry{
-			"go-expert": {Module: "github.com/start-cli/library/roles/go-expert@v1"},
+			"go-expert": {Module: "github.com/p3bot/library/roles/go-expert@v1"},
 		},
 	}
 
@@ -724,9 +724,9 @@ func TestValidateCheckIndexVersionExistsNoop(t *testing.T) {
 	}
 	ctx := context.Background()
 	paths := []string{
-		"github.com/start-cli/library/index@v1",
-		"github.com/start-cli/library/index@v2",
-		"github.com/start-cli/library/index",
+		"github.com/p3bot/library/index@v1",
+		"github.com/p3bot/library/index@v2",
+		"github.com/p3bot/library/index",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {

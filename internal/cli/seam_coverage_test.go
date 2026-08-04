@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // errFetchBoom is the canned fetch failure that drives update's per-module
@@ -73,7 +73,7 @@ const schemaFixtureBody = `package schemas
 // sentinelModuleBase is the sentinel agent's module path with major version.
 // Lookups strip the version suffix, so a SetFetch keyed here also matches the
 // resolved @v1.0.0 path.
-const sentinelModuleBase = "github.com/start-cli/library/agents/" + sentinelAgentName + "@v1"
+const sentinelModuleBase = "github.com/p3bot/library/agents/" + sentinelAgentName + "@v1"
 
 // writeInstalledAgentAt writes the sentinel agent into the named local config
 // file at the given origin version, so collectInstalledModules picks it up and
@@ -84,7 +84,7 @@ func writeInstalledAgentAt(t *testing.T, tmpDir, fileName, version string) strin
 	"` + sentinelAgentName + `": {
 		bin:     "sentinel"
 		command: "{{.bin}} run"
-		origin:  "github.com/start-cli/library/agents/` + sentinelAgentName + `@` + version + `"
+		origin:  "github.com/p3bot/library/agents/` + sentinelAgentName + `@` + version + `"
 		version: "` + version + `"
 	}
 }

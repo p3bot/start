@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"cuelang.org/go/cue/ast"
-	"github.com/start-cli/start/internal/modules"
+	"github.com/p3bot/start/internal/modules"
 )
 
 // upsertAgent writes agent into its category file through the shared AST layer,

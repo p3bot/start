@@ -11,7 +11,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	cueformat "cuelang.org/go/cue/format"
 	"cuelang.org/go/cue/load"
-	"github.com/start-cli/start/internal/fault"
+	"github.com/p3bot/start/internal/fault"
 )
 
 // ErrNoCUEFiles is returned when no CUE files are found in the provided directories.

@@ -196,7 +196,7 @@ type Options struct {
 }
 
 // RepoURL is the repository URL for the project.
-const RepoURL = "https://github.com/start-cli/start"
+const RepoURL = "https://github.com/p3bot/start"
 
 // IssuesURL is the issues URL for the project.
-const IssuesURL = "https://github.com/start-cli/start/issues"
+const IssuesURL = "https://github.com/p3bot/start/issues"

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/p3bot/start/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
 )
 
 func addConfigExportCommand(parent *cobra.Command) {

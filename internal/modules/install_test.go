@@ -11,8 +11,8 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/format"
 	"cuelang.org/go/cue/parser"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/registry"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func formatAST(t *testing.T, node ast.Node) string {

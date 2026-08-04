@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/p3bot/start/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
 )
 
 // Plural names so tui.CategoryColor returns the correct colour for each.

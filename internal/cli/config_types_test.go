@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/config"
 )
 
 func TestDecodeAgentValue_FullMetadata(t *testing.T) {

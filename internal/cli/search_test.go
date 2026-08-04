@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestPrintSearchSections(t *testing.T) {

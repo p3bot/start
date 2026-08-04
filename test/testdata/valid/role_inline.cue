@@ -1,6 +1,6 @@
 package config
 
-import "github.com/start-cli/start/test/testdata/schemas"
+import "github.com/p3bot/start/test/testdata/schemas"
 
 // Role with inline prompt
 roles: "code-reviewer": schemas.#Role & {

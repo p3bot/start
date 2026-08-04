@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/doctor"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/doctor"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
 )
 
 func addDoctorCommand(parent *cobra.Command) {

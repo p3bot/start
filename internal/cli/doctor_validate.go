@@ -14,12 +14,12 @@ import (
 	"time"
 
 	"cuelang.org/go/mod/modconfig"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/doctor"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/doctor"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/tui"
 	"golang.org/x/mod/semver"
 )
 
@@ -253,7 +253,7 @@ func runDoctorValidate(cmd *cobra.Command, args []string) error {
 }
 
 // validateDeriveRepoURL converts an index module path to a GitHub HTTPS repo URL
-// (e.g. ".../library/index@v1" → "https://github.com/start-cli/library"),
+// (e.g. ".../library/index@v1" → "https://github.com/p3bot/library"),
 // erroring unless the path uses the "/index" subpath convention.
 func validateDeriveRepoURL(indexModulePath string) (string, error) {
 	path := indexModulePath
@@ -293,7 +293,7 @@ func validateCacheDir(repoURL string) (string, error) {
 }
 
 // validateCacheDirName derives a filesystem-safe cache directory name from a repo
-// URL, e.g. "https://github.com/start-cli/library" → "start-cli-library".
+// URL, e.g. "https://github.com/p3bot/library" → "p3bot-library".
 func validateCacheDirName(repoURL string) string {
 	path := strings.TrimPrefix(repoURL, "https://")
 	path = strings.TrimPrefix(path, "http://")

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/config"
 )
 
 var allConfigCategories = []string{"agents", "roles", "contexts", "tasks"}

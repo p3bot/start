@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/tui"
 )
 
 // writeJSON disables HTML escaping so shell characters are not escaped (unlike

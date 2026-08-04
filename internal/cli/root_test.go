@@ -75,7 +75,7 @@ func TestExecute_Version(t *testing.T) {
 		t.Errorf("Expected 'start version' in output, got: %s", output)
 	}
 
-	if !strings.Contains(output, "https://github.com/start-cli/start") {
+	if !strings.Contains(output, "https://github.com/p3bot/start") {
 		t.Errorf("Expected repository URL in output, got: %s", output)
 	}
 

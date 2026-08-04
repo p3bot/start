@@ -9,7 +9,7 @@ import (
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/format"
-	"github.com/start-cli/start/internal/modules"
+	"github.com/p3bot/start/internal/modules"
 )
 
 // TestUpsert_FreshFileWritesManagedHeader covers requirement 5: a file created

@@ -4,9 +4,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // decideCachedIndex is the single cache-gating decision shared by ensureIndex

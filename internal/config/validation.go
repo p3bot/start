@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	internalcue "github.com/start-cli/start/internal/cue"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 // ValidationResult holds the result of validating configuration directories.

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/tui"
 )
 
 // Each writer owns its own leading blank line: when any field would be

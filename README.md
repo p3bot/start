@@ -1,9 +1,9 @@
 # start
 
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
-[![Go Report Card](https://goreportcard.com/badge/github.com/start-cli/start)](https://goreportcard.com/report/github.com/start-cli/start)
-[![Go Reference](https://pkg.go.dev/badge/github.com/start-cli/start.svg)](https://pkg.go.dev/github.com/start-cli/start)
-[![GitHub Release](https://img.shields.io/github/v/release/start-cli/start)](https://github.com/start-cli/start/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/p3bot/start)](https://goreportcard.com/report/github.com/p3bot/start)
+[![Go Reference](https://pkg.go.dev/badge/github.com/p3bot/start.svg)](https://pkg.go.dev/github.com/p3bot/start)
+[![GitHub Release](https://img.shields.io/github/v/release/p3bot/start)](https://github.com/p3bot/start/releases)
 
 Context-aware AI agent launcher powered by CUE.
 
@@ -30,8 +30,8 @@ Every time you open an AI coding session you provide the same background: what t
 
 ```bash
 # Install
-brew tap start-cli/tap
-brew install start-cli/tap/start
+brew tap p3bot/tap
+brew install p3bot/tap/start
 
 # Auto-setup detects your installed AI agent and writes initial config
 # Launch an AI session with full project context
@@ -55,20 +55,20 @@ start prompt "Explain this error message: 404 Not Found"
 ### Homebrew (Linux/macOS)
 
 ```bash
-brew tap start-cli/tap
-brew install start-cli/tap/start
+brew tap p3bot/tap
+brew install p3bot/tap/start
 ```
 
 ### Go Install
 
 ```bash
-go install github.com/start-cli/start/cmd/start@latest
+go install github.com/p3bot/start/cmd/start@latest
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/start-cli/start.git
+git clone https://github.com/p3bot/start.git
 cd start
 go build ./cmd/start
 ./start --version
@@ -455,7 +455,7 @@ start task ./tasks/my-workflow.md "Additional instructions"
 
 Contributions welcome! Please:
 
-1. Check existing issues: https://github.com/start-cli/start/issues
+1. Check existing issues: https://github.com/p3bot/start/issues
 2. Create an issue for bugs or feature requests
 3. Submit pull requests against the `main` branch
 

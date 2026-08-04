@@ -2,15 +2,16 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strings"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/tui"
 )
 
 // addAliasCommand wires the alias command family. Aliases are global-only
@@ -381,9 +382,7 @@ func runAliasImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		for name, tokens := range normalized {
-			existing[name] = tokens
-		}
+		maps.Copy(existing, normalized)
 		final = existing
 	}
 

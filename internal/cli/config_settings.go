@@ -12,10 +12,10 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/tui"
 )
 
 func addConfigSettingsCommand(parent *cobra.Command) {
@@ -37,7 +37,7 @@ Available settings:
   start config settings edit                                          Open settings.cue in $EDITOR
 
   start config settings library_index                                 Show current index path
-  start config settings library_index "github.com/start-cli/library/index@v1"
+  start config settings library_index "github.com/p3bot/library/index@v1"
   start config settings library_index --unset                         Restore default index
   start config settings default_agent claude
   start config settings shell /bin/bash

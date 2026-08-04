@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestResolveCross_ZeroMatches(t *testing.T) {

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/detection"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/detection"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestAutoSetup_DetectionFlow(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/parser"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func parseCUEStruct(t *testing.T, src string) ast.Expr {

@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/tui"
 )
 
 // searchSection groups search results under a labelled section.

@@ -12,8 +12,8 @@ import (
 	cueerrors "cuelang.org/go/cue/errors"
 	"cuelang.org/go/cue/load"
 	"cuelang.org/go/mod/modconfig"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 // SchemaSet holds parsed CUE schema definitions for validation.

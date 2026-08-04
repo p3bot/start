@@ -11,8 +11,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/fatih/color"
+	"github.com/p3bot/start/internal/registry"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/registry"
 	"golang.org/x/term"
 )
 
@@ -51,7 +51,7 @@ var (
 	cliVersion = "dev"
 	commit     = "unknown"
 	buildDate  = "unknown"
-	repoURL    = "https://github.com/start-cli/start"
+	repoURL    = "https://github.com/p3bot/start"
 )
 
 var versionTemplate = fmt.Sprintf(`start version %s
@@ -69,7 +69,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "AI agent CLI orchestrator",
 		Long: `
 start
-https://github.com/start-cli/start
+https://github.com/p3bot/start
 
 A command-line orchestrator for AI agents built on CUE.
 Manages prompt composition, context injection, and workflow automation.

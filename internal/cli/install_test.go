@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // Install validates its 3-character floor against the name only, excluding any
@@ -55,14 +55,14 @@ func TestInstallCommandMatchesDescriptionAndTags(t *testing.T) {
 	idx := &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			"alpha/widget": {
-				Module:      "github.com/start-cli/library/agents/alpha/widget@v1",
+				Module:      "github.com/p3bot/library/agents/alpha/widget@v1",
 				Description: "a searchable helper",
 				Version:     stubVersion,
 			},
 		},
 		Roles: map[string]registry.IndexEntry{
 			"beta/helper": {
-				Module:      "github.com/start-cli/library/roles/beta/helper@v1",
+				Module:      "github.com/p3bot/library/roles/beta/helper@v1",
 				Description: "an unrelated role",
 				Version:     stubVersion,
 				Tags:        []string{"searchable"},

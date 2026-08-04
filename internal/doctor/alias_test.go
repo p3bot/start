@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/config"
 )
 
 func writeStore(t *testing.T, path, data string) {

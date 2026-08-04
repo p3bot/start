@@ -9,9 +9,9 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/fault"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/fault"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // searchIndexResults reproduces the retired SearchIndex over the shared

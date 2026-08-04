@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/tui"
 )
 
 // chdir changes to the given directory and registers a cleanup to restore the original.
@@ -1855,7 +1855,7 @@ func TestEnsureIndex_FreshCacheSkipsFetchMessage(t *testing.T) {
 	cacheContent := fmt.Sprintf(
 		"index_updated: %q\nindex_version: %q\n",
 		time.Now().Format(time.RFC3339),
-		"github.com/start-cli/library/index@v1.0.0",
+		"github.com/p3bot/library/index@v1.0.0",
 	)
 	if err := os.WriteFile(filepath.Join(cacheDir, "cache.cue"), []byte(cacheContent), 0o644); err != nil {
 		t.Fatal(err)
@@ -1892,7 +1892,7 @@ func TestEnsureIndex_StaleCacheShowsFetchMessage(t *testing.T) {
 	cacheContent := fmt.Sprintf(
 		"index_updated: %q\nindex_version: %q\n",
 		staleTime,
-		"github.com/start-cli/library/index@v1.0.0",
+		"github.com/p3bot/library/index@v1.0.0",
 	)
 	if err := os.WriteFile(filepath.Join(cacheDir, "cache.cue"), []byte(cacheContent), 0o644); err != nil {
 		t.Fatal(err)
@@ -2013,7 +2013,7 @@ func TestEnsureIndex_FreshCacheNotRewritten(t *testing.T) {
 	cacheContent := fmt.Sprintf(
 		"index_updated: %q\nindex_version: %q\n",
 		seedTime.Format(time.RFC3339),
-		"github.com/start-cli/library/index@v1.0.0",
+		"github.com/p3bot/library/index@v1.0.0",
 	)
 	cachePath := filepath.Join(cacheDir, "cache.cue")
 	if err := os.WriteFile(cachePath, []byte(cacheContent), 0o644); err != nil {

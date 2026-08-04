@@ -7,7 +7,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/config"
 )
 
 // CheckAliases validates the global alias store. An absent store reports zero

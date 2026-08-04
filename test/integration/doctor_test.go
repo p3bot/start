@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/doctor"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/doctor"
 )
 
 // setupDoctorTestConfig creates a temporary directory with a valid CUE config

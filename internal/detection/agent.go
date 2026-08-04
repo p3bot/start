@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // DetectedAgent represents an agent that was found in PATH.

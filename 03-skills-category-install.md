@@ -61,11 +61,11 @@ Out of scope:
   resolves global (`~/.config/start/`) and local (`./.start/`) directories and scope.
 - `internal/orchestration/executor.go` extracts agent fields (bin, command, models,
   default_model, description) from config. It does not currently read a skills attribute.
-- The full design is in `/home/grant/Projects/start-cli/design-skills.md`.
+- The full design is in `/home/grant/Projects/p3bot/docs/skills-design.md`.
 
 ## References
 
-- `/home/grant/Projects/start-cli/design-skills.md` — the authoritative skills design.
+- `/home/grant/Projects/p3bot/docs/skills-design.md` — the authoritative skills design.
   Read it first.
 - https://agentskills.io/specification — the SKILL.md and bundle format.
 

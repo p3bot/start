@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 // AgentConfig represents an agent configuration for editing.
@@ -352,4 +352,3 @@ func loadTasksFromDir(dir string) (map[string]TaskConfig, []string, error) {
 
 	return tasks, order, nil
 }
-

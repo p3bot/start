@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/fault"
-	"github.com/start-cli/start/internal/registry"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/fault"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestExitCodeFromError(t *testing.T) {

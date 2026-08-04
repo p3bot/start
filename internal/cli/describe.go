@@ -12,11 +12,11 @@ import (
 
 	"cuelang.org/go/cue"
 	cueformat "cuelang.org/go/cue/format"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/tui"
 )
 
 // DescribeResult holds the result of preparing describe output.

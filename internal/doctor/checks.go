@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/orchestration"
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/orchestration"
 )
 
 // CheckIntro returns the intro section with repository info.

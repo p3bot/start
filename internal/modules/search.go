@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/fault"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/fault"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // searchCategories lists the four module categories in display order. It is the

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/shell"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/shell"
 )
 
 // loadedContexts returns only the contexts whose content was successfully

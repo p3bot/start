@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/start-cli/start/internal/cli"
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/cli"
+	"github.com/p3bot/start/internal/tui"
 )
 
 func main() {

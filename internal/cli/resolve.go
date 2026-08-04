@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // ModuleSourceInstalled and ModuleSourceRegistry are the resolution layer's

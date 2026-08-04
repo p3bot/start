@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // Source distinguishes where a gathered candidate was enumerated from. Its

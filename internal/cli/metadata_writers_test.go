@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 // noColorForTest disables fatih/color so writer output is byte-exact;

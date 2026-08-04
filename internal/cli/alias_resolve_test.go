@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/config"
 )
 
 // seedStore writes the alias store directly for resolver setup.

@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 // setupTestConfig creates a temp directory with CUE config. Tests calling it
@@ -173,7 +173,7 @@ func setupTestConfigWithOrigin(t *testing.T) string {
 roles: {
 	"golang/assistant": {
 		description: "Go assistant"
-		origin:      "github.com/start-cli/library/roles/golang@v1.0.0"
+		origin:      "github.com/p3bot/library/roles/golang@v1.0.0"
 		prompt:      "You are a Go assistant."
 	}
 }
@@ -657,8 +657,8 @@ func extractDescribeSection(output, header string) string {
 		return ""
 	}
 	rest := output[idx+1:] // skip the leading newline so the slice starts at the header
-	if endIdx := strings.Index(rest, "\n\n"); endIdx != -1 {
-		return rest[:endIdx]
+	if before, _, ok := strings.Cut(rest, "\n\n"); ok {
+		return before
 	}
 	return rest
 }
@@ -746,7 +746,7 @@ func TestVerboseDumpOriginCache(t *testing.T) {
 	printVerboseDump(&buf, result, &Flags{})
 	output := buf.String()
 
-	if !strings.Contains(output, "github.com/start-cli/library/roles/golang@v1.0.0") {
+	if !strings.Contains(output, "github.com/p3bot/library/roles/golang@v1.0.0") {
 		t.Errorf("output missing origin\ngot:\n%s", output)
 	}
 
@@ -1187,7 +1187,7 @@ func TestResolveDescribeFile(t *testing.T) {
 
 func TestDeriveCacheDir(t *testing.T) {
 	t.Run("origin with version", func(t *testing.T) {
-		result := deriveCacheDir("github.com/start-cli/library/roles/golang@v1.0.0")
+		result := deriveCacheDir("github.com/p3bot/library/roles/golang@v1.0.0")
 		if result == "" {
 			t.Error("expected non-empty cache dir")
 		}
@@ -1200,7 +1200,7 @@ func TestDeriveCacheDir(t *testing.T) {
 	})
 
 	t.Run("origin without version", func(t *testing.T) {
-		result := deriveCacheDir("github.com/start-cli/library/roles/golang")
+		result := deriveCacheDir("github.com/p3bot/library/roles/golang")
 		if result != "" {
 			t.Errorf("expected empty cache dir for unversioned origin, got %q", result)
 		}

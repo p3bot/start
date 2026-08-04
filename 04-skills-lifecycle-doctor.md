@@ -43,11 +43,11 @@ Out of scope:
 - A target-resolution helper from the installation project returns an agent's skills
   directories and a skill's destination directories.
 - The full design, including the doctor behaviour, is in
-  `/home/grant/Projects/start-cli/design-skills.md`.
+  `/home/grant/Projects/p3bot/docs/skills-design.md`.
 
 ## References
 
-- `/home/grant/Projects/start-cli/design-skills.md` — the authoritative skills design,
+- `/home/grant/Projects/p3bot/docs/skills-design.md` — the authoritative skills design,
   especially the doctor section.
 - https://agentskills.io/specification — the SKILL.md frontmatter rules to validate.
 

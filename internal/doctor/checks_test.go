@@ -9,8 +9,8 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/config"
 )
 
 func TestCheckIntro(t *testing.T) {

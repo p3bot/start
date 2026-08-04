@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // captureJSON runs a --json command through the shared captureStreams scaffold
@@ -40,13 +40,13 @@ func stubLibraryIndex() *registry.Index {
 	return &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			sentinelAgentName: {
-				Module:      "github.com/start-cli/library/agents/" + sentinelAgentName + "@v1",
+				Module:      "github.com/p3bot/library/agents/" + sentinelAgentName + "@v1",
 				Description: "Sentinel agent proving the stub was consulted",
 				Bin:         "sentinel",
 				Version:     stubVersion,
 			},
 			"claude": {
-				Module:      "github.com/start-cli/library/agents/claude@v1",
+				Module:      "github.com/p3bot/library/agents/claude@v1",
 				Description: "Anthropic Claude",
 				Bin:         "claude",
 				Version:     stubVersion,
@@ -55,21 +55,21 @@ func stubLibraryIndex() *registry.Index {
 		},
 		Roles: map[string]registry.IndexEntry{
 			"go-expert": {
-				Module:      "github.com/start-cli/library/roles/go-expert@v1",
+				Module:      "github.com/p3bot/library/roles/go-expert@v1",
 				Description: "Go expert role",
 				Version:     stubVersion,
 			},
 		},
 		Contexts: map[string]registry.IndexEntry{
 			"environment": {
-				Module:      "github.com/start-cli/library/contexts/environment@v1",
+				Module:      "github.com/p3bot/library/contexts/environment@v1",
 				Description: "Environment context",
 				Version:     stubVersion,
 			},
 		},
 		Tasks: map[string]registry.IndexEntry{
 			"review/pre-commit": {
-				Module:      "github.com/start-cli/library/tasks/review/pre-commit@v1",
+				Module:      "github.com/p3bot/library/tasks/review/pre-commit@v1",
 				Description: "Pre-commit review",
 				Version:     stubVersion,
 				Tags:        []string{"review", "git"},
@@ -244,7 +244,7 @@ agents: {
 	"` + sentinelAgentName + `": {
 		bin:     "sentinel"
 		command: "{{.bin}} run"
-		origin:  "github.com/start-cli/library/agents/` + sentinelAgentName + `@` + stubVersion + `"
+		origin:  "github.com/p3bot/library/agents/` + sentinelAgentName + `@` + stubVersion + `"
 		version: "` + stubVersion + `"
 	}
 }

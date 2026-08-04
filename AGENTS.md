@@ -318,7 +318,7 @@ CUE (Configure Unify Execute) provides:
 
 ## Library Repository
 
-The `./library/` directory contains the cloned [start-cli/library](https://github.com/start-cli/library) repository for local development and testing. This directory is git-ignored.
+The `./library/` directory contains the cloned [p3bot/library](https://github.com/p3bot/library) repository for local development and testing. This directory is git-ignored.
 
 Use for: Developing and testing new modules, schemas, and registry content before publishing.
 

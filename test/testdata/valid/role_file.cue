@@ -1,6 +1,6 @@
 package config
 
-import "github.com/start-cli/start/test/testdata/schemas"
+import "github.com/p3bot/start/test/testdata/schemas"
 
 // Role with file-based content
 roles: "general-assistant": schemas.#Role & {

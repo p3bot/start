@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/modules"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/modules"
 )
 
 // installedMatcher is the installed-only matchSource behind start uninstall and

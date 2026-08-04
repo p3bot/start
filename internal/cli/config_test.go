@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/config"
+	"github.com/p3bot/start/internal/config"
 )
 
 // Tests use os.Chdir (process-global): do not add t.Parallel() or the working directory races.

@@ -16,13 +16,13 @@ import (
 	"cuelang.org/go/cue/load"
 	"cuelang.org/go/mod/modconfig"
 
-	"github.com/start-cli/start/internal/cache"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/detection"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/cache"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/detection"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/tui"
 )
 
 // AutoSetupResult contains the result of auto-setup.

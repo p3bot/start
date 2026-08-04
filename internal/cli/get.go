@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/shell"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/shell"
-	"github.com/start-cli/start/internal/tui"
 )
 
 func addGetCommand(parent *cobra.Command, flags *Flags) {

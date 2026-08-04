@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/registry"
-	"github.com/start-cli/start/internal/shell"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/shell"
 )
 
 // SettingInfo describes a valid settings key with its type.

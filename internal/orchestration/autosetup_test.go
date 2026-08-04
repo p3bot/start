@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/detection"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/detection"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestNeedsSetup(t *testing.T) {

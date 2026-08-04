@@ -5,9 +5,9 @@ import (
 	"errors"
 	"io/fs"
 
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/fault"
-	"github.com/start-cli/start/internal/registry"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/fault"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // Exit codes follow the semantic taxonomy documented under `start help

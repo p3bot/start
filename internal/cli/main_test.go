@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/start-cli/start/internal/orchestration"
+	"github.com/p3bot/start/internal/orchestration"
 )
 
 // TestMain installs the execution guard for the cli test binary. The cli tests

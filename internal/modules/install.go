@@ -14,8 +14,8 @@ import (
 	"cuelang.org/go/cue/load"
 	"cuelang.org/go/mod/modconfig"
 	"cuelang.org/go/mod/modfile"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/registry"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // InstallModule installs a module from the registry to the config directory.

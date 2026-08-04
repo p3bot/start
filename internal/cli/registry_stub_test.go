@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"cuelang.org/go/mod/modconfig"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // registryStub is an offline registry.Client for tests. It serves a canned

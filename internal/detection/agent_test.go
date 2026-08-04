@@ -3,7 +3,7 @@ package detection
 import (
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func TestDetectAgents_EmptyIndex(t *testing.T) {

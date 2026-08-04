@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/p3bot/start/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/start-cli/start/internal/config"
 )
 
 // runRoot resolves a leading alias token, then executes the root command. The
@@ -152,7 +152,7 @@ func firstPositionalIndex(root *cobra.Command, args []string) (int, bool) {
 			return 0, false
 		case strings.HasPrefix(arg, "--"):
 			name := arg[2:]
-			if eq := strings.IndexByte(name, '='); eq >= 0 {
+			if found := strings.Contains(name, "="); found {
 				i++ // --flag=value carries its value inline.
 				continue
 			}
@@ -163,7 +163,7 @@ func firstPositionalIndex(root *cobra.Command, args []string) (int, bool) {
 				i++
 			}
 		case strings.HasPrefix(arg, "-") && arg != "-":
-			if eq := strings.IndexByte(arg, '='); eq >= 0 {
+			if found := strings.Contains(arg, "="); found {
 				i++ // -f=value carries its value inline.
 				continue
 			}

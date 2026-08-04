@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/start-cli/start/internal/temp"
+	"github.com/p3bot/start/internal/temp"
 )
 
 func TestIsFilePath(t *testing.T) {

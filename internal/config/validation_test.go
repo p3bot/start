@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	internalcue "github.com/start-cli/start/internal/cue"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 func TestValidateConfig(t *testing.T) {

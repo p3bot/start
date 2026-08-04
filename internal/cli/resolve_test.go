@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/registry"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/registry"
 )
 
 func buildTestCfg(t *testing.T, cueStr string) internalcue.LoadResult {

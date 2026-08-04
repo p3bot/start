@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/start-cli/start/internal/cache"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/cache"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // canonicalIndexVersion is the fresh-cache version the stub and seeded cache
 // agree on: the index module path at a canonical (non-bare-major) version.
-const canonicalIndexVersion = "github.com/start-cli/library/index@" + stubVersion
+const canonicalIndexVersion = "github.com/p3bot/library/index@" + stubVersion
 
 // seedFreshIndexCache writes a fresh index cache pointing at the canonical index
 // version, so decideCachedIndex's module-match guard and IsFresh both hold. The

@@ -14,8 +14,8 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
 )
 
 // snapshotSeparator is the 79-rune box-drawing line emitted by printSeparator.

@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/start-cli/start/internal/config"
-	"github.com/start-cli/start/internal/modules"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/tui"
+	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/tui"
 )
 
 // matchMode and its constants are the resolution layer's names for the shared

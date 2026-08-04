@@ -1,4 +1,4 @@
-module github.com/start-cli/start
+module github.com/p3bot/start
 
 go 1.25.8
 

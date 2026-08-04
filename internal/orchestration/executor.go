@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/fault"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/fault"
 )
 
 // quotedPlaceholderPattern detects placeholders that are incorrectly wrapped in quotes.

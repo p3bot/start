@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 
+	"github.com/p3bot/start/internal/registry"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/registry"
 )
 
 type providerKey struct{}

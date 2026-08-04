@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/start-cli/start/internal/fault"
+	"github.com/p3bot/start/internal/fault"
 )
 
 // TestBuildCommand_MissingBinaryIsConfigFault asserts a configured agent whose

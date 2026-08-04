@@ -13,13 +13,13 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/fatih/color"
+	"github.com/p3bot/start/internal/config"
+	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/shell"
+	"github.com/p3bot/start/internal/temp"
+	"github.com/p3bot/start/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/start-cli/start/internal/config"
-	internalcue "github.com/start-cli/start/internal/cue"
-	"github.com/start-cli/start/internal/orchestration"
-	"github.com/start-cli/start/internal/shell"
-	"github.com/start-cli/start/internal/temp"
-	"github.com/start-cli/start/internal/tui"
 )
 
 // flagsKey is the context key for storing Flags.

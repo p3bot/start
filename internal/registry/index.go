@@ -12,10 +12,10 @@ import (
 
 // IndexModulePath is the CUE module path for the start library index.
 // Major version; resolved to latest canonical version at runtime.
-const IndexModulePath = "github.com/start-cli/library/index@v1"
+const IndexModulePath = "github.com/p3bot/library/index@v1"
 
 // SchemaModulePath is the CUE module path for the start library schemas.
-const SchemaModulePath = "github.com/start-cli/library/schemas@v1"
+const SchemaModulePath = "github.com/p3bot/library/schemas@v1"
 
 // IndexEntry represents an entry in the library index.
 type IndexEntry struct {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/start-cli/start/internal/registry"
+	"github.com/p3bot/start/internal/registry"
 )
 
 // cleanupCUECache makes CUE cache files writable before t.TempDir cleanup; CUE
