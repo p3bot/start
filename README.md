@@ -5,7 +5,7 @@
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 [![Go Report Card](https://goreportcard.com/badge/github.com/p3bot/start)](https://goreportcard.com/report/github.com/p3bot/start)
 [![Go Reference](https://pkg.go.dev/badge/github.com/p3bot/start.svg)](https://pkg.go.dev/github.com/p3bot/start)
-[![GitHub Release](https://img.shields.io/github/v/release/p3bot/start)](https://github.com/p3bot/start/releases)
+[![GitHub Tag](https://img.shields.io/github/v/tag/p3bot/start)](https://github.com/p3bot/start/tags)
 
 Context-aware AI agent launcher powered by CUE.
 
