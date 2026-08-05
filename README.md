@@ -1,4 +1,6 @@
-# start
+<p align="center">
+  <img src="images/start.png" alt="start" width="320">
+</p>
 
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 [![Go Report Card](https://goreportcard.com/badge/github.com/p3bot/start)](https://goreportcard.com/report/github.com/p3bot/start)
