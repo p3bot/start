@@ -999,6 +999,54 @@ func TestConfigRoleAdd_NoOptionalWithPromptSource(t *testing.T) {
 	}
 }
 
+func TestConfigAgentEdit_JoinedSkipsBinaryPrompt(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	chdir(t, tmpDir)
+
+	globalDir := filepath.Join(tmpDir, "start")
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	initial := `agents: {
+	"claude-code/interactive": {
+		agentdex: "claude-code"
+		bin: "leftover-bin"
+		command: "{{.bin}}"
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(globalDir, "agents.cue"), []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No Binary prompt: command keep, description keep, models keep, default keep, tags keep.
+	// One fewer line than a bin prompt would consume — EOF if Binary is still asked.
+	stdout := &bytes.Buffer{}
+	if err := configAgentEdit(slowStdin("\n\nk\n\n\n"), stdout, false, "claude-code/interactive"); err != nil {
+		t.Fatalf("edit failed: %v\nstdout: %s", err, stdout)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `supplied by agentdex "claude-code"`) {
+		t.Errorf("expected catalog bin notice, got:\n%s", out)
+	}
+	if strings.Contains(out, "Binary:") && !strings.Contains(out, "supplied by agentdex") {
+		t.Errorf("joined edit must not prompt for Binary:\n%s", out)
+	}
+
+	content, err := os.ReadFile(filepath.Join(globalDir, "agents.cue"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+	if !strings.Contains(s, `agentdex: "claude-code"`) {
+		t.Errorf("edit must keep agentdex:\n%s", s)
+	}
+	if !strings.Contains(s, `leftover-bin`) {
+		t.Errorf("edit must leave an existing CUE bin untouched:\n%s", s)
+	}
+}
+
 func TestConfigRoleEdit_OptionalPrompt(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)

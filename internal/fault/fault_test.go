@@ -25,9 +25,10 @@ func TestTag_ClassifiableViaIs(t *testing.T) {
 		domain error
 		others []error
 	}{
-		{"not found", NotFound(errors.New("x")), ErrNotFound, []error{ErrUsage, ErrUserConfig}},
-		{"usage", Usage(errors.New("x")), ErrUsage, []error{ErrNotFound, ErrUserConfig}},
-		{"user config", UserConfig(errors.New("x")), ErrUserConfig, []error{ErrNotFound, ErrUsage}},
+		{"not found", NotFound(errors.New("x")), ErrNotFound, []error{ErrUsage, ErrUserConfig, ErrTransient}},
+		{"usage", Usage(errors.New("x")), ErrUsage, []error{ErrNotFound, ErrUserConfig, ErrTransient}},
+		{"user config", UserConfig(errors.New("x")), ErrUserConfig, []error{ErrNotFound, ErrUsage, ErrTransient}},
+		{"transient", Transient(errors.New("x")), ErrTransient, []error{ErrNotFound, ErrUsage, ErrUserConfig}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,6 +70,7 @@ func TestTag_NilReturnsNil(t *testing.T) {
 		{"NotFound", NotFound},
 		{"Usage", Usage},
 		{"UserConfig", UserConfig},
+		{"Transient", Transient},
 	} {
 		if err := ctor.fn(nil); err != nil {
 			t.Errorf("%s(nil) = %v, want nil", ctor.name, err)

@@ -143,7 +143,7 @@ func prepareDoctor(cmd *cobra.Command, provider clientProvider, reserved map[str
 	report.Sections = append(report.Sections, doctor.CheckSettings(paths, settingsCfg))
 
 	if cfgLoaded {
-		report.Sections = append(report.Sections, doctor.CheckAgents(cfgResult.Value))
+		report.Sections = append(report.Sections, doctor.CheckAgents(cfgResult.Value, skillCatalogOpts(cmd)...))
 	} else {
 		report.Sections = append(report.Sections, doctor.SectionResult{
 			Name: "Agents",

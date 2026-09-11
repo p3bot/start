@@ -234,6 +234,7 @@ func TestEntryByteIdenticalToInstall(t *testing.T) {
 			description: "Claude agent"
 			tags: ["claude", "anthropic"]
 			uses: ["contexts:start/library/publishing"]
+			agentdex: "claude-code"
 			bin: "claude"
 			command: "claude --model {{model}}"
 			default_model: "claude-opus-4-8"
@@ -248,6 +249,7 @@ func TestEntryByteIdenticalToInstall(t *testing.T) {
 			Description:  "Claude agent",
 			Tags:         []string{"claude", "anthropic"},
 			Uses:         []string{"contexts:start/library/publishing"},
+			Agentdex:     "claude-code",
 			Bin:          "claude",
 			Command:      "claude --model {{model}}",
 			DefaultModel: "claude-opus-4-8",

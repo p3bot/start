@@ -3,12 +3,14 @@ package doctor
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/p3bot/agentdex"
 	"github.com/p3bot/start/internal/cache"
 	"github.com/p3bot/start/internal/config"
 )
@@ -406,6 +408,37 @@ func TestCheckAgents_MissingBinary(t *testing.T) {
 	}
 	if section.Results[0].Fix == "" {
 		t.Error("expected a fix suggestion for missing binary")
+	}
+}
+
+func TestCheckAgents_JoinedNoBin(t *testing.T) {
+	t.Parallel()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller")
+	}
+	catalogDir := filepath.Join(filepath.Dir(file), "..", "skills", "testdata", "catalog")
+	bin := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts := []agentdex.Option{
+		agentdex.WithCatalogDir(catalogDir),
+		agentdex.WithLookPath(func(string) (string, error) { return "", os.ErrNotExist }),
+		agentdex.WithBinPaths(map[string]string{"claude-code": bin}),
+	}
+	cctx := cuecontext.New()
+	v := cctx.CompileString(`agents: { "claude-code/interactive": { agentdex: "claude-code", command: "{{.bin}}" } }`)
+
+	section := CheckAgents(v, opts...)
+	if len(section.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(section.Results))
+	}
+	if section.Results[0].Status != StatusPass {
+		t.Errorf("status = %v, want StatusPass (%s)", section.Results[0].Status, section.Results[0].Message)
+	}
+	if section.Results[0].Message != bin {
+		t.Errorf("message = %q, want %q", section.Results[0].Message, bin)
 	}
 }
 

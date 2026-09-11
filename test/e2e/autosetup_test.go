@@ -132,15 +132,10 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 		t.Errorf("expected 'Fetching agent index' in output:\n%s", outputStr)
 	}
 
-	// Auto-setup picks one variant of the claude bin. The exact key depends on
-	// the index, but it must be slash-form (e.g. "claude/interactive") so the
-	// label matches what 'start install' produces. The detection output may
-	// take either of two shapes depending on whether the index ships one or
-	// many variants for the bin:
-	//   single variant : "Detected: claude/interactive"
-	//   many variants  : "Detected claude with multiple variants; using claude/interactive. Override with default_agent in config."
-	if !strings.Contains(outputStr, "claude/") {
-		t.Errorf("expected slash-form claude variant in detection output:\n%s", outputStr)
+	// Catalogued claude maps to the <id>/interactive recipe; first-run never
+	// menus variants.
+	if !strings.Contains(outputStr, "claude-code/interactive") {
+		t.Errorf("expected Detected: claude-code/interactive in output:\n%s", outputStr)
 	}
 
 	if !strings.Contains(outputStr, "Configuration saved") {
@@ -163,21 +158,23 @@ func TestE2E_AutoSetup_SingleAgent(t *testing.T) {
 		t.Fatalf("failed to read agents.cue: %v", err)
 	}
 
-	if !strings.Contains(string(agentsContent), `"claude/`) {
-		t.Errorf("agents.cue should use slash-form registry key as label:\n%s", string(agentsContent))
+	if !strings.Contains(string(agentsContent), `"claude-code/interactive"`) {
+		t.Errorf("agents.cue should use the catalog recipe key as label:\n%s", string(agentsContent))
 	}
-	if !strings.Contains(string(agentsContent), `bin:`) {
-		t.Error("agents.cue should contain bin field")
+	if !strings.Contains(string(agentsContent), `agentdex:`) {
+		t.Error("agents.cue should persist the agentdex join key")
+	}
+	if strings.Contains(string(agentsContent), `bin:`) {
+		t.Errorf("joined auto-setup must omit bin:\n%s", string(agentsContent))
 	}
 
-	// Check settings.cue content: default_agent must be the same slash-form key.
 	configContent, err := os.ReadFile(configFile)
 	if err != nil {
 		t.Fatalf("failed to read settings.cue: %v", err)
 	}
 
-	if !strings.Contains(string(configContent), `default_agent: "claude/`) {
-		t.Errorf("settings.cue should set default_agent to slash-form registry key:\n%s", string(configContent))
+	if !strings.Contains(string(configContent), `default_agent: "claude-code/interactive"`) {
+		t.Errorf("settings.cue should set default_agent to the recipe key:\n%s", string(configContent))
 	}
 }
 
@@ -287,8 +284,11 @@ func TestE2E_AutoSetup_MultipleAgents_NonTTY(t *testing.T) {
 	sort.Strings(sortedTools)
 	chosenBin := sortedTools[0]
 	wantPrefix := `"` + chosenBin + `/`
+	if chosenBin == "claude" {
+		wantPrefix = `"claude-code/`
+	}
 	if !strings.Contains(string(agentsContent), wantPrefix) {
-		t.Errorf("agents.cue should contain a %q label (lex-first bin), got:\n%s", wantPrefix, string(agentsContent))
+		t.Errorf("agents.cue should contain a %q label (lex-first product), got:\n%s", wantPrefix, string(agentsContent))
 	}
 }
 

@@ -16,6 +16,7 @@ type ConfigListItem struct {
 	Category     string            `json:"category"`
 	Name         string            `json:"name"`
 	Description  string            `json:"description,omitempty"`
+	Agentdex     string            `json:"agentdex,omitempty"`
 	Bin          string            `json:"bin,omitempty"`
 	Command      string            `json:"command,omitempty"`
 	DefaultModel string            `json:"defaultModel,omitempty"`
@@ -44,6 +45,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		if err != nil {
 			return item, err
 		}
+		item.Agentdex = agent.Agentdex
 		item.Bin = agent.Bin
 		item.Command = agent.Command
 		item.DefaultModel = agent.DefaultModel
@@ -128,7 +130,7 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 		for _, name := range order {
 			a := agents[name]
 			items = append(items, ConfigListItem{
-				Category: "agent", Name: name, Bin: a.Bin, Command: a.Command,
+				Category: "agent", Name: name, Agentdex: a.Agentdex, Bin: a.Bin, Command: a.Command,
 				DefaultModel: a.DefaultModel, Description: a.Description,
 				Models: a.Models, Tags: a.Tags, Uses: a.Uses, Source: a.Source, Origin: a.Origin,
 			})

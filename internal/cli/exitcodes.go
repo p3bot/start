@@ -82,6 +82,8 @@ func ExitCodeFromError(err error) int {
 		return ExitNotFound
 	case errors.Is(err, fault.ErrUserConfig):
 		return ExitConfig
+	case errors.Is(err, fault.ErrTransient):
+		return ExitTransient
 	}
 
 	// Schema-validation failures are user-config faults (78).

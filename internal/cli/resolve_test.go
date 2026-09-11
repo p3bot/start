@@ -244,20 +244,20 @@ func TestResolveAgent_MultipleMatches_NonTTY(t *testing.T) {
 
 	cfg := buildTestCfg(t, `{
 		agents: {
-			"claude-code": { description: "Claude for coding", bin: "claude", command: "{{.bin}}" }
-			"claude-chat": { description: "Claude for chatting", bin: "claude", command: "{{.bin}}" }
+			"gem-code": { description: "Gem for coding", bin: "gem", command: "{{.bin}}" }
+			"gem-chat": { description: "Gem for chatting", bin: "gem", command: "{{.bin}}" }
 		}
 	}`)
 
 	r := newTestResolver(cfg)
-	_, err := r.resolveAgent("claude")
+	_, err := r.resolveAgent("gem")
 	if err == nil {
 		t.Fatal("expected error for multiple matches in non-TTY")
 	}
 	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("error = %q, want containing 'ambiguous'", err.Error())
 	}
-	for _, want := range []string{"claude-code", "claude-chat"} {
+	for _, want := range []string{"gem-code", "gem-chat"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should list %q: %v", want, err)
 		}
@@ -783,7 +783,7 @@ func TestResolveContexts_PrefixMismatchError(t *testing.T) {
 	}
 }
 
-// --- Model resolution is out of scope and keeps the search-style match. ---
+// --- Model resolution is overlay, then live agentdex list, then passthrough. ---
 
 func TestResolveModelName_ExactMatch(t *testing.T) {
 	t.Parallel()

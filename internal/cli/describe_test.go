@@ -672,7 +672,7 @@ func TestVerboseDumpCUEDefinition(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	wantStrings := []string{
@@ -700,7 +700,7 @@ func TestVerboseDumpAgentCommand(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	if !strings.Contains(output, "Command: claude --model claude-sonnet-4-20250514") {
@@ -721,7 +721,7 @@ func TestVerboseDumpConfigSource(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	expectedPath := filepath.Join(dir, ".start", "settings.cue")
@@ -743,7 +743,7 @@ func TestVerboseDumpOriginCache(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	if !strings.Contains(output, "github.com/p3bot/library/roles/golang@v1.0.0") {
@@ -764,7 +764,7 @@ func TestVerboseDumpFileContent(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	if !strings.Contains(output, "You are a Go expert.") {
@@ -783,7 +783,7 @@ func TestVerboseDumpStylesMarkdownFileBody(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	// glamour's dark style emits 256-colour sequences (ESC[38;5;Nm); the fatih
@@ -827,7 +827,7 @@ roles: {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	if !strings.Contains(output, "[error:") {
@@ -844,7 +844,7 @@ func TestVerboseDumpCommand(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	if !strings.Contains(output, "git diff --staged") {
@@ -861,7 +861,7 @@ func TestVerboseDumpSeparators(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	separator := strings.Repeat("─", 79)
@@ -1522,7 +1522,7 @@ func TestVerboseDumpMetadataBlock_PlacementBetweenCacheAndCUE(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	cacheIdx := strings.Index(output, "Cache:")
@@ -1571,7 +1571,7 @@ agents: {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{})
+	printVerboseDump(&buf, result, &Flags{}, "", "")
 	output := buf.String()
 
 	// Inspect the window from just after the separator line to the CUE

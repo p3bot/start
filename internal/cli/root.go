@@ -91,6 +91,7 @@ Examples:
 		// SilenceErrors: main.go prints errors itself with coloured output.
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			flags.catalogOpts = skillCatalogOpts(cmd)
 			ctx := context.WithValue(cmd.Context(), flagsKey{}, flags)
 			cmd.SetContext(ctx)
 
@@ -135,7 +136,7 @@ Examples:
 
 	cmd.SetVersionTemplate(versionTemplate)
 
-	cmd.PersistentFlags().StringSliceVarP(&flags.Agent, "agent", "a", nil, "Override agent (launch: one library agent; skill install/describe: agentdex catalog ids)")
+	cmd.PersistentFlags().StringSliceVarP(&flags.Agent, "agent", "a", nil, "Override agent (launch: recipe or agentdex catalog id; skills: dest catalog ids)")
 	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name, file path, or http(s) URL); 'none' skips role assignment (also: nil, off, 0)")
 	cmd.PersistentFlags().StringVarP(&flags.Model, "model", "m", "", "Override model selection")
 	cmd.PersistentFlags().StringSliceVarP(&flags.Context, "context", "c", nil, "Select contexts (tags, file paths, or http(s) URLs); 'none' drops auto-loaded contexts (also: nil, off, 0)")
@@ -145,7 +146,7 @@ Examples:
 	cmd.PersistentFlags().BoolVar(&flags.Debug, "debug", false, "Debug output (implies --verbose)")
 	cmd.PersistentFlags().StringVar(&flags.Color, "color", "auto", "Colour output: auto, always, never")
 	cmd.PersistentFlags().BoolVarP(&flags.Local, "local", "l", false, "Target local config (./.start/) instead of global")
-	cmd.PersistentFlags().BoolVar(&flags.Refresh, "refresh", false, "Bypass the 24h index cache and resolve the registry index live")
+	cmd.PersistentFlags().BoolVar(&flags.Refresh, "refresh", false, "Bypass cached CUE index; commands that open agentdex also fetch catalog and models.dev live")
 
 	cmd.RunE = runStart
 

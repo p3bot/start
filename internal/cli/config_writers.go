@@ -31,6 +31,7 @@ func agentEntry(a AgentConfig) *ast.StructLit {
 	putString(fields, "description", a.Description)
 	putStringList(fields, "tags", a.Tags)
 	putStringList(fields, "uses", a.Uses)
+	putString(fields, "agentdex", a.Agentdex)
 	putString(fields, "bin", a.Bin)
 	putString(fields, "command", a.Command)
 	putString(fields, "default_model", a.DefaultModel)

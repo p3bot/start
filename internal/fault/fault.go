@@ -27,6 +27,12 @@ var (
 	// module name (retry with a different name) never collapses into a
 	// broken-environment signal (fix the environment).
 	ErrUserConfig = errors.New("invalid configuration")
+
+	// ErrTransient marks a failure a retry with backoff could clear: a
+	// registry network error, or the agent catalog unreachable. Maps to
+	// exit 75. Distinct from ErrUserConfig so a blip never collapses into
+	// "fix the environment".
+	ErrTransient = errors.New("transient error")
 )
 
 // tagged attaches a fault-domain sentinel without altering the message:
@@ -50,6 +56,9 @@ func Usage(err error) error { return tag(err, ErrUsage) }
 // UserConfig tags err as an invalid-configuration fault (exit 78). Returns nil
 // for nil.
 func UserConfig(err error) error { return tag(err, ErrUserConfig) }
+
+// Transient tags err as a retryable fault (exit 75). Returns nil for nil.
+func Transient(err error) error { return tag(err, ErrTransient) }
 
 func tag(err, domain error) error {
 	if err == nil {

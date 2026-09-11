@@ -28,6 +28,7 @@ var singleBracePlaceholderPattern = regexp.MustCompile(`\{(bin|model|role|role_f
 // Agent represents an agent configuration.
 type Agent struct {
 	Name         string
+	Agentdex     string // catalog id; empty means CUE-only bin and models
 	Bin          string
 	Command      string
 	DefaultModel string
@@ -153,19 +154,13 @@ func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
 	// This avoids strings.Fields misparsing shell-quoted tokens when the
 	// bin path contains spaces (e.g. "/my tools/claude").
 	if bin == "" {
-		return "", fault.UserConfig(fmt.Errorf(`agent 'bin' field is empty
-
-Check your agent's 'bin' field`))
+		return "", emptyBinError(cfg.Agent)
 	}
 	if _, err := exec.LookPath(bin); err != nil {
 		// Binary absent from PATH is an environment the user must fix (78),
 		// not a missing config resource (3) — note the deliberately different
 		// domain from the "agent not found" config-absent case in ExtractAgent.
-		return "", fault.UserConfig(fmt.Errorf(`binary %q not found
-
-  Error: %s
-
-Check your agent's 'bin' field or ensure the executable is in PATH`, cfg.Agent.Bin, err))
+		return "", missingBinError(cfg.Agent, err)
 	}
 
 	roleFile, err := ExpandTilde(cfg.RoleFile)
@@ -352,6 +347,36 @@ func escapeForShell(s string) string {
 	return "'" + escaped + "'"
 }
 
+func emptyBinError(agent Agent) error {
+	if agent.Agentdex != "" {
+		return fault.UserConfig(fmt.Errorf(`agent binary is empty (agentdex %q)
+
+Install the catalogued CLI or remove the join key; joined recipes have no bin field`, agent.Agentdex))
+	}
+	return fault.UserConfig(fmt.Errorf(`agent 'bin' field is empty
+
+Check your agent's 'bin' field`))
+}
+
+func missingBinError(agent Agent, err error) error {
+	if agent.Agentdex != "" {
+		name := agent.Bin
+		if name == "" {
+			name = agent.Agentdex
+		}
+		return fault.UserConfig(fmt.Errorf(`binary %q not found
+
+  Error: %s
+
+Install %s or remove the agentdex join key %q; joined recipes have no bin field`, agent.Bin, err, name, agent.Agentdex))
+	}
+	return fault.UserConfig(fmt.Errorf(`binary %q not found
+
+  Error: %s
+
+Check your agent's 'bin' field or ensure the executable is in PATH`, agent.Bin, err))
+}
+
 // ExtractAgent extracts agent configuration from CUE value.
 func ExtractAgent(cfg cue.Value, name string) (Agent, error) {
 	agentVal := cfg.LookupPath(cue.ParsePath(internalcue.KeyAgents)).LookupPath(cue.MakePath(cue.Str(name)))
@@ -364,11 +389,20 @@ func ExtractAgent(cfg cue.Value, name string) (Agent, error) {
 	return extractAgentFields(agentVal, name), nil
 }
 
+// AgentFromValue extracts agent fields from a resolved CUE value (config entry
+// or module body) without looking up the agents map.
+func AgentFromValue(agentVal cue.Value, name string) Agent {
+	return extractAgentFields(agentVal, name)
+}
+
 // extractAgentFields extracts agent fields from a resolved CUE value.
 func extractAgentFields(agentVal cue.Value, name string) Agent {
 	var agent Agent
 	agent.Name = name
 
+	if ad := agentVal.LookupPath(cue.ParsePath("agentdex")); ad.Exists() {
+		agent.Agentdex, _ = ad.String()
+	}
 	if bin := agentVal.LookupPath(cue.ParsePath("bin")); bin.Exists() {
 		agent.Bin, _ = bin.String()
 	}

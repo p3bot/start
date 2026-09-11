@@ -138,12 +138,17 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 
 	fmt.Fprintf(stdout, "Editing agent %q %s\n\n", resolvedName, tui.Annotate("press Enter to keep current value"))
 
-	newBin, err := promptString(stdout, stdin, "Binary", agent.Bin)
-	if err != nil {
-		return err
-	}
-	if newBin == "" {
-		newBin = agent.Bin
+	if agent.Agentdex != "" {
+		fmt.Fprintf(stdout, "Binary: supplied by agentdex %q\n", agent.Agentdex)
+	} else {
+		newBin, err := promptString(stdout, stdin, "Binary", agent.Bin)
+		if err != nil {
+			return err
+		}
+		if newBin == "" {
+			newBin = agent.Bin
+		}
+		agent.Bin = newBin
 	}
 
 	newCommand, err := promptString(stdout, stdin, "Command template", agent.Command)
@@ -178,7 +183,6 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 	}
 
 	agent.Name = resolvedName
-	agent.Bin = newBin
 	agent.Command = newCommand
 	agent.DefaultModel = newDefaultModel
 	agent.Description = newDescription

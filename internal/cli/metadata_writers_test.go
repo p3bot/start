@@ -25,6 +25,7 @@ func TestWriteAgentMetadata_AllFields(t *testing.T) {
 	noColorForTest(t)
 	agent := AgentConfig{
 		Name:         "claude",
+		Agentdex:     "claude-code",
 		Bin:          "claude",
 		Command:      "claude {{.prompt}}",
 		DefaultModel: "sonnet",
@@ -41,6 +42,7 @@ func TestWriteAgentMetadata_AllFields(t *testing.T) {
 
 	want := `
 Description: Anthropic Claude
+Agentdex: claude-code
 Bin: claude
 Default Model: sonnet
 Tags: anthropic, ai

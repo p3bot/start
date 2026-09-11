@@ -31,7 +31,7 @@ func TestAutoSetup_DetectionFlow(t *testing.T) {
 		},
 	}
 
-	detected := detection.DetectAgents(index)
+	detected := detection.DetectSetupAgents(index, nil)
 
 	if len(detected) == 0 {
 		t.Skip("no agents detected - bash may not be available")

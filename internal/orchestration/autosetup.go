@@ -16,12 +16,14 @@ import (
 	"cuelang.org/go/cue/load"
 	"cuelang.org/go/mod/modconfig"
 
+	"github.com/p3bot/agentdex"
 	"github.com/p3bot/start/internal/cache"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
 	"github.com/p3bot/start/internal/detection"
 	"github.com/p3bot/start/internal/modules"
 	"github.com/p3bot/start/internal/registry"
+	"github.com/p3bot/start/internal/skills"
 	"github.com/p3bot/start/internal/tui"
 )
 
@@ -33,10 +35,11 @@ type AutoSetupResult struct {
 
 // AutoSetup performs first-run auto-setup: detect AI CLI tools, prompt if needed, write config.
 type AutoSetup struct {
-	stdout io.Writer
-	stderr io.Writer
-	stdin  io.Reader
-	isTTY  bool
+	stdout      io.Writer
+	stderr      io.Writer
+	stdin       io.Reader
+	isTTY       bool
+	catalogOpts []agentdex.Option
 }
 
 // NewAutoSetup creates a new auto-setup handler.
@@ -47,6 +50,11 @@ func NewAutoSetup(stdout, stderr io.Writer, stdin io.Reader, isTTY bool) *AutoSe
 		stdin:  stdin,
 		isTTY:  isTTY,
 	}
+}
+
+// SetCatalogOpts injects agentdex options so tests stay offline.
+func (a *AutoSetup) SetCatalogOpts(opts []agentdex.Option) {
+	a.catalogOpts = opts
 }
 
 // NeedsSetup checks if auto-setup is required.
@@ -68,9 +76,10 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 	}
 	_ = cache.WriteIndex(indexVersion)
 
-	detected := detection.DetectAgents(index)
-	if len(detected) == 0 {
-		return nil, a.noAgentsError(index)
+	catalog, catalogErr := a.catalogAgents(ctx)
+	detected, err := firstRunAgents(index, catalog, catalogErr)
+	if err != nil {
+		return nil, err
 	}
 
 	selected, err := a.selectAgent(detected)
@@ -89,15 +98,15 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 		return nil, fmt.Errorf("fetching agent module: %w", err)
 	}
 
-	// selected.Key (slash-form, e.g. "claude/interactive") becomes both the agents.cue
-	// label and the settings.cue default_agent value, matching 'start install' so the
-	// two writers cannot drift.
-	agent, err := loadAgentFromModule(agentResult.SourceDir, selected.Key, client.Registry())
+	// selected.Key (slash-form, e.g. "claude-code/interactive") becomes both the
+	// agents.cue label and the settings.cue default_agent value, matching
+	// 'start install' so the two writers cannot drift.
+	agent, agentVal, err := loadAgentFromModule(agentResult.SourceDir, selected.Key, client.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("loading agent: %w", err)
 	}
 
-	configPath, err := a.writeConfig(agent)
+	configPath, err := a.writeConfig(agent, agentVal, resolvedPath)
 	if err != nil {
 		return nil, fmt.Errorf("writing config: %w", err)
 	}
@@ -106,10 +115,12 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 
 	a.installDefaultModules(ctx, client, index)
 
-	fmt.Fprintln(a.stdout)
-	fmt.Fprintln(a.stdout, "Note: The generated configuration uses generic model aliases.")
-	fmt.Fprintln(a.stdout, "If using Vertex AI, Bedrock, or other providers, you may need to")
-	fmt.Fprintln(a.stdout, "specify explicit model IDs. Edit with: start config edit agent")
+	if len(agent.Models) > 0 {
+		fmt.Fprintln(a.stdout)
+		fmt.Fprintln(a.stdout, "Note: The generated configuration uses generic model aliases.")
+		fmt.Fprintln(a.stdout, "If using Vertex AI, Bedrock, or other providers, you may need to")
+		fmt.Fprintln(a.stdout, "specify explicit model IDs. Edit with: start config edit agent")
+	}
 
 	return &AutoSetupResult{
 		Agent:      agent,
@@ -118,28 +129,15 @@ func (a *AutoSetup) Run(ctx context.Context) (*AutoSetupResult, error) {
 }
 
 // noAgentsError returns a helpful error when no agents are detected.
-func (a *AutoSetup) noAgentsError(index *registry.Index) error {
+// catalog nil lists unique bins from the index only. A non-nil catalog
+// (even empty) lists catalog products that have an <id>/interactive recipe,
+// then unique bins from unjoined index entries.
+func noAgentsError(index *registry.Index, catalog []agentdex.Agent) error {
 	var sb strings.Builder
 	sb.WriteString("No AI CLI tools detected in PATH.\n\n")
 	sb.WriteString("Install one of:\n")
 
-	var agents []struct {
-		bin  string
-		desc string
-	}
-	for _, entry := range index.Agents {
-		if entry.Bin != "" {
-			agents = append(agents, struct {
-				bin  string
-				desc string
-			}{entry.Bin, entry.Description})
-		}
-	}
-	sort.Slice(agents, func(i, j int) bool {
-		return agents[i].bin < agents[j].bin
-	})
-
-	for _, ag := range agents {
+	for _, ag := range setupInstallHints(index, catalog) {
 		if ag.desc != "" {
 			fmt.Fprintf(&sb, "  %s - %s\n", ag.bin, ag.desc)
 		} else {
@@ -151,122 +149,177 @@ func (a *AutoSetup) noAgentsError(index *registry.Index) error {
 	return fmt.Errorf("%s", sb.String())
 }
 
-// selectAgent resolves a single detected agent from the full slice returned by
-// detection. It handles four cases:
-//
-//   - one bin, one variant: use it without prompting
-//   - one bin, multiple variants: TTY variant prompt; non-TTY heuristic
-//   - multiple bins, single variants: TTY tool prompt; non-TTY pick-first bin with feedback
-//   - multiple bins, multi-variant somewhere: TTY tool prompt then variant prompt
-//     for the chosen bin if needed; non-TTY pick-first bin then heuristic
-func (a *AutoSetup) selectAgent(detected []detection.DetectedAgent) (detection.DetectedAgent, error) {
-	groups, binNames := groupAgentsByBin(detected)
+type installHint struct {
+	bin  string
+	desc string
+}
 
-	if len(binNames) == 1 {
-		bin := binNames[0]
-		variants := groups[bin]
-		if len(variants) == 1 {
-			fmt.Fprintf(a.stdout, "Detected: %s\n", variants[0].Key)
-			return variants[0], nil
+func setupInstallHints(index *registry.Index, catalog []agentdex.Agent) []installHint {
+	if catalog == nil {
+		return indexBinHints(index)
+	}
+
+	known := make(map[string]bool, len(catalog))
+	for _, item := range catalog {
+		if item.ID != "" {
+			known[item.ID] = true
 		}
-		if a.isTTY {
-			return a.promptVariantSelection(bin, variants, bufio.NewReader(a.stdin))
+	}
+
+	seen := map[string]bool{}
+	var out []installHint
+	add := func(bin, desc string) {
+		if bin == "" || seen[bin] {
+			return
 		}
-		chosen := pickVariant(variants)
-		fmt.Fprintf(a.stdout,
-			"Detected %s with multiple variants; using %s. Override with default_agent in config.\n",
-			bin, chosen.Key)
-		return chosen, nil
+		seen[bin] = true
+		out = append(out, installHint{bin: bin, desc: desc})
+	}
+
+	for _, item := range catalog {
+		if index == nil {
+			continue
+		}
+		if _, ok := index.Agents[item.ID+detection.DefaultSetupVariant]; !ok {
+			continue
+		}
+		bin := item.Bin
+		if bin == "" {
+			bin = item.ID
+		}
+		desc := item.Description
+		if desc == "" {
+			desc = item.Name
+		}
+		add(bin, desc)
+	}
+	if index != nil {
+		for key, entry := range index.Agents {
+			if entry.Bin == "" {
+				continue
+			}
+			tool, _, _ := strings.Cut(key, "/")
+			if known[tool] {
+				continue
+			}
+			add(entry.Bin, entry.Description)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].bin < out[j].bin
+	})
+	return out
+}
+
+func indexBinHints(index *registry.Index) []installHint {
+	if index == nil {
+		return nil
+	}
+	var out []installHint
+	seen := map[string]bool{}
+	for _, entry := range index.Agents {
+		if entry.Bin == "" || seen[entry.Bin] {
+			continue
+		}
+		seen[entry.Bin] = true
+		out = append(out, installHint{bin: entry.Bin, desc: entry.Description})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].bin < out[j].bin
+	})
+	return out
+}
+
+// firstRunAgents is the first-run candidate set. A catalog error aborts
+// before LookPath: joined recipes have no index bin, so a degraded scan
+// would miss catalogued tools and could write the wrong default. Unjoined
+// index bins are considered only after a successful catalog list.
+func firstRunAgents(index *registry.Index, catalog []agentdex.Agent, catalogErr error) ([]detection.DetectedAgent, error) {
+	if catalogErr != nil {
+		return nil, catalogErr
+	}
+	detected := detection.DetectSetupAgents(index, foundCatalogProducts(catalog))
+	if len(detected) == 0 {
+		return nil, noAgentsError(index, catalog)
+	}
+	return detected, nil
+}
+
+func (a *AutoSetup) catalogAgents(ctx context.Context) ([]agentdex.Agent, error) {
+	// First-run may wait on the registry: Latest so setup sees current recipes
+	// and warms the cache later CacheOnly launches use.
+	opts := make([]agentdex.Option, 0, 1+len(a.catalogOpts))
+	opts = append(opts, agentdex.WithCatalogFetch(agentdex.FetchLatest))
+	opts = append(opts, a.catalogOpts...)
+	idx, err := skills.OpenIndex("", opts...)
+	if err != nil {
+		return nil, mapSetupCatalogErr(err)
+	}
+	res, err := idx.Agents.List(ctx, agentdex.AgentQuery{Enrich: agentdex.EnrichNone})
+	if err != nil {
+		return nil, mapSetupCatalogErr(err)
+	}
+	return res.Items, nil
+}
+
+func foundCatalogProducts(items []agentdex.Agent) []detection.CatalogProduct {
+	if len(items) == 0 {
+		return nil
+	}
+	var out []detection.CatalogProduct
+	for _, item := range items {
+		if !item.Detection.Found {
+			continue
+		}
+		out = append(out, detection.CatalogProduct{
+			ID:         item.ID,
+			Bin:        item.Bin,
+			BinaryPath: item.Detection.BinaryPath,
+		})
+	}
+	return out
+}
+
+// selectAgent resolves one product from DetectSetupAgents. Variants are already
+// collapsed there; this only menus or picks among products.
+func (a *AutoSetup) selectAgent(detected []detection.DetectedAgent) (detection.DetectedAgent, error) {
+	if len(detected) == 0 {
+		return detection.DetectedAgent{}, fmt.Errorf("no agents detected")
+	}
+	products := append([]detection.DetectedAgent(nil), detected...)
+	sort.Slice(products, func(i, j int) bool {
+		return products[i].Key < products[j].Key
+	})
+
+	if len(products) == 1 {
+		fmt.Fprintf(a.stdout, "Detected: %s\n", products[0].Key)
+		return products[0], nil
 	}
 
 	if a.isTTY {
-		reps := make([]detection.DetectedAgent, 0, len(binNames))
-		for _, bin := range binNames {
-			reps = append(reps, pickVariant(groups[bin]))
-		}
-		// Shared reader: bufio look-ahead would otherwise drop bytes between
-		// the tool prompt and the cascading variant prompt.
-		reader := bufio.NewReader(a.stdin)
-		chosen, err := a.promptSelection(reps, reader)
-		if err != nil {
-			return detection.DetectedAgent{}, err
-		}
-		variants := groups[chosen.Entry.Bin]
-		if len(variants) == 1 {
-			return variants[0], nil
-		}
-		return a.promptVariantSelection(chosen.Entry.Bin, variants, reader)
+		return a.promptSelection(products, bufio.NewReader(a.stdin))
 	}
 
-	// Non-TTY multi-bin: deterministic pick-first with stdout feedback.
-	chosenBin := binNames[0]
-	chosen := pickVariant(groups[chosenBin])
+	bins := make([]string, 0, len(products))
+	seen := map[string]bool{}
+	for _, p := range products {
+		if p.Entry.Bin == "" || seen[p.Entry.Bin] {
+			continue
+		}
+		seen[p.Entry.Bin] = true
+		bins = append(bins, p.Entry.Bin)
+	}
+	sort.Strings(bins)
+	chosen := products[0]
 	fmt.Fprintf(a.stdout,
 		"Detected multiple AI CLI tools (%s); using %s. Override with default_agent in config.\n",
-		strings.Join(binNames, ", "), chosen.Key)
+		strings.Join(bins, ", "), chosen.Key)
 	return chosen, nil
 }
 
-// groupAgentsByBin groups detected agents by their bin name. The returned
-// binNames slice is sorted lexicographically and each group is sorted by Key
-// to keep auto-setup output deterministic regardless of map iteration order.
-func groupAgentsByBin(detected []detection.DetectedAgent) (map[string][]detection.DetectedAgent, []string) {
-	groups := make(map[string][]detection.DetectedAgent)
-	for _, d := range detected {
-		groups[d.Entry.Bin] = append(groups[d.Entry.Bin], d)
-	}
-	binNames := make([]string, 0, len(groups))
-	for bin := range groups {
-		binNames = append(binNames, bin)
-	}
-	sort.Strings(binNames)
-	for _, bin := range binNames {
-		variants := groups[bin]
-		sort.Slice(variants, func(i, j int) bool {
-			return variants[i].Key < variants[j].Key
-		})
-		groups[bin] = variants
-	}
-	return groups, binNames
-}
-
-// pickVariant chooses a single variant from a group sharing a bin. Priority:
-//  1. key ends with "/interactive"
-//  2. key has no slash (bare-name entry)
-//  3. lex-first key
-//
-// Callers must pass a non-empty slice. The function sorts a local copy so the
-// result is stable regardless of input order. groupAgentsByBin already sorts
-// each group, so the in-flow re-sort is a defensive no-op for production
-// callers — it exists so unit tests can pass unsorted slices and still get
-// deterministic output.
-func pickVariant(variants []detection.DetectedAgent) detection.DetectedAgent {
-	sorted := make([]detection.DetectedAgent, len(variants))
-	copy(sorted, variants)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Key < sorted[j].Key
-	})
-	for _, v := range sorted {
-		if strings.HasSuffix(v.Key, "/interactive") {
-			return v
-		}
-	}
-	for _, v := range sorted {
-		if !strings.Contains(v.Key, "/") {
-			return v
-		}
-	}
-	return sorted[0]
-}
-
-// promptSelection prompts the user to choose between detected bins. Each
-// element of reps is the heuristic representative for one bin; the bin name is
-// shown in the menu and the representative's description is reused for context.
-// Variant selection (if the chosen bin has multiple variants) is the caller's
-// responsibility — promptSelection only resolves the bin.
-//
-// reader is the shared bufio.Reader created by selectAgent so a follow-up
-// variant prompt sees the same buffered stream.
+// promptSelection prompts the user to choose among detected products. Each
+// element is one product (already collapsed to the recipe that would be
+// installed). The bin name is shown in the menu.
 func (a *AutoSetup) promptSelection(reps []detection.DetectedAgent, reader *bufio.Reader) (detection.DetectedAgent, error) {
 	tui.ColorHeader.Fprintln(a.stdout, "Multiple AI CLI tools detected:")
 	fmt.Fprintln(a.stdout)
@@ -314,47 +367,6 @@ func (a *AutoSetup) promptSelection(reps []detection.DetectedAgent, reader *bufi
 	return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s", input)
 }
 
-// promptVariantSelection prompts the user to pick one variant for a single bin.
-// Each row spans two lines: the slash-form key on the first line and an
-// indented description (when present) on the second. reader is shared with the
-// (optional) preceding tool prompt so bufio doesn't drop bytes between reads.
-func (a *AutoSetup) promptVariantSelection(bin string, variants []detection.DetectedAgent, reader *bufio.Reader) (detection.DetectedAgent, error) {
-	tui.ColorHeader.Fprintf(a.stdout, "Multiple variants of %s detected:\n", bin)
-	fmt.Fprintln(a.stdout)
-
-	for i, v := range variants {
-		fmt.Fprintf(a.stdout, "  %d. ", i+1)
-		tui.ColorAgents.Fprintln(a.stdout, v.Key)
-		if v.Entry.Description != "" {
-			tui.ColorDim.Fprintf(a.stdout, "     %s\n", v.Entry.Description)
-		}
-		fmt.Fprintln(a.stdout)
-	}
-
-	fmt.Fprint(a.stdout, "Select agent: ")
-
-	input, err := readSelection(reader)
-	if err != nil {
-		return detection.DetectedAgent{}, err
-	}
-
-	if choice, convErr := strconv.Atoi(input); convErr == nil {
-		if choice >= 1 && choice <= len(variants) {
-			return variants[choice-1], nil
-		}
-		return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s (choose 1-%d)", input, len(variants))
-	}
-
-	inputLower := strings.ToLower(input)
-	for _, v := range variants {
-		if strings.ToLower(v.Key) == inputLower {
-			return v, nil
-		}
-	}
-
-	return detection.DetectedAgent{}, fmt.Errorf("invalid selection: %s", input)
-}
-
 // readSelection reads a single trimmed line from the shared bufio.Reader.
 func readSelection(reader *bufio.Reader) (string, error) {
 	input, err := reader.ReadString('\n')
@@ -365,7 +377,7 @@ func readSelection(reader *bufio.Reader) (string, error) {
 }
 
 // loadAgentFromModule loads an agent from a fetched module directory.
-func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, error) {
+func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, cue.Value, error) {
 	cctx := cuecontext.New()
 
 	cfg := &load.Config{
@@ -375,17 +387,17 @@ func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, error)
 
 	insts := load.Instances([]string{"."}, cfg)
 	if len(insts) == 0 {
-		return Agent{}, fmt.Errorf("no CUE instances found in %s", dir)
+		return Agent{}, cue.Value{}, fmt.Errorf("no CUE instances found in %s", dir)
 	}
 
 	inst := insts[0]
 	if inst.Err != nil {
-		return Agent{}, fmt.Errorf("loading module: %w", inst.Err)
+		return Agent{}, cue.Value{}, fmt.Errorf("loading module: %w", inst.Err)
 	}
 
 	v := cctx.BuildInstance(inst)
 	if err := v.Err(); err != nil {
-		return Agent{}, fmt.Errorf("building module: %w", err)
+		return Agent{}, cue.Value{}, fmt.Errorf("building module: %w", err)
 	}
 
 	return extractAgentFromValue(v, key)
@@ -393,7 +405,7 @@ func loadAgentFromModule(dir, key string, reg modconfig.Registry) (Agent, error)
 
 // extractAgentFromValue extracts agent config from a CUE value, trying multiple
 // lookup paths to handle both user config and registry module formats.
-func extractAgentFromValue(v cue.Value, name string) (Agent, error) {
+func extractAgentFromValue(v cue.Value, name string) (Agent, cue.Value, error) {
 	agentVal := v.LookupPath(cue.ParsePath(internalcue.KeyAgents)).LookupPath(cue.MakePath(cue.Str(name)))
 	if !agentVal.Exists() {
 		// Singular "agent" field is the registry module style.
@@ -405,18 +417,19 @@ func extractAgentFromValue(v cue.Value, name string) (Agent, error) {
 
 	agent := extractAgentFields(agentVal, name)
 
-	if agent.Bin == "" {
-		return agent, fmt.Errorf("agent %s missing required 'bin' field", name)
-	}
 	if agent.Command == "" {
-		return agent, fmt.Errorf("agent %s missing required 'command' field", name)
+		return agent, agentVal, fmt.Errorf("agent %s missing required 'command' field", name)
+	}
+	if agent.Bin == "" && agent.Agentdex == "" {
+		return agent, agentVal, fmt.Errorf("agent %s missing required 'bin' field", name)
 	}
 
-	return agent, nil
+	return agent, agentVal, nil
 }
 
-// writeConfig writes the agent configuration to the global config directory.
-func (a *AutoSetup) writeConfig(agent Agent) (string, error) {
+// writeConfig writes the agent entry through the shared AST upsert (same as
+// install) and settings.cue for default_agent.
+func (a *AutoSetup) writeConfig(agent Agent, agentVal cue.Value, origin string) (string, error) {
 	paths, err := config.ResolvePaths("")
 	if err != nil {
 		return "", err
@@ -426,9 +439,12 @@ func (a *AutoSetup) writeConfig(agent Agent) (string, error) {
 		return "", fmt.Errorf("creating config directory: %w", err)
 	}
 
-	agentContent := generateAgentCUE(agent)
+	entry, err := modules.FormatModuleStruct(agentVal, "agents", origin, "")
+	if err != nil {
+		return "", fmt.Errorf("formatting agent entry: %w", err)
+	}
 	agentPath := filepath.Join(paths.Global, "agents.cue")
-	if err := os.WriteFile(agentPath, []byte(agentContent), 0644); err != nil {
+	if err := modules.UpsertConfigModule(agentPath, "agents", agent.Name, entry); err != nil {
 		return "", fmt.Errorf("writing agents file: %w", err)
 	}
 
@@ -439,51 +455,6 @@ func (a *AutoSetup) writeConfig(agent Agent) (string, error) {
 	}
 
 	return configPath, nil
-}
-
-// generateAgentCUE generates CUE content for an agent.
-func generateAgentCUE(agent Agent) string {
-	var sb strings.Builder
-
-	sb.WriteString("// Auto-generated by start auto-setup\n")
-	sb.WriteString("// Edit this file to customize your agent configuration\n")
-	sb.WriteString("//\n")
-	sb.WriteString("// Note: Model values below are generic aliases. If using Vertex AI, Bedrock,\n")
-	sb.WriteString("// or other providers, you may need to replace them with explicit model IDs.\n")
-	sb.WriteString("// Example for Vertex AI: \"opus\" -> \"claude-opus-4-5@20251101\"\n\n")
-	sb.WriteString("agents: {\n")
-	fmt.Fprintf(&sb, "\t%q: {\n", agent.Name)
-	fmt.Fprintf(&sb, "\t\tbin:     %q\n", agent.Bin)
-	fmt.Fprintf(&sb, "\t\tcommand: %q\n", agent.Command)
-
-	if agent.DefaultModel != "" {
-		fmt.Fprintf(&sb, "\t\tdefault_model: %q\n", agent.DefaultModel)
-	}
-
-	if agent.Description != "" {
-		fmt.Fprintf(&sb, "\t\tdescription: %q\n", agent.Description)
-	}
-
-	if len(agent.Models) > 0 {
-		sb.WriteString("\t\tmodels: {\n")
-
-		// Sort for deterministic output.
-		var modelNames []string
-		for name := range agent.Models {
-			modelNames = append(modelNames, name)
-		}
-		sort.Strings(modelNames)
-
-		for _, name := range modelNames {
-			fmt.Fprintf(&sb, "\t\t\t%q: %q\n", name, agent.Models[name])
-		}
-		sb.WriteString("\t\t}\n")
-	}
-
-	sb.WriteString("\t}\n")
-	sb.WriteString("}\n")
-
-	return sb.String()
 }
 
 // generateSettingsCUE generates CUE content for settings.

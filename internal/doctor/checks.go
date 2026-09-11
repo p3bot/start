@@ -1,6 +1,8 @@
 package doctor
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -11,10 +13,12 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	"github.com/p3bot/agentdex"
 	"github.com/p3bot/start/internal/cache"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
 	"github.com/p3bot/start/internal/orchestration"
+	"github.com/p3bot/start/internal/skills"
 )
 
 // CheckIntro returns the intro section with repository info.
@@ -172,7 +176,10 @@ func checkConfigDir(dir, scope string, exists bool) []CheckResult {
 }
 
 // CheckAgents validates configured agent binaries are available.
-func CheckAgents(cfgValue cue.Value) SectionResult {
+// catalogOpts is the agentdex seam: the CLI doctor passes skillCatalogOpts;
+// tests inject a fixture catalog. Production callers that omit it use the
+// default agentdex open.
+func CheckAgents(cfgValue cue.Value, catalogOpts ...agentdex.Option) SectionResult {
 	section := SectionResult{Name: "Agents"}
 
 	agents := cfgValue.LookupPath(cue.ParsePath(internalcue.KeyAgents))
@@ -200,6 +207,21 @@ func CheckAgents(cfgValue cue.Value) SectionResult {
 		count++
 		name := iter.Selector().Unquoted()
 		agent := iter.Value()
+
+		adVal := agent.LookupPath(cue.ParsePath("agentdex"))
+		if adVal.Exists() {
+			id, err := adVal.String()
+			if err != nil || id == "" {
+				section.Results = append(section.Results, CheckResult{
+					Status:  StatusWarn,
+					Label:   name,
+					Message: "Invalid agentdex field",
+				})
+				continue
+			}
+			section.Results = append(section.Results, checkJoinedAgent(name, id, catalogOpts))
+			continue
+		}
 
 		binVal := agent.LookupPath(cue.ParsePath("bin"))
 		if !binVal.Exists() {
@@ -243,6 +265,57 @@ func CheckAgents(cfgValue cue.Value) SectionResult {
 	}
 
 	return section
+}
+
+func checkJoinedAgent(name, id string, catalogOpts []agentdex.Option) CheckResult {
+	// Latest: doctor is diagnostic, not a launch path. Warms the catalog
+	// CacheOnly launches then read.
+	opts := make([]agentdex.Option, 0, 1+len(catalogOpts))
+	opts = append(opts, agentdex.WithCatalogFetch(agentdex.FetchLatest))
+	opts = append(opts, catalogOpts...)
+	idx, err := skills.OpenIndex("", opts...)
+	if err != nil {
+		return CheckResult{
+			Status:  StatusFail,
+			Label:   name,
+			Message: "agent catalog unavailable",
+			Fix:     "retry when the agent catalog is reachable",
+		}
+	}
+	detail, err := idx.Agents.Get(context.Background(), id, agentdex.AgentGetQuery{Enrich: agentdex.EnrichNone})
+	if err != nil {
+		if errors.Is(err, agentdex.ErrAgentUnknown) {
+			return CheckResult{
+				Status:  StatusFail,
+				Label:   name,
+				Message: fmt.Sprintf("unknown agentdex id %q", id),
+				Fix:     "set agentdex to a catalogued product id or remove the join key",
+			}
+		}
+		return CheckResult{
+			Status:  StatusFail,
+			Label:   name,
+			Message: "agent catalog unavailable",
+			Fix:     "retry when the agent catalog is reachable",
+		}
+	}
+	if detail.Detection.Found && detail.Detection.BinaryPath != "" {
+		return CheckResult{
+			Status:  StatusPass,
+			Label:   name,
+			Message: detail.Detection.BinaryPath,
+		}
+	}
+	bin := detail.Bin
+	if bin == "" {
+		bin = id
+	}
+	return CheckResult{
+		Status:  StatusFail,
+		Label:   name,
+		Message: "NOT FOUND",
+		Fix:     fmt.Sprintf("Install %s or remove from config", bin),
+	}
 }
 
 // CheckRoles validates configured role files exist.

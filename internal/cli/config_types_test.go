@@ -15,6 +15,7 @@ import (
 func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 	ctx := cuecontext.New()
 	val := ctx.CompileString(`{
+		agentdex:      "claude-code"
 		bin:           "claude"
 		command:       "claude --model {{.model}} \"{{.prompt}}\""
 		default_model: "sonnet"
@@ -33,6 +34,9 @@ func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 
 	got := decodeAgentValue(val)
 
+	if got.Agentdex != "claude-code" {
+		t.Errorf("Agentdex: got %q want %q", got.Agentdex, "claude-code")
+	}
 	if got.Bin != "claude" {
 		t.Errorf("Bin: got %q want %q", got.Bin, "claude")
 	}
@@ -128,7 +132,7 @@ func TestDecodeAgentValue_Empty(t *testing.T) {
 
 	got := decodeAgentValue(val)
 
-	if got.Bin != "" || got.Command != "" || got.DefaultModel != "" ||
+	if got.Agentdex != "" || got.Bin != "" || got.Command != "" || got.DefaultModel != "" ||
 		got.Description != "" || got.Origin != "" ||
 		len(got.Tags) != 0 || len(got.Uses) != 0 || len(got.Models) != 0 {
 		t.Errorf("expected zero-value AgentConfig, got %+v", got)

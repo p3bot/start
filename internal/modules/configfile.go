@@ -22,7 +22,7 @@ func CategoryFieldOrder(category string) []string {
 	case "roles":
 		return []string{"description", "tags", "uses", "file", "command", "prompt", "optional"}
 	case "agents":
-		return []string{"description", "tags", "uses", "bin", "command", "default_model", "models"}
+		return []string{"description", "tags", "uses", "agentdex", "bin", "command", "default_model", "models"}
 	case "contexts":
 		return []string{"description", "tags", "uses", "file", "command", "prompt", "required", "default"}
 	default:

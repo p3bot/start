@@ -32,6 +32,7 @@ func TestExitCodeFromError(t *testing.T) {
 		{"not-found sentinel", fault.NotFound(errors.New("role not found")), ExitNotFound},
 		{"usage sentinel", fault.Usage(errors.New("bad flag")), ExitUsage},
 		{"user-config sentinel", fault.UserConfig(errors.New("bad cue")), ExitConfig},
+		{"transient sentinel", fault.Transient(errors.New("catalog blip")), ExitTransient},
 		{"validation error", &internalcue.ValidationError{Message: "bad"}, ExitConfig},
 		{"permission", fmt.Errorf("writing: %w", fs.ErrPermission), ExitPermission},
 		{"deadline exceeded", fmt.Errorf("fetch: %w", context.DeadlineExceeded), ExitTransient},

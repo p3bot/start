@@ -12,6 +12,7 @@ import (
 // AgentConfig represents an agent configuration for editing.
 type AgentConfig struct {
 	Name         string            `json:"name"`
+	Agentdex     string            `json:"agentdex,omitempty"`
 	Bin          string            `json:"bin,omitempty"`
 	Command      string            `json:"command,omitempty"`
 	DefaultModel string            `json:"defaultModel,omitempty"`
@@ -28,6 +29,9 @@ type AgentConfig struct {
 func decodeAgentValue(val cue.Value) AgentConfig {
 	var agent AgentConfig
 
+	if v := val.LookupPath(cue.ParsePath("agentdex")); v.Exists() {
+		agent.Agentdex, _ = v.String()
+	}
 	if v := val.LookupPath(cue.ParsePath("bin")); v.Exists() {
 		agent.Bin, _ = v.String()
 	}

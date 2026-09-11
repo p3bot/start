@@ -33,6 +33,63 @@ func TestBuildCommand_MissingBinaryIsConfigFault(t *testing.T) {
 	if errors.Is(err, fault.ErrNotFound) {
 		t.Error("missing binary must not classify as not-found")
 	}
+	if !strings.Contains(err.Error(), "bin' field") {
+		t.Errorf("unjoined miss should still mention the bin field, got %v", err)
+	}
+}
+
+func TestBuildCommand_JoinedMissingBinaryNamesJoinKey(t *testing.T) {
+	t.Parallel()
+	executor := NewExecutor("")
+	cfg := ExecuteConfig{
+		Agent: Agent{
+			Agentdex: "claude-code",
+			Bin:      "definitely-not-a-real-binary-xyz",
+			Command:  "{{.bin}} run",
+		},
+	}
+	_, err := executor.BuildCommand(cfg)
+	if err == nil {
+		t.Fatal("expected an error for a missing binary")
+	}
+	if !errors.Is(err, fault.ErrUserConfig) {
+		t.Errorf("missing binary should be a user-config fault; got %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `agentdex join key "claude-code"`) {
+		t.Errorf("joined miss should name the join key, got %v", err)
+	}
+	if !strings.Contains(msg, "Install definitely-not-a-real-binary-xyz") {
+		t.Errorf("joined miss should name the catalogued binary, got %v", err)
+	}
+	if strings.Contains(msg, "bin' field") {
+		t.Errorf("joined miss must not point at a CUE bin field, got %v", err)
+	}
+}
+
+func TestBuildCommand_JoinedEmptyBinaryNamesJoinKey(t *testing.T) {
+	t.Parallel()
+	executor := NewExecutor("")
+	cfg := ExecuteConfig{
+		Agent: Agent{
+			Agentdex: "claude-code",
+			Command:  "{{.bin}} run",
+		},
+	}
+	_, err := executor.BuildCommand(cfg)
+	if err == nil {
+		t.Fatal("expected an error for an empty binary")
+	}
+	if !errors.Is(err, fault.ErrUserConfig) {
+		t.Errorf("empty binary should be a user-config fault; got %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `agentdex "claude-code"`) {
+		t.Errorf("joined empty bin should name the join key, got %v", err)
+	}
+	if strings.Contains(msg, "bin' field") {
+		t.Errorf("joined empty bin must not point at a CUE bin field, got %v", err)
+	}
 }
 
 // TestExtractAgent_AbsentIsNotFound asserts a named agent absent from config is

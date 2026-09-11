@@ -17,7 +17,7 @@ import (
 // it outside the metadata block (config_get as a header line; describe via
 // ExtractUTDFields).
 func writeAgentMetadata(w io.Writer, agent AgentConfig) {
-	hasHeader := agent.Description != "" || agent.Bin != "" ||
+	hasHeader := agent.Description != "" || agent.Agentdex != "" || agent.Bin != "" ||
 		agent.DefaultModel != "" || len(agent.Tags) > 0
 	hasModels := len(agent.Models) > 0
 	if !hasHeader && !hasModels {
@@ -29,6 +29,9 @@ func writeAgentMetadata(w io.Writer, agent AgentConfig) {
 
 	if agent.Description != "" {
 		fmt.Fprintf(w, "%s %s\n", label("Description:"), agent.Description)
+	}
+	if agent.Agentdex != "" {
+		fmt.Fprintf(w, "%s %s\n", label("Agentdex:"), agent.Agentdex)
 	}
 	if agent.Bin != "" {
 		fmt.Fprintf(w, "%s %s\n", label("Bin:"), agent.Bin)

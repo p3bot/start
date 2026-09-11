@@ -3,14 +3,19 @@ package orchestration
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/p3bot/agentdex"
 	"github.com/p3bot/start/internal/config"
 	"github.com/p3bot/start/internal/detection"
+	"github.com/p3bot/start/internal/fault"
 	"github.com/p3bot/start/internal/registry"
 )
 
@@ -52,42 +57,63 @@ func TestNeedsSetup(t *testing.T) {
 	}
 }
 
-func TestGenerateAgentCUE(t *testing.T) {
-	agent := Agent{
-		Name:         "claude",
-		Bin:          "claude",
-		Command:      "{{.bin}} --model {{.model}}",
-		DefaultModel: "sonnet",
-		Description:  "Anthropic Claude",
-		Models: map[string]string{
-			"sonnet": "claude-sonnet-4",
-			"opus":   "claude-opus-4",
+func compileAgentVal(t *testing.T, src string) cue.Value {
+	t.Helper()
+	v := cuecontext.New().CompileString(src)
+	if err := v.Err(); err != nil {
+		t.Fatalf("compile agent value: %v", err)
+	}
+	return v
+}
+
+func isolateAutoSetupConfig(t *testing.T) *AutoSetup {
+	t.Helper()
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+	return NewAutoSetup(&bytes.Buffer{}, &bytes.Buffer{}, strings.NewReader(""), false)
+}
+
+func TestCatalogAgents_Unavailable(t *testing.T) {
+	as := isolateAutoSetupConfig(t)
+	as.SetCatalogOpts([]agentdex.Option{
+		agentdex.WithCatalogDir(filepath.Join(t.TempDir(), "missing-catalog")),
+	})
+	_, err := as.catalogAgents(context.Background())
+	if err == nil {
+		t.Fatal("expected catalog error")
+	}
+	if !strings.Contains(err.Error(), "agent catalog unavailable") {
+		t.Errorf("error = %v, want catalog unavailable", err)
+	}
+	if !strings.Contains(err.Error(), "cannot detect catalogued CLI tools") {
+		t.Errorf("error = %v, want detection wording, not join", err)
+	}
+	if strings.Contains(err.Error(), "join") {
+		t.Errorf("first-run catalog error must not talk about join: %v", err)
+	}
+	if !errors.Is(err, fault.ErrTransient) && !errors.Is(err, fault.ErrUserConfig) {
+		t.Errorf("error = %v, want transient or user-config fault", err)
+	}
+}
+
+func TestFirstRunAgents_CatalogErrorDoesNotFallback(t *testing.T) {
+	index := &registry.Index{
+		Agents: map[string]registry.IndexEntry{
+			"shell/interactive":       {Bin: "bash", Description: "Shell"},
+			"claude-code/interactive": {Description: "Claude"},
 		},
 	}
-
-	content := generateAgentCUE(agent)
-
-	if !strings.Contains(content, `"claude"`) {
-		t.Error("missing agent name")
+	catalogErr := mapSetupCatalogErr(agentdex.ErrCatalogUnavailable)
+	got, err := firstRunAgents(index, nil, catalogErr)
+	if err == nil {
+		t.Fatalf("catalog error must abort even when an unjoined bin is on PATH, got %+v", got)
 	}
-	if !strings.Contains(content, `bin:`) {
-		t.Error("missing bin field")
+	if !errors.Is(err, catalogErr) {
+		t.Errorf("err = %v, want the catalog error (not PATH-empty hints or a leftover product)", err)
 	}
-	if !strings.Contains(content, `command:`) {
-		t.Error("missing command field")
-	}
-	if !strings.Contains(content, `default_model:`) {
-		t.Error("missing default_model field")
-	}
-	if !strings.Contains(content, `models:`) {
-		t.Error("missing models field")
-	}
-	if !strings.Contains(content, "Auto-generated") {
-		t.Error("missing auto-generated comment")
-	}
-	// Settings should NOT be in agents.cue (it goes in settings.cue)
-	if strings.Contains(content, `default_agent:`) {
-		t.Error("default_agent should not be in agents.cue")
+	if strings.Contains(err.Error(), "No AI CLI tools detected") {
+		t.Errorf("must not pretend PATH is empty: %v", err)
 	}
 }
 
@@ -105,27 +131,37 @@ func TestGenerateSettingsCUE(t *testing.T) {
 	}
 }
 
-func TestGenerateAgentCUE_MinimalAgent(t *testing.T) {
+func TestWriteConfig_JoinedOmitsBinAndModels(t *testing.T) {
+	as := isolateAutoSetupConfig(t)
 	agent := Agent{
-		Name:    "test",
-		Bin:     "test-bin",
-		Command: "{{.bin}}",
+		Name:     "claude-code/interactive",
+		Agentdex: "claude-code",
+		Command:  "{{.bin}} --model {{.model}}",
 	}
-
-	content := generateAgentCUE(agent)
-
-	if !strings.Contains(content, `bin:`) {
-		t.Error("missing bin field")
+	val := compileAgentVal(t, `{
+		agentdex: "claude-code"
+		command: "{{.bin}} --model {{.model}}"
+	}`)
+	path, err := as.writeConfig(agent, val, "github.com/p3bot/library/agents/claude-code/interactive@v1.0.0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(content, `command:`) {
-		t.Error("missing command field")
+	content, err := os.ReadFile(filepath.Join(filepath.Dir(path), "agents.cue"))
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	if strings.Contains(content, `default_model:`) {
-		t.Error("should not have default_model when empty")
+	s := string(content)
+	if !strings.Contains(s, `agentdex: "claude-code"`) {
+		t.Errorf("missing agentdex:\n%s", s)
 	}
-	if strings.Contains(content, `description:`) {
-		t.Error("should not have description when empty")
+	if !strings.Contains(s, `origin:`) {
+		t.Errorf("shared writer should persist origin:\n%s", s)
+	}
+	if strings.Contains(s, "\tbin:") || strings.Contains(s, " bin:") {
+		t.Errorf("joined recipe must omit bin:\n%s", s)
+	}
+	if strings.Contains(s, `models:`) {
+		t.Errorf("joined recipe must omit empty models:\n%s", s)
 	}
 }
 
@@ -157,23 +193,31 @@ func TestAutoSetup_NewAutoSetup(t *testing.T) {
 // default_agent value are byte-for-byte identical. This is the alignment
 // requirement that lets auto-setup and 'start install' coexist without drift.
 func TestGenerateConfig_SlashKeyLabelAlignment(t *testing.T) {
-	const key = "claude/interactive"
-	agent := Agent{
-		Name:    key,
-		Bin:     "claude",
-		Command: "{{.bin}}",
+	const key = "claude-code/interactive"
+	as := isolateAutoSetupConfig(t)
+	agent := Agent{Name: key, Agentdex: "claude-code", Command: "{{.bin}}"}
+	val := compileAgentVal(t, `{
+		agentdex: "claude-code"
+		command: "{{.bin}}"
+	}`)
+	path, err := as.writeConfig(agent, val, "github.com/p3bot/library/agents/claude-code/interactive@v1.0.0")
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	agentCUE := generateAgentCUE(agent)
-	settingsCUE := generateSettingsCUE(agent.Name)
-
-	wantLabel := `"claude/interactive": {`
-	if !strings.Contains(agentCUE, wantLabel) {
-		t.Errorf("agents.cue should use the registry key as label (%q), got:\n%s", wantLabel, agentCUE)
+	agentsCUE, err := os.ReadFile(filepath.Join(filepath.Dir(path), "agents.cue"))
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	wantDefault := `default_agent: "claude/interactive"`
-	if !strings.Contains(settingsCUE, wantDefault) {
+	settingsCUE, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLabel := `"claude-code/interactive": {`
+	if !strings.Contains(string(agentsCUE), wantLabel) {
+		t.Errorf("agents.cue should use the registry key as label (%q), got:\n%s", wantLabel, agentsCUE)
+	}
+	wantDefault := `default_agent: "claude-code/interactive"`
+	if !strings.Contains(string(settingsCUE), wantDefault) {
 		t.Errorf("settings.cue should set default_agent to the registry key (%q), got:\n%s", wantDefault, settingsCUE)
 	}
 }
@@ -194,6 +238,11 @@ func TestExtractAgentFromValue_RequiredFields(t *testing.T) {
 			cue:     `bin: "test"`,
 			wantErr: "missing required 'command' field",
 		},
+		{
+			name:    "joined without bin is valid",
+			cue:     `agentdex: "claude-code"` + "\n" + `command: "{{.bin}}"`,
+			wantErr: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -204,7 +253,13 @@ func TestExtractAgentFromValue_RequiredFields(t *testing.T) {
 				t.Fatalf("failed to compile test CUE: %v", err)
 			}
 
-			_, err := extractAgentFromValue(v, "test")
+			_, _, err := extractAgentFromValue(v, "test")
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
 			if err == nil {
 				t.Error("expected error for missing required field")
 				return
@@ -233,7 +288,7 @@ models: {
 		t.Fatalf("failed to compile test CUE: %v", err)
 	}
 
-	agent, err := extractAgentFromValue(v, "claude")
+	agent, _, err := extractAgentFromValue(v, "claude")
 	if err != nil {
 		t.Fatalf("extractAgentFromValue failed: %v", err)
 	}
@@ -253,12 +308,6 @@ models: {
 }
 
 func TestNoAgentsError(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	stdin := strings.NewReader("")
-
-	as := NewAutoSetup(stdout, stderr, stdin, false)
-
 	index := &registry.Index{
 		Agents: map[string]registry.IndexEntry{
 			"ai/claude": {
@@ -274,7 +323,7 @@ func TestNoAgentsError(t *testing.T) {
 		},
 	}
 
-	err := as.noAgentsError(index)
+	err := noAgentsError(index, nil)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -300,17 +349,11 @@ func TestNoAgentsError(t *testing.T) {
 }
 
 func TestNoAgentsError_EmptyIndex(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	stdin := strings.NewReader("")
-
-	as := NewAutoSetup(stdout, stderr, stdin, false)
-
 	index := &registry.Index{
 		Agents: map[string]registry.IndexEntry{},
 	}
 
-	err := as.noAgentsError(index)
+	err := noAgentsError(index, nil)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -322,54 +365,48 @@ func TestNoAgentsError_EmptyIndex(t *testing.T) {
 	}
 }
 
-func TestPickVariant(t *testing.T) {
-	mk := func(keys ...string) []detection.DetectedAgent {
-		out := make([]detection.DetectedAgent, len(keys))
-		for i, k := range keys {
-			out[i] = detection.DetectedAgent{Key: k, Entry: registry.IndexEntry{Bin: "claude"}}
-		}
-		return out
-	}
-
-	tests := []struct {
-		name     string
-		variants []detection.DetectedAgent
-		wantKey  string
-	}{
-		{
-			name:     "interactive wins over lex-first",
-			variants: mk("claude/zzz", "claude/interactive", "claude/aaa"),
-			wantKey:  "claude/interactive",
-		},
-		{
-			name:     "bare name wins when no interactive variant",
-			variants: mk("claude/zzz", "claude", "claude/aaa"),
-			wantKey:  "claude",
-		},
-		{
-			name:     "interactive beats bare name",
-			variants: mk("claude/zzz", "claude", "claude/interactive"),
-			wantKey:  "claude/interactive",
-		},
-		{
-			name:     "lex-first when neither interactive nor bare",
-			variants: mk("claude/zzz", "claude/aaa", "claude/middle"),
-			wantKey:  "claude/aaa",
-		},
-		{
-			name:     "single variant",
-			variants: mk("claude/edit"),
-			wantKey:  "claude/edit",
+func TestNoAgentsError_CatalogBinWithoutIndexBin(t *testing.T) {
+	index := &registry.Index{
+		Agents: map[string]registry.IndexEntry{
+			"claude-code/interactive": {Description: "Claude recipe"},
 		},
 	}
+	catalog := []agentdex.Agent{{
+		KnownAgent: agentdex.KnownAgent{ID: "claude-code", Bin: "claude", Name: "Claude Code"},
+	}}
+	err := noAgentsError(index, catalog)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "claude") {
+		t.Errorf("catalog bin must appear when index omits bin:\n%s", errMsg)
+	}
+	if !strings.Contains(errMsg, "Claude Code") {
+		t.Errorf("catalog name must appear:\n%s", errMsg)
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := pickVariant(tt.variants)
-			if got.Key != tt.wantKey {
-				t.Errorf("pickVariant(): got %q, want %q", got.Key, tt.wantKey)
-			}
-		})
+func TestNoAgentsError_UnjoinedIndexBinWithCatalog(t *testing.T) {
+	index := &registry.Index{
+		Agents: map[string]registry.IndexEntry{
+			"claude-code/interactive": {Description: "Claude recipe"},
+			"shell/interactive":       {Bin: "bash", Description: "Shell"},
+		},
+	}
+	catalog := []agentdex.Agent{{
+		KnownAgent: agentdex.KnownAgent{ID: "claude-code", Bin: "claude", Name: "Claude Code"},
+	}}
+	err := noAgentsError(index, catalog)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "claude") {
+		t.Errorf("missing catalog bin:\n%s", errMsg)
+	}
+	if !strings.Contains(errMsg, "bash") {
+		t.Errorf("missing unjoined index bin:\n%s", errMsg)
 	}
 }
 
@@ -382,31 +419,30 @@ func TestSelectAgent_NonTTYMultiBinPicksFirstWithFeedback(t *testing.T) {
 
 	detected := []detection.DetectedAgent{
 		{Key: "gemini/interactive", Entry: registry.IndexEntry{Bin: "gemini"}},
-		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude"}},
-		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude-code/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
 	}
 
 	selected, err := as.selectAgent(detected)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if selected.Key != "claude/interactive" {
-		t.Errorf("expected lex-first bin's heuristic winner 'claude/interactive', got %q", selected.Key)
+	if selected.Key != "claude-code/interactive" {
+		t.Errorf("expected lex-first product 'claude-code/interactive', got %q", selected.Key)
 	}
 
 	out := stdout.String()
 	if !strings.Contains(out, "claude") || !strings.Contains(out, "gemini") {
 		t.Errorf("feedback should name all detected bins:\n%s", out)
 	}
-	if !strings.Contains(out, "using claude/interactive") {
-		t.Errorf("feedback should name the chosen variant key (not just the bin):\n%s", out)
+	if !strings.Contains(out, "using claude-code/interactive") {
+		t.Errorf("feedback should name the chosen recipe key (not just the bin):\n%s", out)
 	}
 	if !strings.Contains(out, "default_agent") {
 		t.Errorf("feedback should mention default_agent override:\n%s", out)
 	}
 }
 
-func TestSelectAgent_NonTTYSingleBinMultipleVariants(t *testing.T) {
+func TestSelectAgent_NonTTYSingleProduct(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	stdin := strings.NewReader("")
@@ -414,24 +450,19 @@ func TestSelectAgent_NonTTYSingleBinMultipleVariants(t *testing.T) {
 	as := NewAutoSetup(stdout, stderr, stdin, false)
 
 	detected := []detection.DetectedAgent{
-		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude"}},
-		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
-		{Key: "claude/unattended", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude-code/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
 	}
 
 	selected, err := as.selectAgent(detected)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if selected.Key != "claude/interactive" {
-		t.Errorf("expected heuristic winner 'claude/interactive', got %q", selected.Key)
+	if selected.Key != "claude-code/interactive" {
+		t.Errorf("got %q", selected.Key)
 	}
 	out := stdout.String()
-	if !strings.Contains(out, "claude/interactive") {
-		t.Errorf("feedback should name the chosen variant:\n%s", out)
-	}
-	if !strings.Contains(out, "default_agent") {
-		t.Errorf("feedback should mention default_agent override:\n%s", out)
+	if !strings.Contains(out, "Detected: claude-code/interactive") {
+		t.Errorf("single product should print Detected, got:\n%s", out)
 	}
 }
 
@@ -458,18 +489,15 @@ func TestSelectAgent_SingleAgentPrintsSlashKey(t *testing.T) {
 	}
 }
 
-func TestSelectAgent_TTYMultiBinCascadesToVariantPrompt(t *testing.T) {
+func TestSelectAgent_TTYMultiBinNoVariantMenu(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	// Two prompts: tool prompt picks "claude" by name, then variant prompt
-	// picks #2 ("claude/interactive" after lex sort of [edit, interactive]).
-	stdin := strings.NewReader("claude\n2\n")
+	stdin := strings.NewReader("claude\n")
 
 	as := NewAutoSetup(stdout, stderr, stdin, true)
 
 	detected := []detection.DetectedAgent{
-		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude", Description: "auto-edit"}},
-		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude", Description: "default"}},
+		{Key: "claude-code/interactive", Entry: registry.IndexEntry{Bin: "claude", Description: "default"}},
 		{Key: "gemini/interactive", Entry: registry.IndexEntry{Bin: "gemini", Description: "Google Gemini"}},
 	}
 
@@ -477,17 +505,16 @@ func TestSelectAgent_TTYMultiBinCascadesToVariantPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if selected.Key != "claude/interactive" {
-		// claude variants sorted lex: edit, interactive. Input "2" → interactive.
-		t.Errorf("expected cascade to land on 'claude/interactive', got %q", selected.Key)
+	if selected.Key != "claude-code/interactive" {
+		t.Errorf("expected product menu to pick claude-code/interactive, got %q", selected.Key)
 	}
 
 	out := stdout.String()
 	if !strings.Contains(out, "Multiple AI CLI tools detected") {
 		t.Errorf("expected tool prompt header:\n%s", out)
 	}
-	if !strings.Contains(out, "Multiple variants of claude detected") {
-		t.Errorf("expected cascade variant prompt header:\n%s", out)
+	if strings.Contains(out, "Multiple variants of") {
+		t.Errorf("first-run must not menu variants:\n%s", out)
 	}
 }
 
@@ -500,8 +527,7 @@ func TestSelectAgent_TTYMultiBinSingleVariantSkipsCascade(t *testing.T) {
 
 	detected := []detection.DetectedAgent{
 		{Key: "aichat/interactive", Entry: registry.IndexEntry{Bin: "aichat"}},
-		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude"}},
-		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
+		{Key: "claude-code/interactive", Entry: registry.IndexEntry{Bin: "claude"}},
 	}
 
 	selected, err := as.selectAgent(detected)
@@ -516,27 +542,26 @@ func TestSelectAgent_TTYMultiBinSingleVariantSkipsCascade(t *testing.T) {
 	}
 }
 
-func TestSelectAgent_TTYVariantPrompt(t *testing.T) {
+func TestSelectAgent_TTYSingleProduct(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	stdin := strings.NewReader("2\n")
+	stdin := strings.NewReader("")
 
 	as := NewAutoSetup(stdout, stderr, stdin, true)
 
 	detected := []detection.DetectedAgent{
-		{Key: "claude/edit", Entry: registry.IndexEntry{Bin: "claude", Description: "auto-edit"}},
-		{Key: "claude/interactive", Entry: registry.IndexEntry{Bin: "claude", Description: "default"}},
+		{Key: "claude-code/interactive", Entry: registry.IndexEntry{Bin: "claude", Description: "default"}},
 	}
 
 	selected, err := as.selectAgent(detected)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if selected.Key != "claude/interactive" {
-		t.Errorf("expected variant prompt selection 'claude/interactive', got %q", selected.Key)
+	if selected.Key != "claude-code/interactive" {
+		t.Errorf("got %q", selected.Key)
 	}
-	if !strings.Contains(stdout.String(), "Multiple variants of claude detected") {
-		t.Errorf("expected variant prompt header:\n%s", stdout.String())
+	if strings.Contains(stdout.String(), "Multiple") {
+		t.Errorf("single product must not menu:\n%s", stdout.String())
 	}
 }
 
@@ -676,7 +701,17 @@ func TestWriteConfig(t *testing.T) {
 		},
 	}
 
-	configPath, err := as.writeConfig(agent)
+	val := compileAgentVal(t, `{
+		bin: "test-bin"
+		command: "{{.bin}} --model {{.model}}"
+		default_model: "default"
+		description: "Test agent for unit tests"
+		models: {
+			fast: "fast-model-id"
+			slow: "slow-model-id"
+		}
+	}`)
+	configPath, err := as.writeConfig(agent, val, "github.com/test/agent@v0")
 	if err != nil {
 		t.Fatalf("writeConfig() error = %v", err)
 	}
@@ -707,7 +742,7 @@ func TestWriteConfig(t *testing.T) {
 	if !strings.Contains(agentsStr, `models:`) {
 		t.Error("agents.cue should contain models field")
 	}
-	if !strings.Contains(agentsStr, `"fast"`) {
+	if !strings.Contains(agentsStr, "fast-model-id") {
 		t.Error("agents.cue should contain fast model")
 	}
 
@@ -743,7 +778,11 @@ func TestWriteConfig_MinimalAgent(t *testing.T) {
 		Command: "{{.bin}}",
 	}
 
-	configPath, err := as.writeConfig(agent)
+	val := compileAgentVal(t, `{
+		bin: "minimal-bin"
+		command: "{{.bin}}"
+	}`)
+	configPath, err := as.writeConfig(agent, val, "github.com/test/minimal@v0")
 	if err != nil {
 		t.Fatalf("writeConfig() error = %v", err)
 	}
@@ -790,7 +829,7 @@ agents: {
 		t.Fatalf("failed to compile test CUE: %v", err)
 	}
 
-	agent, err := extractAgentFromValue(v, "claude")
+	agent, _, err := extractAgentFromValue(v, "claude")
 	if err != nil {
 		t.Fatalf("extractAgentFromValue failed: %v", err)
 	}
@@ -817,7 +856,7 @@ agent: {
 		t.Fatalf("failed to compile test CUE: %v", err)
 	}
 
-	agent, err := extractAgentFromValue(v, "gemini")
+	agent, _, err := extractAgentFromValue(v, "gemini")
 	if err != nil {
 		t.Fatalf("extractAgentFromValue failed: %v", err)
 	}
@@ -850,7 +889,7 @@ models: {
 		t.Fatalf("failed to compile test CUE: %v", err)
 	}
 
-	agent, err := extractAgentFromValue(v, "test")
+	agent, _, err := extractAgentFromValue(v, "test")
 	if err != nil {
 		t.Fatalf("extractAgentFromValue failed: %v", err)
 	}
@@ -900,7 +939,7 @@ agent: {
 		t.Fatalf("write agent.cue: %v", err)
 	}
 
-	agent, err := loadAgentFromModule(moduleDir, "claude/bypass-permissions", nil)
+	agent, _, err := loadAgentFromModule(moduleDir, "claude/bypass-permissions", nil)
 	if err != nil {
 		t.Fatalf("loadAgentFromModule failed: %v", err)
 	}

@@ -1603,9 +1603,8 @@ func TestGetCrossCategoryFindsContext(t *testing.T) {
 	}
 }
 
-// TestGetAgentExplicitlyEmptyModelFlag verifies an empty --model does not
-// trigger resolveModelName (getAgent gates on flags.Model != ""), so
-// default_model still wins.
+// TestGetAgentExplicitlyEmptyModelFlag verifies an empty --model is treated
+// as omitted, so resolveLaunchModel still fills default_model.
 func TestGetAgentExplicitlyEmptyModelFlag(t *testing.T) {
 	setupGetTestConfig(t)
 

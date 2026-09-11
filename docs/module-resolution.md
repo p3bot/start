@@ -26,8 +26,28 @@ match rule over installed config, but return the full match set rather than
 reducing to one, so they are documented separately under Config inspection
 surfaces below rather than listed here.
 
-Model resolution (`--model`) is out of scope. A model is resolved against the
-selected agent's `models` map, not against config and registry modules.
+Model resolution (`--model`) is out of scope of the module match rule. A model
+is resolved against the selected agent's CUE `models` overlay (exact key, then
+unique multi-term AND substring on keys), then — when the agent has an
+`agentdex` join key and the overlay matched nothing — the live
+agentdex/models.dev list (exact id or canonical id, then unique substring
+per model — id and canonical id count as one), then passthrough.
+Multiple overlay hits passthrough without consulting the live list.
+Launch join, leftover alias prefixing, get, and describe open agentdex
+CacheOnly (catalog and models.dev): a local binary is never delayed by a
+download. A cold cache fails fast (passthrough for models, transient for
+join). `--refresh` on those commands (and on skill dest resolution) fetches
+Latest. First-run auto-setup and `start doctor` always use Latest. Display
+commands that never open agentdex (`library`, `search`, `list`) do not.
+
+Launch `--agent` and `settings.default_agent` apply a finite leftover-name
+alias table after an exact installed-name check and before fallback:
+`claude` → `claude-code`, `claude/<variant>` → `claude-code/<variant>`
+(case-insensitive; rewritten names are lowercase). A leftover installed
+`claude/interactive` still launches from CUE. The table is not
+applied to get, describe, install, update, or `uses:`. A slash-less catalog id
+on launch is prefix-qualified as `agents:<id>` so `claude-code` menus or unique-
+matches `claude-code/<variant>` recipes.
 
 ## The match rule
 

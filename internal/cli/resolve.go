@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/p3bot/agentdex"
 	"github.com/p3bot/start/internal/cache"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
@@ -75,6 +76,9 @@ type resolver struct {
 	// (a module is about to be auto-installed, so the latest index is needed).
 	// The late task-declared-role check may flip it true (forceLiveReResolve).
 	wantLive bool
+
+	catalogOpts []agentdex.Option
+	workingDir  string
 }
 
 func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Writer, stdin io.Reader) *resolver {
@@ -84,13 +88,18 @@ func newResolver(cfg internalcue.LoadResult, flags *Flags, stdout, stderr io.Wri
 	} else {
 		src = newProductionIndexSource(flags, stderr)
 	}
+	var catalogOpts []agentdex.Option
+	if flags != nil {
+		catalogOpts = flags.agentdexOpts()
+	}
 	return &resolver{
-		cfg:      cfg,
-		flags:    flags,
-		stderr:   stderr,
-		stdout:   stdout,
-		stdin:    stdin,
-		indexSrc: src,
+		cfg:         cfg,
+		flags:       flags,
+		stderr:      stderr,
+		stdout:      stdout,
+		stdin:       stdin,
+		indexSrc:    src,
+		catalogOpts: catalogOpts,
 	}
 }
 
@@ -201,6 +210,7 @@ func (r *resolver) ensureTaskRoleLive(declared string) {
 // to an installed agent name. An agent is a structured configuration, not a
 // document body, so a filesystem path is rejected.
 func (r *resolver) resolveAgent(name string) (string, error) {
+	name = rewriteLaunchAgent(name, r.cfg.Value, r.workingDir, r.catalogOpts...)
 	return r.resolveSingle(name, singleCategoryScope("agents", "agent", false))
 }
 
@@ -233,10 +243,12 @@ func (r *resolver) resolveSingle(name string, scope resolveScope) (string, error
 	return outcome.match.Name, nil
 }
 
-// resolveModelName resolves a model name against agent.Models: exact match,
-// then multi-term AND substring match, then passthrough. Model resolution is
-// deliberately outside the unified module match rule — its target is an agent's
-// model map, not the module sources — so it keeps the search-style match.
+// resolveModelName resolves a model name against agent.Models (exact, then
+// multi-term AND substring). Zero overlay hits then consult the live
+// agentdex/models.dev list when the agent has an agentdex join key; multiple
+// overlay hits passthrough without that list. Model resolution is
+// deliberately outside the unified module match rule: its target is an
+// agent's model map and catalog, not the module sources.
 func (r *resolver) resolveModelName(name string, agent orchestration.Agent) string {
 	if name == "" {
 		return ""
@@ -276,10 +288,38 @@ func (r *resolver) resolveModelName(name string, agent orchestration.Agent) stri
 
 	if len(matches) > 1 {
 		debugf(r.stderr, r.flags, dbgResolve, "Model %q: multiple matches %v, using passthrough", name, matches)
+		return name
+	}
+
+	if agent.Agentdex != "" {
+		live, err := orchestration.LiveModelIDs(context.Background(), agent.Agentdex, r.workingDir, r.catalogOpts...)
+		if err != nil {
+			debugf(r.stderr, r.flags, dbgResolve, "Model %q: live list unavailable (%v), passthrough", name, err)
+			return name
+		}
+		resolved := orchestration.MatchLiveModel(name, live)
+		if resolved != name {
+			debugf(r.stderr, r.flags, dbgResolve, "Model %q: live match %q", name, resolved)
+		} else {
+			debugf(r.stderr, r.flags, dbgResolve, "Model %q: passthrough", name)
+		}
+		return resolved
 	}
 
 	debugf(r.stderr, r.flags, dbgResolve, "Model %q: passthrough", name)
 	return name
+}
+
+// resolveLaunchModel is the model filled into a command: --model if set,
+// otherwise the agent's default_model, then resolveModelName (overlay, live
+// list, passthrough). Launch, get, and describe share this so they substitute
+// the same id.
+func (r *resolver) resolveLaunchModel(flagModel string, agent orchestration.Agent) string {
+	name := flagModel
+	if name == "" {
+		name = agent.DefaultModel
+	}
+	return r.resolveModelName(name, agent)
 }
 
 // resolveContexts resolves each --context term independently through the unified

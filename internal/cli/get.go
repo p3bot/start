@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -93,6 +94,9 @@ func runGet(cmd *cobra.Command, args []string) error {
 	// stderr in the stdout slot so fetch progress, auto-install notices, and
 	// selection menus do not corrupt the piped content on stdout.
 	r := newResolver(cfg, flags, stderr, stderr, stdin)
+	if wd, err := os.Getwd(); err == nil {
+		r.workingDir = wd
+	}
 	attachResolverSource(r, cmd)
 	outcome, err := r.resolveCrossNoInstall(query)
 	if err != nil {
@@ -179,8 +183,8 @@ func outputFileBody(w io.Writer, flags *Flags, path string) error {
 }
 
 // getAgent writes the agent's command template (with {{.bin}} and {{.model}}
-// resolved) to stdout, leaving runtime placeholders intact. --model is
-// resolved via resolveModelName to match `start`'s rendering of the flag.
+// resolved) to stdout, leaving runtime placeholders intact. The model is
+// resolved via resolveLaunchModel so get matches launch and describe.
 func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, item cue.Value) error {
 	cmdField := item.LookupPath(cue.ParsePath("command"))
 	command := ""
@@ -195,16 +199,12 @@ func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, 
 		printGetVerbose(stderr, "Agent", name, item, "", "", false)
 	}
 
-	modelOverride := ""
-	if flags.Model != "" {
-		agent, err := orchestration.ExtractAgent(r.cfg.Value, name)
-		if err != nil {
-			return fmt.Errorf("loading agent %q for --model resolution: %w", name, err)
-		}
-		modelOverride = r.resolveModelName(flags.Model, agent)
+	agent := orchestration.AgentFromValue(item, name)
+	agent, err := orchestration.JoinAgent(context.Background(), agent, r.workingDir, r.catalogOpts...)
+	if err != nil {
+		return err
 	}
-
-	rendered := partialFillAgentCommand(command, item, modelOverride)
+	rendered := partialFillAgentCommand(command, item, r.resolveLaunchModel(flags.Model, agent), agent.Bin)
 	fmt.Fprint(stdout, ensureTrailingNewline(rendered))
 	return nil
 }

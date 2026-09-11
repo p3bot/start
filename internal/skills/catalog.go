@@ -21,16 +21,27 @@ type Catalog struct {
 	idx *agentdex.Index
 }
 
-// Open constructs a catalog using workingDir for local path expansion.
-// Extra options (WithCatalogDir, WithLookPath, WithBinPaths, WithEnvLookup)
-// are the test seams; production callers pass none.
-func Open(workingDir string, opts ...agentdex.Option) (*Catalog, error) {
+// OpenIndex constructs an agentdex index using workingDir for local path
+// expansion. Extra options (WithCatalogDir, WithLookPath, WithBinPaths,
+// WithEnvLookup, WithCatalogFetch, WithModelsFetch) are caller policy and
+// test seams; production skill dests pass none (agentdex default Cached).
+// Launch prepends CacheOnly (--refresh overrides to Latest); auto-setup and
+// doctor use Latest. Errors are unmapped so launch and auto-setup can
+// classify them independently of skill dest policy.
+func OpenIndex(workingDir string, opts ...agentdex.Option) (*agentdex.Index, error) {
 	all := make([]agentdex.Option, 0, len(opts)+1)
 	if workingDir != "" {
 		all = append(all, agentdex.WithWorkingDir(workingDir))
 	}
 	all = append(all, opts...)
-	idx, err := agentdex.Open(all...)
+	return agentdex.Open(all...)
+}
+
+// Open constructs a catalog using workingDir for local path expansion.
+// Extra options (WithCatalogDir, WithLookPath, WithBinPaths, WithEnvLookup)
+// are the test seams; production callers pass none.
+func Open(workingDir string, opts ...agentdex.Option) (*Catalog, error) {
+	idx, err := OpenIndex(workingDir, opts...)
 	if err != nil {
 		return nil, mapCatalogErr(err)
 	}

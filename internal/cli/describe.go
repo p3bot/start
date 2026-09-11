@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -268,6 +269,9 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	}
 
 	r := newResolver(cfg, flags, w, stderr, stdin)
+	if wd, err := os.Getwd(); err == nil {
+		r.workingDir = wd
+	}
 	attachResolverSource(r, cmd)
 	outcome, err := r.resolveCrossNoInstall(name)
 	if err != nil {
@@ -302,16 +306,42 @@ func runDescribeSearch(cmd *cobra.Command, name string) error {
 	if cat == nil {
 		return fmt.Errorf("unknown category %q", match.Category)
 	}
-	return describeVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType, flags)
+	return describeVerboseItem(w, match.Name, effectiveScope, cat.key, cat.itemType, flags, r)
 }
 
-func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string, flags *Flags) error {
+func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, itemType string, flags *Flags, r *resolver) error {
 	result, err := prepareDescribe(name, scope, cueKey, itemType)
 	if err != nil {
 		return err
 	}
-	printVerboseDump(w, result, flags)
-	return nil
+	binOverride, modelOverride, joinErr := joinedAgentFill(result, flags, r)
+	printVerboseDump(w, result, flags, binOverride, modelOverride)
+	return joinErr
+}
+
+func joinedAgentFill(result DescribeResult, flags *Flags, r *resolver) (bin, model string, err error) {
+	if result.ItemType != "Agent" {
+		return "", "", nil
+	}
+	workingDir := ""
+	opts := flags.agentdexOpts()
+	if r != nil {
+		workingDir = r.workingDir
+		opts = r.catalogOpts
+	}
+	agent := orchestration.AgentFromValue(result.Value, result.Name)
+	agent, err = orchestration.JoinAgent(context.Background(), agent, workingDir, opts...)
+	if err != nil {
+		return "", "", err
+	}
+	if r != nil {
+		flagModel := ""
+		if flags != nil {
+			flagModel = flags.Model
+		}
+		model = r.resolveLaunchModel(flagModel, agent)
+	}
+	return agent.Bin, model, nil
 }
 
 func prepareDescribe(name string, scope config.Scope, cueKey, itemType string) (DescribeResult, error) {
@@ -460,7 +490,7 @@ func loadConfigOrEmpty(scope config.Scope) (internalcue.LoadResult, error) {
 	return result, err
 }
 
-func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags) {
+func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, modelOverride string) {
 	cat := r.Category
 	label := tui.ColorDim.Sprint
 
@@ -524,7 +554,7 @@ func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags) {
 	if fields.Command != "" {
 		cmd := fields.Command
 		if r.ItemType == "Agent" {
-			cmd = partialFillAgentCommand(cmd, r.Value, "")
+			cmd = partialFillAgentCommand(cmd, r.Value, modelOverride, binOverride)
 		}
 		fmt.Fprintln(w)
 		fmt.Fprintf(w, "%s %s\n", label("Command:"), cmd)
@@ -644,10 +674,12 @@ func resolveDescribeFile(filePath, origin string) (resolvedPath, content string,
 // modelOverride (already resolved by the caller) replaces default_model when
 // non-empty. Both paths look the key up in the models map; unknown keys pass
 // through as the literal id.
-func partialFillAgentCommand(command string, v cue.Value, modelOverride string) string {
-	bin := ""
-	if f := v.LookupPath(cue.ParsePath("bin")); f.Exists() {
-		bin, _ = f.String()
+func partialFillAgentCommand(command string, v cue.Value, modelOverride, binOverride string) string {
+	bin := binOverride
+	if bin == "" {
+		if f := v.LookupPath(cue.ParsePath("bin")); f.Exists() {
+			bin, _ = f.String()
+		}
 	}
 
 	model := modelOverride

@@ -104,7 +104,7 @@ Array of config-item objects. Empty result is `[]`.
 
 ```
 [{ category, name, source,
-   description?, bin?, command?, defaultModel?, file?, prompt?, role?,
+   description?, agentdex?, bin?, command?, defaultModel?, file?, prompt?, role?,
    required?, default?, optional?, models?, tags?, uses?, origin? }]
 ```
 
@@ -129,9 +129,9 @@ source = "default" | "global" | "local" | "not set"
 | 3 | Not found | A named module, config item, or agent does not exist |
 | 4 | Permission | Filesystem permission denied on a user path; fix permissions |
 | 5 | Conflict | Reserved; no current producer |
-| 75 | Transient | Registry network failure; retry with backoff |
+| 75 | Transient | Registry or agent-catalog unreachable; retry with backoff |
 | 78 | Config | Invalid user CUE, or an agent binary missing from PATH; fix the environment |
 
-Exit 75 is the retry signal: a transient registry failure a retry could clear.
-A typo'd module name returns 3, never 75. Invalid user configuration returns 78,
-never 3.
+Exit 75 is the retry signal: a transient registry or agent-catalog failure a
+retry could clear. A typo'd module name returns 3, never 75. Invalid user
+configuration returns 78, never 3.

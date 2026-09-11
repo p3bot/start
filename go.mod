@@ -9,7 +9,7 @@ require (
 	cuelang.org/go v0.16.1
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/fatih/color v1.19.0
-	github.com/p3bot/agentdex v1.1.0
+	github.com/p3bot/agentdex v1.2.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	go.yaml.in/yaml/v3 v3.0.5

@@ -99,7 +99,7 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 
 | Flag | Short | Description |
 | ---- | ----- | ----------- |
-| `--agent` | `-a` | Override agent (launch: one library agent; skill install/describe: agentdex catalog ids) |
+| `--agent` | `-a` | Override agent (launch: recipe or agentdex catalog id; skills: dest catalog ids) |
 | `--role` | `-r` | Override role (config name, file path, or http(s) URL); `none` skips role assignment |
 | `--model` | `-m` | Override the model |
 | `--context` | `-c` | Select contexts (tags, file paths, or http(s) URLs, repeatable); `none` drops auto-loaded required/default contexts (`none,foo` keeps only foo) |
@@ -109,7 +109,7 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | `--debug` | | Debug output (implies --verbose) |
 | `--color` | | Colour output: `auto` (default), `always`, `never` |
 | `--local` | `-l` | Target local config |
-| `--refresh` | | Bypass the 24h index cache and resolve the registry index live (inert on `install`/`update`/`doctor validate`, which already resolve live) |
+| `--refresh` | | Bypass the 24h CUE index cache and resolve it live; commands that open agentdex also fetch catalog and models.dev live (inert on `install`/`update`/`doctor validate` for the CUE index) |
 
 ## Architecture
 
@@ -185,8 +185,13 @@ Matching is literal and case-insensitive over names only — no regex, no
 description/tag matching, no multi-term splitting. The registry index is fetched
 lazily and its absence is non-fatal: an uninstalled name is not-found when the
 index is reachable, and a transient (retry) error when it is unreachable, since
-absence cannot be confirmed. Model resolution (`--model`) is out of scope; it
-keeps the search-style match against the agent's `models` map.
+absence cannot be confirmed. Model resolution (`--model`) is out of scope of
+the module match rule: the agent's CUE `models` overlay first, then — when the
+agent has an `agentdex` join key — the live agentdex/models.dev list, then
+passthrough. Launch opens agentdex CacheOnly so a local bin is not delayed
+by a catalog or models.dev download; `--refresh` on those commands fetches
+Latest. Auto-setup and doctor always use Latest. Launch `--agent` leftover
+aliases and catalog-id prefixing are documented in `docs/module-resolution.md`.
 
 ### Candidate Gathering
 
@@ -251,9 +256,13 @@ registry, expressed by the shared `decideCachedIndex` primitive (cache read +
   first-run auto-setup are out of scope.
 
 The persistent `--refresh` flag is the single user-facing override of the
-cache-gating rule: it forces a live index resolve on the display commands (across
-default, `--json`, and `--export`) and ORs into `computeWantLive` on the
-resolution surfaces, and is an inert no-op on the already-live commands.
+cache-gating rule: it forces a live CUE index resolve on the display commands
+(across default, `--json`, and `--export`) and ORs into `computeWantLive` on
+the resolution surfaces, and is an inert no-op on the already-live CUE-index
+commands. On commands that open agentdex (launch, get, describe, skills dests)
+it also fetches the agent catalog and models.dev Latest. `start doctor` already
+fetches the agent catalog Latest. Display commands that never open agentdex
+(`library`, `search`, `list`) do not.
 
 ### Module Cross-References (`uses`)
 

@@ -96,11 +96,15 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	}
 
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
+	r.workingDir = workingDir
+	agentName = r.prepareLaunchAgent(agentName)
 
 	// Decide index liveness once, up front, over every known surface. The
 	// task-declared role is late-bound — its name lives in the task content —
 	// so it is excluded here and carries its own targeted liveness check
-	// (ensureTaskRoleLive) after the task resolves.
+	// (ensureTaskRoleLive) after the task resolves. The launch identifier is
+	// rewritten first so leftover aliases and catalog-id prefixes are the
+	// name the union interprets, matching resolveAgent.
 	surfaces := append(baseSurfaces(flags, agentName), pendingSurface{taskName, singleCategoryScope("tasks", "task", false)})
 	r.wantLive = r.computeWantLive(surfaces)
 
@@ -143,10 +147,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		return err
 	}
 
-	resolvedModel := flags.Model
-	if resolvedModel != "" {
-		resolvedModel = r.resolveModelName(resolvedModel, env.Agent)
-	}
+	resolvedModel := r.resolveLaunchModel(flags.Model, env.Agent)
 
 	debugf(stderr, flags, dbgTask, "Searching for task %q", taskName)
 
@@ -269,7 +270,10 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 	printWarnings(flags, stderr, taskResult.Warnings)
 	printWarnings(flags, stderr, composeResult.Warnings)
 
-	model, modelSource := resolveModel(resolvedModel, env.Agent.DefaultModel)
+	model, modelSource := resolveModel(flags.Model, env.Agent.DefaultModel)
+	if resolvedModel != "" {
+		model = resolvedModel
+	}
 	if model != "" {
 		debugf(stderr, flags, dbgTask, "Model: %s (%s)", model, modelSource)
 	} else {

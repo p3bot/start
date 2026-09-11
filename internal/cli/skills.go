@@ -49,7 +49,7 @@ func openSkillCatalog(cmd *cobra.Command) (*skills.Catalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolving working directory: %w", err)
 	}
-	return skills.Open(wd, skillCatalogOpts(cmd)...)
+	return skills.Open(wd, getFlags(cmd).agentdexOpts()...)
 }
 
 func fetchSkillModule(ctx context.Context, client registry.Client, selected modules.SearchResult) (sourceDir, origin, version string, err error) {

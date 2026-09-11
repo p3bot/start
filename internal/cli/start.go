@@ -13,6 +13,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/fatih/color"
+	"github.com/p3bot/agentdex"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
 	"github.com/p3bot/start/internal/orchestration"
@@ -56,6 +57,29 @@ type Flags struct {
 	// by pointer, so the sync.Once is never copied.
 	markdownStyleOnce  sync.Once
 	markdownStyleValue string
+
+	// catalogOpts is the agentdex option seam (fixture catalog, LookPath).
+	// Production leaves it nil; tests inject via WithSkillCatalogOpts.
+	catalogOpts []agentdex.Option
+}
+
+// agentdexOpts is the Open() list for this invocation: test fixtures, then
+// FetchLatest on catalog and models.dev when --refresh is set (last write wins
+// over launch CacheOnly).
+func (f *Flags) agentdexOpts() []agentdex.Option {
+	if f == nil {
+		return nil
+	}
+	if !f.Refresh {
+		return f.catalogOpts
+	}
+	out := make([]agentdex.Option, 0, len(f.catalogOpts)+2)
+	out = append(out, f.catalogOpts...)
+	out = append(out,
+		agentdex.WithCatalogFetch(agentdex.FetchLatest),
+		agentdex.WithModelsFetch(agentdex.FetchLatest),
+	)
+	return out
 }
 
 // MarkdownStyle returns the glamour style for this invocation, probing the
@@ -214,6 +238,10 @@ func buildExecutionEnv(cfg internalcue.LoadResult, workingDir string, agentName 
 	agent, err := orchestration.ExtractAgent(cfg.Value, agentName)
 	if err != nil {
 		return nil, fmt.Errorf("loading agent: %w", err)
+	}
+	agent, err = orchestration.JoinAgent(context.Background(), agent, workingDir, flags.agentdexOpts()...)
+	if err != nil {
+		return nil, err
 	}
 	debugf(stderr, flags, dbgAgent, "Binary: %s", agent.Bin)
 	debugf(stderr, flags, dbgAgent, "Command template: %s", agent.Command)
@@ -387,12 +415,16 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 	}
 
 	r := newResolver(cfg, flags, stdout, stderr, stdin)
+	r.workingDir = workingDir
+	agentName = r.prepareLaunchAgent(agentName)
 
 	// Decide index liveness once, up front: live iff --refresh is set or some
 	// surface has no installed match. Computed before the first resolve so the
 	// choice is position-independent and the held index serves the whole
 	// invocation. selection.Tags equals flags.Context here, so baseSurfaces
-	// covers the contexts this invocation will resolve.
+	// covers the contexts this invocation will resolve. The launch identifier
+	// is rewritten first so leftover aliases and catalog-id prefixes are the
+	// name the union interprets, matching resolveAgent.
 	r.wantLive = r.computeWantLive(baseSurfaces(flags, agentName))
 
 	if agentName != "" {
@@ -430,10 +462,7 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		return err
 	}
 
-	resolvedModel := flags.Model
-	if resolvedModel != "" {
-		resolvedModel = r.resolveModelName(resolvedModel, env.Agent)
-	}
+	resolvedModel := r.resolveLaunchModel(flags.Model, env.Agent)
 
 	debugf(stderr, flags, dbgContext, "Selection: required=%t, defaults=%t, tags=%v",
 		selection.IncludeRequired, selection.IncludeDefaults, selection.Tags)
@@ -464,7 +493,10 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 
 	printWarnings(flags, stderr, result.Warnings)
 
-	model, modelSource := resolveModel(resolvedModel, env.Agent.DefaultModel)
+	model, modelSource := resolveModel(flags.Model, env.Agent.DefaultModel)
+	if resolvedModel != "" {
+		model = resolvedModel
+	}
 	if model != "" {
 		debugf(stderr, flags, dbgAgent, "Model: %s (%s)", model, modelSource)
 	} else {
@@ -631,7 +663,7 @@ func printContentPreview(w io.Writer, label string, labelColor *color.Color, tex
 // loadMergedConfigFromDir loads configuration using the specified working directory
 // for local config resolution. If workingDir is empty, uses current directory.
 func loadMergedConfigFromDir(workingDir string) (internalcue.LoadResult, error) {
-	return loadMergedConfigWithIO(os.Stdout, os.Stderr, os.Stdin, workingDir)
+	return loadMergedConfigWithIO(os.Stdout, os.Stderr, os.Stdin, workingDir, nil)
 }
 
 // loadMergedConfigFromDirWithDebug loads configuration with debug logging.
@@ -644,7 +676,7 @@ func loadMergedConfigFromDirWithDebug(stdout, stderr io.Writer, stdin io.Reader,
 	debugf(stderr, flags, dbgConfig, "Global: %s (exists: %t)", paths.Global, paths.GlobalExists)
 	debugf(stderr, flags, dbgConfig, "Local: %s (exists: %t)", paths.Local, paths.LocalExists)
 
-	result, err := loadMergedConfigWithIO(stdout, stderr, stdin, workingDir)
+	result, err := loadMergedConfigWithIO(stdout, stderr, stdin, workingDir, flags.catalogOpts)
 	if err != nil {
 		return result, err
 	}
@@ -664,7 +696,7 @@ func loadMergedConfigFromDirWithDebug(stdout, stderr io.Writer, stdin io.Reader,
 }
 
 // loadMergedConfigWithIO loads configuration with custom I/O streams.
-func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDir string) (internalcue.LoadResult, error) {
+func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDir string, catalogOpts []agentdex.Option) (internalcue.LoadResult, error) {
 	paths, err := config.ResolvePaths(workingDir)
 	if err != nil {
 		return internalcue.LoadResult{}, fmt.Errorf("resolving config paths: %w", err)
@@ -683,7 +715,7 @@ func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDi
 			}
 		}
 
-		if err := runAutoSetup(stdout, stderr, stdin); err != nil {
+		if err := runAutoSetup(stdout, stderr, stdin, catalogOpts); err != nil {
 			return internalcue.LoadResult{}, err
 		}
 		// Re-resolve and validate after auto-setup.
@@ -703,10 +735,11 @@ func loadMergedConfigWithIO(stdout, stderr io.Writer, stdin io.Reader, workingDi
 }
 
 // runAutoSetup runs the auto-setup flow.
-func runAutoSetup(stdout, stderr io.Writer, stdin io.Reader) error {
+func runAutoSetup(stdout, stderr io.Writer, stdin io.Reader, catalogOpts []agentdex.Option) error {
 	isTTY := isTerminal(stdin)
 
 	autoSetup := orchestration.NewAutoSetup(stdout, stderr, stdin, isTTY)
+	autoSetup.SetCatalogOpts(catalogOpts)
 	ctx := context.Background()
 
 	_, err := autoSetup.Run(ctx)
