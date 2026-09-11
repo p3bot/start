@@ -188,9 +188,10 @@ index is reachable, and a transient (retry) error when it is unreachable, since
 absence cannot be confirmed. Model resolution (`--model`) is out of scope of
 the module match rule: the agent's CUE `models` overlay first, then — when the
 agent has an `agentdex` join key — the live agentdex/models.dev list, then
-passthrough. Launch opens agentdex CacheOnly so a local bin is not delayed
-by a catalog or models.dev download; `--refresh` on those commands fetches
-Latest. Auto-setup and doctor always use Latest. Launch `--agent` leftover
+passthrough. Launch join opens the catalog Cached (network only on a cold
+miss) so a joined recipe can resolve its bin; models.dev stays CacheOnly
+(passthrough on a miss). `--refresh` on those commands fetches Latest.
+Auto-setup and doctor always use Latest. Launch `--agent` leftover
 aliases and catalog-id prefixing are documented in `docs/module-resolution.md`.
 
 ### Candidate Gathering

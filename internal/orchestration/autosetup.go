@@ -247,7 +247,7 @@ func firstRunAgents(index *registry.Index, catalog []agentdex.Agent, catalogErr 
 
 func (a *AutoSetup) catalogAgents(ctx context.Context) ([]agentdex.Agent, error) {
 	// First-run may wait on the registry: Latest so setup sees current recipes
-	// and warms the cache later CacheOnly launches use.
+	// and warms the cache later Cached joins read without a network round-trip.
 	opts := make([]agentdex.Option, 0, 1+len(a.catalogOpts))
 	opts = append(opts, agentdex.WithCatalogFetch(agentdex.FetchLatest))
 	opts = append(opts, a.catalogOpts...)

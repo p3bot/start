@@ -442,6 +442,126 @@ func TestCheckAgents_JoinedNoBin(t *testing.T) {
 	}
 }
 
+func TestCheckAgents_TwoJoinedShareCatalog(t *testing.T) {
+	t.Parallel()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller")
+	}
+	catalogDir := filepath.Join(filepath.Dir(file), "..", "skills", "testdata", "catalog")
+	dir := t.TempDir()
+	claudeBin := filepath.Join(dir, "claude")
+	agyBin := filepath.Join(dir, "agy")
+	for _, p := range []string{claudeBin, agyBin} {
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	opts := []agentdex.Option{
+		agentdex.WithCatalogDir(catalogDir),
+		agentdex.WithLookPath(func(string) (string, error) { return "", os.ErrNotExist }),
+		agentdex.WithBinPaths(map[string]string{"claude-code": claudeBin, "agy": agyBin}),
+	}
+	cctx := cuecontext.New()
+	v := cctx.CompileString(`agents: {
+		"agy/interactive": { agentdex: "agy", command: "{{.bin}}" }
+		"claude-code/interactive": { agentdex: "claude-code", command: "{{.bin}}" }
+	}`)
+
+	section := CheckAgents(v, opts...)
+	if len(section.Results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(section.Results))
+	}
+	byName := map[string]CheckResult{}
+	for _, r := range section.Results {
+		if r.Status != StatusPass {
+			t.Errorf("%s: status = %v (%s), want StatusPass", r.Label, r.Status, r.Message)
+		}
+		byName[r.Label] = r
+	}
+	if got := byName["claude-code/interactive"].Message; got != claudeBin {
+		t.Errorf("claude-code path = %q, want %q", got, claudeBin)
+	}
+	if got := byName["agy/interactive"].Message; got != agyBin {
+		t.Errorf("agy path = %q, want %q", got, agyBin)
+	}
+}
+
+func TestCheckAgents_JoinedFailures(t *testing.T) {
+	t.Parallel()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller")
+	}
+	catalogDir := filepath.Join(filepath.Dir(file), "..", "skills", "testdata", "catalog")
+	offline := []agentdex.Option{
+		agentdex.WithCatalogDir(catalogDir),
+		agentdex.WithLookPath(func(string) (string, error) { return "", os.ErrNotExist }),
+	}
+
+	tests := []struct {
+		name    string
+		cue     string
+		opts    []agentdex.Option
+		status  Status
+		message string
+		fix     string
+	}{
+		{
+			name:    "unknown id",
+			cue:     `agents: { broken: { agentdex: "not-a-catalog-id", command: "{{.bin}}" } }`,
+			opts:    offline,
+			status:  StatusFail,
+			message: `unknown agentdex id "not-a-catalog-id"`,
+			fix:     "set agentdex to a catalogued product id or remove the join key",
+		},
+		{
+			name:    "catalog missing",
+			cue:     `agents: { "claude-code/interactive": { agentdex: "claude-code", command: "{{.bin}}" } }`,
+			opts:    []agentdex.Option{agentdex.WithCatalogDir(filepath.Join(t.TempDir(), "missing-catalog"))},
+			status:  StatusFail,
+			message: "agent catalog unavailable",
+			fix:     "retry when the agent catalog is reachable",
+		},
+		{
+			name:    "cli not installed",
+			cue:     `agents: { "claude-code/interactive": { agentdex: "claude-code", command: "{{.bin}}" } }`,
+			opts:    offline,
+			status:  StatusFail,
+			message: "NOT FOUND",
+			fix:     "Install claude or remove from config",
+		},
+		{
+			name:    "empty join key",
+			cue:     `agents: { broken: { agentdex: "", command: "{{.bin}}" } }`,
+			opts:    offline,
+			status:  StatusWarn,
+			message: "Invalid agentdex field",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := cuecontext.New().CompileString(tt.cue)
+			section := CheckAgents(v, tt.opts...)
+			if len(section.Results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(section.Results))
+			}
+			got := section.Results[0]
+			if got.Status != tt.status {
+				t.Errorf("status = %v (%s), want %v", got.Status, got.Message, tt.status)
+			}
+			if got.Message != tt.message {
+				t.Errorf("message = %q, want %q", got.Message, tt.message)
+			}
+			if got.Fix != tt.fix {
+				t.Errorf("fix = %q, want %q", got.Fix, tt.fix)
+			}
+		})
+	}
+}
+
 func TestCheckAgents_NoBinField(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()

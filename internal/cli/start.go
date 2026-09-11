@@ -65,7 +65,7 @@ type Flags struct {
 
 // agentdexOpts is the Open() list for this invocation: test fixtures, then
 // FetchLatest on catalog and models.dev when --refresh is set (last write wins
-// over launch CacheOnly).
+// over join Cached / live CacheOnly).
 func (f *Flags) agentdexOpts() []agentdex.Option {
 	if f == nil {
 		return nil

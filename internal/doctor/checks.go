@@ -202,6 +202,25 @@ func CheckAgents(cfgValue cue.Value, catalogOpts ...agentdex.Option) SectionResu
 		return section
 	}
 
+	var (
+		idx       *agentdex.Index
+		idxErr    error
+		idxOpened bool
+	)
+	joinedIndex := func() (*agentdex.Index, error) {
+		if !idxOpened {
+			idxOpened = true
+			// Latest: doctor is diagnostic, not a launch path. Warms the catalog
+			// Cached joins then read without a network round-trip. One open for
+			// the run; each joined agent is a Get on this index.
+			opts := make([]agentdex.Option, 0, 1+len(catalogOpts))
+			opts = append(opts, agentdex.WithCatalogFetch(agentdex.FetchLatest))
+			opts = append(opts, catalogOpts...)
+			idx, idxErr = skills.OpenIndex("", opts...)
+		}
+		return idx, idxErr
+	}
+
 	count := 0
 	for iter.Next() {
 		count++
@@ -219,7 +238,8 @@ func CheckAgents(cfgValue cue.Value, catalogOpts ...agentdex.Option) SectionResu
 				})
 				continue
 			}
-			section.Results = append(section.Results, checkJoinedAgent(name, id, catalogOpts))
+			openIdx, openErr := joinedIndex()
+			section.Results = append(section.Results, checkJoinedAgent(name, id, openIdx, openErr))
 			continue
 		}
 
@@ -267,14 +287,8 @@ func CheckAgents(cfgValue cue.Value, catalogOpts ...agentdex.Option) SectionResu
 	return section
 }
 
-func checkJoinedAgent(name, id string, catalogOpts []agentdex.Option) CheckResult {
-	// Latest: doctor is diagnostic, not a launch path. Warms the catalog
-	// CacheOnly launches then read.
-	opts := make([]agentdex.Option, 0, 1+len(catalogOpts))
-	opts = append(opts, agentdex.WithCatalogFetch(agentdex.FetchLatest))
-	opts = append(opts, catalogOpts...)
-	idx, err := skills.OpenIndex("", opts...)
-	if err != nil {
+func checkJoinedAgent(name, id string, idx *agentdex.Index, openErr error) CheckResult {
+	if openErr != nil || idx == nil {
 		return CheckResult{
 			Status:  StatusFail,
 			Label:   name,

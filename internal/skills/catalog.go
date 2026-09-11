@@ -25,9 +25,10 @@ type Catalog struct {
 // expansion. Extra options (WithCatalogDir, WithLookPath, WithBinPaths,
 // WithEnvLookup, WithCatalogFetch, WithModelsFetch) are caller policy and
 // test seams; production skill dests pass none (agentdex default Cached).
-// Launch prepends CacheOnly (--refresh overrides to Latest); auto-setup and
-// doctor use Latest. Errors are unmapped so launch and auto-setup can
-// classify them independently of skill dest policy.
+// Launch join prepends catalog Cached and models CacheOnly (--refresh
+// overrides to Latest); live models and catalog-id prefixing stay CacheOnly;
+// auto-setup and doctor use Latest. Errors are unmapped so launch and
+// auto-setup can classify them independently of skill dest policy.
 func OpenIndex(workingDir string, opts ...agentdex.Option) (*agentdex.Index, error) {
 	all := make([]agentdex.Option, 0, len(opts)+1)
 	if workingDir != "" {

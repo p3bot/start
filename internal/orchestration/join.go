@@ -15,13 +15,14 @@ import (
 // JoinAgent fills Bin from agentdex when Agentdex is set. Catalog bin wins over
 // a CUE bin. An empty join key leaves the agent unchanged and does not open
 // agentdex. Unknown ids are usage; a missing catalog is transient (no CUE-bin
-// fallback). Launch opens the catalog CacheOnly so a local binary is never
-// delayed by a registry or models.dev download.
+// fallback). Join opens the catalog Cached (network only on a cold miss) so a
+// joined recipe can resolve its bin; models.dev stays CacheOnly. --refresh
+// overrides both to Latest.
 func JoinAgent(ctx context.Context, agent Agent, workingDir string, opts ...agentdex.Option) (Agent, error) {
 	if agent.Agentdex == "" {
 		return agent, nil
 	}
-	idx, err := skills.OpenIndex(workingDir, launchFetchOpts(opts)...)
+	idx, err := skills.OpenIndex(workingDir, joinFetchOpts(opts)...)
 	if err != nil {
 		return agent, mapLaunchCatalogErr(err)
 	}
@@ -68,12 +69,12 @@ func (m LiveModel) names() []string {
 // LiveModelIDs returns models.dev rows for a catalog id. Display names are
 // omitted so a unique name hit cannot become the CLI model flag. Enrichment
 // failures (including CacheOnly miss) return a nil slice and a non-nil error
-// so the caller can passthrough. Launch is CacheOnly: no HTTP on a cold cache.
+// so the caller can passthrough. Models.dev is CacheOnly: no HTTP on a cold cache.
 func LiveModelIDs(ctx context.Context, id, workingDir string, opts ...agentdex.Option) ([]LiveModel, error) {
 	if id == "" {
 		return nil, nil
 	}
-	idx, err := skills.OpenIndex(workingDir, launchFetchOpts(opts)...)
+	idx, err := skills.OpenIndex(workingDir, cacheOnlyFetchOpts(opts)...)
 	if err != nil {
 		return nil, mapLaunchCatalogErr(err)
 	}
@@ -103,7 +104,7 @@ func KnownCatalogID(ctx context.Context, id, workingDir string, opts ...agentdex
 	if id == "" {
 		return false
 	}
-	idx, err := skills.OpenIndex(workingDir, launchFetchOpts(opts)...)
+	idx, err := skills.OpenIndex(workingDir, cacheOnlyFetchOpts(opts)...)
 	if err != nil {
 		return false
 	}
@@ -111,19 +112,38 @@ func KnownCatalogID(ctx context.Context, id, workingDir string, opts ...agentdex
 	return err == nil
 }
 
-// launchFetchOpts is the hot-path policy: last disk cache only. Callers' options
-// follow so tests can still inject WithCatalogDir / WithLookPath.
-func launchFetchOpts(opts []agentdex.Option) []agentdex.Option {
+// joinFetchOpts is the join policy: catalog Cached so a cold miss fetches
+// once; models.dev CacheOnly so EnrichNone cannot trigger HTTP. Callers'
+// options follow so --refresh Latest and test fixtures last-write-win.
+func joinFetchOpts(opts []agentdex.Option) []agentdex.Option {
+	return prependFetch(opts, agentdex.FetchCached, agentdex.FetchCacheOnly)
+}
+
+// cacheOnlyFetchOpts is the fail-open hot path: last disk cache only for
+// catalog and models.dev. Used by live model matching (passthrough on miss)
+// and catalog-id prefixing (false on miss, substring fallback).
+func cacheOnlyFetchOpts(opts []agentdex.Option) []agentdex.Option {
+	return prependFetch(opts, agentdex.FetchCacheOnly, agentdex.FetchCacheOnly)
+}
+
+func prependFetch(opts []agentdex.Option, catalog, models agentdex.Fetch) []agentdex.Option {
 	out := make([]agentdex.Option, 0, len(opts)+2)
 	out = append(out,
-		agentdex.WithCatalogFetch(agentdex.FetchCacheOnly),
-		agentdex.WithModelsFetch(agentdex.FetchCacheOnly),
+		agentdex.WithCatalogFetch(catalog),
+		agentdex.WithModelsFetch(models),
 	)
 	return append(out, opts...)
 }
 
 func mapLaunchCatalogErr(err error) error {
-	return mapCatalogFault(err, "cannot resolve agentdex join")
+	mapped := mapCatalogFault(err, "cannot resolve agentdex join")
+	if mapped == nil {
+		return nil
+	}
+	if errors.Is(err, agentdex.ErrCatalogUnavailable) {
+		return fmt.Errorf("%w\n\nRetry, or run 'start doctor' to fetch the catalog", mapped)
+	}
+	return mapped
 }
 
 func mapSetupCatalogErr(err error) error {

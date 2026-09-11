@@ -133,5 +133,6 @@ source = "default" | "global" | "local" | "not set"
 | 78 | Config | Invalid user CUE, or an agent binary missing from PATH; fix the environment |
 
 Exit 75 is the retry signal: a transient registry or agent-catalog failure a
-retry could clear. A typo'd module name returns 3, never 75. Invalid user
+retry could clear. A joined launch whose catalog is unreachable also names
+`start doctor`. A typo'd module name returns 3, never 75. Invalid user
 configuration returns 78, never 3.

@@ -33,10 +33,12 @@ unique multi-term AND substring on keys), then — when the agent has an
 agentdex/models.dev list (exact id or canonical id, then unique substring
 per model — id and canonical id count as one), then passthrough.
 Multiple overlay hits passthrough without consulting the live list.
-Launch join, leftover alias prefixing, get, and describe open agentdex
-CacheOnly (catalog and models.dev): a local binary is never delayed by a
-download. A cold cache fails fast (passthrough for models, transient for
-join). `--refresh` on those commands (and on skill dest resolution) fetches
+Launch join (and get/describe of a joined agent) opens the catalog Cached
+(network only on a cold miss) so the bin can resolve. Catalog-id prefixing
+and the live models.dev list stay CacheOnly: a models.dev download cannot
+delay launch, and a cold models cache passthroughs. A cold catalog with no
+network is still transient for join; retry, or run `start doctor`.
+`--refresh` on those commands (and on skill dest resolution) fetches
 Latest. First-run auto-setup and `start doctor` always use Latest. Display
 commands that never open agentdex (`library`, `search`, `list`) do not.
 
