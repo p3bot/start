@@ -1598,3 +1598,122 @@ agents: {
 		t.Errorf("found double blank line between separator and CUE definition:\nwindow:\n%q\nfull:\n%s", window, output)
 	}
 }
+
+func TestDescribeAgentConditionalModelEmpty(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd := NewRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetArgs([]string{"describe", "opt-empty"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, errBuf.String())
+	}
+	cmdLine := describeCommandLine(buf.String())
+	if cmdLine == "" {
+		t.Fatalf("missing Command line\n%s", buf.String())
+	}
+	if strings.Contains(cmdLine, "--model") {
+		t.Errorf("empty model must omit --model from Command, got: %q", cmdLine)
+	}
+	if strings.Contains(cmdLine, "{{if") {
+		t.Errorf("must not leave {{if}} text, got: %q", cmdLine)
+	}
+	if !strings.Contains(cmdLine, "{{.prompt}}") {
+		t.Errorf("runtime {{.prompt}} should remain, got: %q", cmdLine)
+	}
+}
+
+func TestDescribeAgentConditionalModelResolved(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd := NewRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetArgs([]string{"--model", "sonnet", "describe", "opt-empty"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, errBuf.String())
+	}
+	cmdLine := describeCommandLine(buf.String())
+	if cmdLine == "" {
+		t.Fatalf("missing Command line\n%s", buf.String())
+	}
+	if !strings.Contains(cmdLine, "--model sonnet") {
+		t.Errorf("resolved model should appear, got: %q", cmdLine)
+	}
+	if !strings.Contains(cmdLine, "{{.prompt}}") {
+		t.Errorf("runtime {{.prompt}} should remain, got: %q", cmdLine)
+	}
+	if strings.Contains(cmdLine, "{{if") {
+		t.Errorf("must not leave {{if}} text, got: %q", cmdLine)
+	}
+}
+
+func TestDescribeAgentUnconditionalEmptyModelDropsPlaceholder(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd := NewRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetArgs([]string{"describe", "uncond-empty"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, errBuf.String())
+	}
+	cmdLine := describeCommandLine(buf.String())
+	if cmdLine == "" {
+		t.Fatalf("missing Command line\n%s", buf.String())
+	}
+	if strings.Contains(cmdLine, "{{.model}}") {
+		t.Errorf("empty model must not leave {{.model}}, got: %q", cmdLine)
+	}
+	if !strings.Contains(cmdLine, "--model") {
+		t.Errorf("unconditional --model flag stays in the template, got: %q", cmdLine)
+	}
+}
+
+func describeCommandLine(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if after, ok := strings.CutPrefix(line, "Command: "); ok {
+			return after
+		}
+	}
+	return ""
+}
+
+func TestDescribeAgentInvalidTemplate(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	cmd := NewRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetErr(errBuf)
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetArgs([]string{"describe", "broken"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, errBuf.String())
+	}
+	output := buf.String()
+	if !strings.Contains(output, "[error:") {
+		t.Errorf("describe must surface a template parse error, got:\n%s", output)
+	}
+	if !strings.Contains(output, "parsing command template") {
+		t.Errorf("error should name the parse failure, got:\n%s", output)
+	}
+	if cmdLine := describeCommandLine(output); cmdLine != "" {
+		t.Errorf("must not emit Command: from a failed fill, got %q", cmdLine)
+	}
+}

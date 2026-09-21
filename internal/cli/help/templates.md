@@ -2,12 +2,14 @@
 
 Go template syntax: `{{.placeholder}}`. Two contexts with different placeholders.
 
-Agent command templates (agents.cue `command` field). Do NOT quote `{{.prompt}}` — shell escaping is automatic:
+Agent command templates (agents.cue `command` field). Do NOT quote placeholders — non-empty values are shell-escaped automatically. Empty values stay empty, so `{{if}}` is false (they are not quoted as `''`):
 ```
-claude --print {{.prompt}}
+{{.bin}}{{if .model}} --model {{.model}}{{end}} --print {{.prompt}}
 gemini --model {{.model}} --print {{.prompt}}
 {{.bin}} --print {{.prompt}}
 ```
+
+Keep the leading space inside the `if` so tokens do not glue. Recipes that always set `default_model` may keep unconditional `--model {{.model}}`.
 
 Placeholders: `{{.bin}}` `{{.model}}` `{{.role}}` `{{.role_file}}` `{{.prompt}}` `{{.datetime}}`
 

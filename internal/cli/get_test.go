@@ -1644,3 +1644,140 @@ func TestGetDebugFlagDoesNotPolluteStdout(t *testing.T) {
 		t.Errorf("stdout should contain only the file content under --debug, got: %q", stdout.String())
 	}
 }
+
+func setupAgentCommandTemplateConfig(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	startDir := filepath.Join(dir, ".start")
+	if err := os.MkdirAll(startDir, 0o755); err != nil {
+		t.Fatalf("creating .start dir: %v", err)
+	}
+
+	cueConfig := `
+agents: {
+	"opt-empty": {
+		bin:     "opt"
+		command: "{{.bin}}{{if .model}} --model {{.model}}{{end}} --permission-mode default {{.prompt}}"
+	}
+	"opt-default": {
+		bin:           "opt"
+		command:       "{{.bin}}{{if .model}} --model {{.model}}{{end}} --permission-mode default {{.prompt}}"
+		default_model: "sonnet"
+		models: {
+			sonnet: "sonnet-id"
+		}
+	}
+	"uncond-empty": {
+		bin:     "opt"
+		command: "{{.bin}} --model {{.model}} {{.prompt}}"
+	}
+	"broken": {
+		bin:     "opt"
+		command: "{{.bin}} {{.model"
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(startDir, "settings.cue"), []byte(cueConfig), 0o644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, dir)
+}
+
+func TestGetAgentConditionalModelEmpty(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	stdout, stderr, err := runGetCmd(t, "opt-empty")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if strings.Contains(stdout, "--model") {
+		t.Errorf("empty model must omit --model, got: %q", stdout)
+	}
+	if strings.Contains(stdout, "{{if") {
+		t.Errorf("must not leave {{if}} text, got: %q", stdout)
+	}
+	if !strings.Contains(stdout, "{{.prompt}}") {
+		t.Errorf("runtime {{.prompt}} should remain, got: %q", stdout)
+	}
+	want := "opt --permission-mode default {{.prompt}}\n"
+	if stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestGetAgentConditionalModelResolved(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	cmd := NewRootCmd()
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetArgs([]string{"--model", "sonnet", "get", "opt-empty"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "--model sonnet") {
+		t.Errorf("resolved model should appear unquoted, got: %q", got)
+	}
+	if !strings.Contains(got, "{{.prompt}}") {
+		t.Errorf("runtime {{.prompt}} should remain, got: %q", got)
+	}
+	if strings.Contains(got, "{{if") {
+		t.Errorf("must not leave {{if}} text, got: %q", got)
+	}
+}
+
+func TestGetAgentConditionalModelDefault(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	stdout, stderr, err := runGetCmd(t, "opt-default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if !strings.Contains(stdout, "--model sonnet-id") {
+		t.Errorf("default_model should resolve into the if branch, got: %q", stdout)
+	}
+	if !strings.Contains(stdout, "{{.prompt}}") {
+		t.Errorf("runtime {{.prompt}} should remain, got: %q", stdout)
+	}
+}
+
+func TestGetAgentUnconditionalEmptyModelDropsPlaceholder(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	stdout, stderr, err := runGetCmd(t, "uncond-empty")
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr)
+	}
+	if strings.Contains(stdout, "{{.model}}") {
+		t.Errorf("empty model must not leave {{.model}}, got: %q", stdout)
+	}
+	if !strings.Contains(stdout, "--model") {
+		t.Errorf("unconditional --model flag stays in the template, got: %q", stdout)
+	}
+	if !strings.Contains(stdout, "{{.prompt}}") {
+		t.Errorf("runtime {{.prompt}} should remain, got: %q", stdout)
+	}
+}
+
+func TestGetAgentInvalidTemplate(t *testing.T) {
+	setupAgentCommandTemplateConfig(t)
+
+	stdout, _, err := runGetCmd(t, "broken")
+	if err == nil {
+		t.Fatal("expected error for an unclosed agent command template")
+	}
+	if !strings.Contains(err.Error(), "parsing command template") {
+		t.Errorf("error = %v, want parsing command template", err)
+	}
+	if stdout != "" {
+		t.Errorf("stdout should be empty on error, got: %q", stdout)
+	}
+}

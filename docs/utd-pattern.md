@@ -362,10 +362,15 @@ Agents do not use UTD; their `command` templates use a separate placeholder set:
 | `file:` with `@module/` path | Temp file path |
 | `prompt:` or `command:` (inline) | Temp file path (content written to temp) |
 
-All placeholder values are automatically shell-escaped (single-quote wrapped) by the executor. Do NOT add quotes around placeholders in command templates:
+Non-empty placeholder values are automatically shell-escaped (single-quote wrapped) by the executor. Empty values stay empty so `{{if .placeholder}}` is false — they are not quoted as `''`. Do NOT add quotes around placeholders in command templates.
+
+When the model is optional (no `--model` and no `default_model`), wrap the flag and keep the leading space inside the `if` so tokens do not glue:
 
 ```cue
-// Correct
+// Optional model
+command: "{{.bin}}{{if .model}} --model {{.model}}{{end}} --append-system-prompt {{.role}} {{.prompt}}"
+
+// Correct when default_model is always set
 command: "{{.bin}} --model {{.model}} --append-system-prompt {{.role}} {{.prompt}}"
 
 // Wrong — causes double-quoting

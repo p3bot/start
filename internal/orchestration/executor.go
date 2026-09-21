@@ -17,7 +17,7 @@ import (
 )
 
 // quotedPlaceholderPattern detects placeholders that are incorrectly wrapped in quotes.
-// Since escapeForShell wraps all placeholder values in single quotes, templates should NOT
+// escapeForShell wraps non-empty values in single quotes, so templates should NOT
 // include quotes around any placeholder.
 var quotedPlaceholderPattern = regexp.MustCompile(`['"]{{\.(?:bin|model|role|role_file|prompt|datetime)}}['"]`)
 
@@ -96,7 +96,7 @@ func NewExecutor(workingDir string) *Executor {
 
 // ValidateCommandTemplate checks for common template errors.
 // Returns an error if the template contains quoted placeholders like '{{.prompt}}'
-// since escapeForShell already wraps values in single quotes.
+// since escapeForShell already wraps non-empty values in single quotes.
 // Also detects {placeholder} syntax which should be {{.placeholder}}.
 func ValidateCommandTemplate(tmpl string) error {
 	if match := singleBracePlaceholderPattern.FindStringSubmatch(tmpl); match != nil {
@@ -168,7 +168,6 @@ func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
 		return "", fmt.Errorf("expanding role file path %q: %w", cfg.RoleFile, err)
 	}
 
-	// All values are shell-escaped and single-quoted to prevent injection.
 	data := CommandData{
 		"bin":       escapeForShell(bin),
 		"model":     escapeForShell(model),
@@ -178,23 +177,43 @@ func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
 		"datetime":  escapeForShell(time.Now().Format(time.RFC3339)),
 	}
 
-	tmpl, err := template.New("command").Parse(cfg.Agent.Command)
+	cmdStr, err := executeCommandTemplate(cfg.Agent.Command, data)
 	if err != nil {
-		return "", fmt.Errorf("parsing command template: %w", err)
+		return "", err
 	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("executing command template: %w", err)
-	}
-
-	cmdStr := buf.String()
 
 	if err := validateCommandExecutable(cmdStr, cfg.Agent.Command); err != nil {
 		return "", err
 	}
 
 	return cmdStr, nil
+}
+
+func executeCommandTemplate(tmpl string, data CommandData) (string, error) {
+	t, err := template.New("command").Parse(tmpl)
+	if err != nil {
+		return "", fmt.Errorf("parsing command template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("executing command template: %w", err)
+	}
+	return buf.String(), nil
+}
+
+// FillAgentCommandForDisplay evaluates an agent command as a Go template with
+// the same emptiness rules as launch, without shell-quoting. Runtime keys stay
+// as the literal placeholders so get/describe still show them.
+func FillAgentCommandForDisplay(command, bin, model string) (string, error) {
+	return executeCommandTemplate(command, CommandData{
+		"bin":       bin,
+		"model":     model,
+		"role":      "{{.role}}",
+		"role_file": "{{.role_file}}",
+		"prompt":    "{{.prompt}}",
+		"datetime":  "{{.datetime}}",
+	})
 }
 
 // validateCommandExecutable checks that the first token of the built command
@@ -336,12 +355,16 @@ func (e *Executor) ExecuteWithoutReplace(cfg ExecuteConfig) (string, error) {
 // It wraps the value in single quotes and escapes internal single quotes,
 // preventing shell command injection. The returned value is already quoted -
 // templates should use {{.prompt}} directly, NOT '{{.prompt}}'.
+// Empty stays empty so {{if .placeholder}} is false; quoting '' is truthy.
 //
-// Example: "hello 'world'" becomes "'hello '\"'\"'world'\"'\"”"
+// Example: hello 'world' becomes 'hello '"'"'world'"'"'
 //
 // Note: Environment variables (e.g., $HOME) are NOT expanded. Use literal values
 // in prompts or the command field for dynamic content.
 func escapeForShell(s string) string {
+	if s == "" {
+		return ""
+	}
 	// ' -> '"'"': close the single quote, add a double-quoted literal quote, reopen.
 	escaped := strings.ReplaceAll(s, "'", "'\"'\"'")
 	return "'" + escaped + "'"

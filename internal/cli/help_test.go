@@ -44,6 +44,7 @@ func TestTemplatesHelp_ContainsExpectedContent(t *testing.T) {
 		"# start Template Reference",
 		"{{.prompt}}",
 		"{{.role_file}}",
+		"{{if .model}}",
 		"{{.instructions}}",
 		"{{.file_contents}}",
 		"{{.command_output}}",

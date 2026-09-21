@@ -553,11 +553,16 @@ func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, 
 
 	if fields.Command != "" {
 		cmd := fields.Command
+		var fillErr error
 		if r.ItemType == "Agent" {
-			cmd = partialFillAgentCommand(cmd, r.Value, modelOverride, binOverride)
+			cmd, fillErr = fillAgentCommand(cmd, r.Value, modelOverride, binOverride)
 		}
 		fmt.Fprintln(w)
-		fmt.Fprintf(w, "%s %s\n", label("Command:"), cmd)
+		if fillErr != nil {
+			fmt.Fprintf(w, "[error: %s]\n", fillErr)
+		} else {
+			fmt.Fprintf(w, "%s %s\n", label("Command:"), cmd)
+		}
 	}
 
 	printSeparator(w)
@@ -669,12 +674,11 @@ func resolveDescribeFile(filePath, origin string) (resolvedPath, content string,
 	return expanded, string(data), nil
 }
 
-// partialFillAgentCommand fills the static {{.bin}} and {{.model}} placeholders,
-// leaving runtime ones ({{.prompt}}, {{.role}}, ...) for execution time.
-// modelOverride (already resolved by the caller) replaces default_model when
-// non-empty. Both paths look the key up in the models map; unknown keys pass
-// through as the literal id.
-func partialFillAgentCommand(command string, v cue.Value, modelOverride, binOverride string) string {
+// fillAgentCommand evaluates the agent command as a Go template with the
+// same emptiness rules as launch. modelOverride (already resolved by the caller)
+// replaces default_model when non-empty. Both paths look the key up in the
+// models map; unknown keys pass through as the literal id.
+func fillAgentCommand(command string, v cue.Value, modelOverride, binOverride string) (string, error) {
 	bin := binOverride
 	if bin == "" {
 		if f := v.LookupPath(cue.ParsePath("bin")); f.Exists() {
@@ -694,14 +698,7 @@ func partialFillAgentCommand(command string, v cue.Value, modelOverride, binOver
 		}
 	}
 
-	result := command
-	if bin != "" {
-		result = strings.ReplaceAll(result, "{{.bin}}", bin)
-	}
-	if model != "" {
-		result = strings.ReplaceAll(result, "{{.model}}", model)
-	}
-	return result
+	return orchestration.FillAgentCommandForDisplay(command, bin, model)
 }
 
 func deriveCacheDir(origin string) string {

@@ -185,15 +185,18 @@ func TestExecutor_BuildCommand(t *testing.T) {
 			wantContain: "'/tmp/role.md'",
 		},
 		{
-			name: "conditional model in template",
+			name: "conditional model in template with model",
 			config: ExecuteConfig{
 				Agent: Agent{
-					Bin:     "claude",
+					Bin:     "echo",
 					Command: "{{.bin}}{{if .model}} --model {{.model}}{{end}}",
+					Models: map[string]string{
+						"sonnet": "claude-sonnet-4-20250514",
+					},
+					DefaultModel: "sonnet",
 				},
 			},
-			// bin is also quoted now
-			wantContain: "'claude'",
+			wantContain: "--model 'claude-sonnet-4-20250514'",
 		},
 		{
 			name: "invalid template",
@@ -239,6 +242,113 @@ func TestExecutor_BuildCommand(t *testing.T) {
 	}
 }
 
+func TestBuildCommand_ConditionalModel(t *testing.T) {
+	t.Parallel()
+	executor := NewExecutor("")
+	tmpl := "{{.bin}}{{if .model}} --model {{.model}}{{end}} --permission-mode default {{.prompt}}"
+
+	t.Run("empty model omits flag", func(t *testing.T) {
+		cmd, err := executor.BuildCommand(ExecuteConfig{
+			Agent:  Agent{Bin: "echo", Command: tmpl},
+			Prompt: "hi",
+		})
+		if err != nil {
+			t.Fatalf("BuildCommand: %v", err)
+		}
+		if strings.Contains(cmd, "--model") {
+			t.Errorf("empty model must omit --model, got %q", cmd)
+		}
+		if strings.Contains(cmd, "''") {
+			t.Errorf("empty model must not quote as '', got %q", cmd)
+		}
+		want := "'echo' --permission-mode default 'hi'"
+		if cmd != want {
+			t.Errorf("command = %q, want %q", cmd, want)
+		}
+	})
+
+	t.Run("non-empty model quotes id", func(t *testing.T) {
+		cmd, err := executor.BuildCommand(ExecuteConfig{
+			Agent: Agent{
+				Bin:     "echo",
+				Command: tmpl,
+			},
+			Model:  "sonnet",
+			Prompt: "hi",
+		})
+		if err != nil {
+			t.Fatalf("BuildCommand: %v", err)
+		}
+		want := "'echo' --model 'sonnet' --permission-mode default 'hi'"
+		if cmd != want {
+			t.Errorf("command = %q, want %q", cmd, want)
+		}
+	})
+}
+
+func TestFillAgentCommandForDisplay(t *testing.T) {
+	t.Parallel()
+	ifTmpl := "{{.bin}}{{if .model}} --model {{.model}}{{end}} --permission-mode default {{.prompt}}"
+	uncond := "{{.bin}} --model {{.model}} {{.prompt}}"
+
+	tests := []struct {
+		name    string
+		command string
+		bin     string
+		model   string
+		want    string
+	}{
+		{
+			name:    "empty model omits if branch",
+			command: ifTmpl,
+			bin:     "opt",
+			want:    "opt --permission-mode default {{.prompt}}",
+		},
+		{
+			name:    "non-empty model keeps flag unquoted",
+			command: ifTmpl,
+			bin:     "opt",
+			model:   "sonnet",
+			want:    "opt --model sonnet --permission-mode default {{.prompt}}",
+		},
+		{
+			name:    "unconditional empty model drops placeholder",
+			command: uncond,
+			bin:     "opt",
+			want:    "opt --model  {{.prompt}}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := FillAgentCommandForDisplay(tt.command, tt.bin, tt.model)
+			if err != nil {
+				t.Fatalf("FillAgentCommandForDisplay: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+			if strings.Contains(got, "{{if") {
+				t.Errorf("display must not leave {{if}} text, got %q", got)
+			}
+			if tt.model == "" && strings.Contains(got, "{{.model}}") {
+				t.Errorf("empty model must not leave {{.model}}, got %q", got)
+			}
+		})
+	}
+}
+
+func TestFillAgentCommandForDisplay_InvalidTemplate(t *testing.T) {
+	t.Parallel()
+	_, err := FillAgentCommandForDisplay("{{.bin}} {{.model", "opt", "")
+	if err == nil {
+		t.Fatal("expected error for an unclosed template action")
+	}
+	if !strings.Contains(err.Error(), "parsing command template") {
+		t.Errorf("error = %v, want parsing command template", err)
+	}
+}
+
 func TestEscapeForShell(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -249,7 +359,7 @@ func TestEscapeForShell(t *testing.T) {
 		{"simple text", "simple text", "'simple text'"},
 		{"single quote escaping", "it's a test", "'it'\"'\"'s a test'"},
 		{"no quotes", "no quotes here", "'no quotes here'"},
-		{"empty string", "", "''"},
+		{"empty string", "", ""},
 	}
 
 	for _, tt := range tests {

@@ -28,11 +28,11 @@ prefix scopes the search to a single category. A file path (starting with ./, /,
 ~, or ~/) or an http(s) URL bypasses the search and its content is read directly.
 UTD modules (roles, contexts,
 tasks) are template-resolved: file contents are read, prompts are rendered,
-and commands are executed. Agent modules emit the command template with static
-placeholders ({{.bin}}, {{.model}}) substituted while runtime placeholders
-({{.prompt}}, {{.role}}, {{.role_file}}, {{.datetime}}) are left intact. The
---model flag, when set, overrides the agent's default_model in the
-{{.model}} substitution.
+and commands are executed. Agent modules emit the command template evaluated as a Go template:
+{{.bin}} and {{.model}} are filled (an empty model is omitted, including
+inside {{if}}), while runtime placeholders ({{.prompt}}, {{.role}},
+{{.role_file}}, {{.datetime}}) stay intact. The --model flag, when set,
+overrides the agent's default_model in the {{.model}} substitution.
 
 Source priority for UTD modules is file > prompt > command. When a UTD module
 defines both file and prompt, get outputs the file. During role/task/context
@@ -182,8 +182,8 @@ func outputFileBody(w io.Writer, flags *Flags, path string) error {
 	return nil
 }
 
-// getAgent writes the agent's command template (with {{.bin}} and {{.model}}
-// resolved) to stdout, leaving runtime placeholders intact. The model is
+// getAgent writes the agent's command template evaluated as a Go template
+// ({{.bin}} and {{.model}} filled; runtime placeholders intact). The model is
 // resolved via resolveLaunchModel so get matches launch and describe.
 func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, item cue.Value) error {
 	cmdField := item.LookupPath(cue.ParsePath("command"))
@@ -204,7 +204,10 @@ func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, 
 	if err != nil {
 		return err
 	}
-	rendered := partialFillAgentCommand(command, item, r.resolveLaunchModel(flags.Model, agent), agent.Bin)
+	rendered, err := fillAgentCommand(command, item, r.resolveLaunchModel(flags.Model, agent), agent.Bin)
+	if err != nil {
+		return err
+	}
 	fmt.Fprint(stdout, ensureTrailingNewline(rendered))
 	return nil
 }
