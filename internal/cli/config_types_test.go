@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/p3bot/start/internal/config"
+	"github.com/p3bot/start/internal/orchestration"
 )
 
 func TestDecodeAgentValue_FullMetadata(t *testing.T) {
@@ -32,7 +34,10 @@ func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 		t.Fatalf("CompileString: %v", err)
 	}
 
-	got := decodeAgentValue(val)
+	got, err := decodeAgentValue(val)
+	if err != nil {
+		t.Fatalf("decodeAgentValue: %v", err)
+	}
 
 	if got.Agentdex != "claude-code" {
 		t.Errorf("Agentdex: got %q want %q", got.Agentdex, "claude-code")
@@ -88,7 +93,10 @@ func TestDecodeAgentValue_ObjectFormModels(t *testing.T) {
 		t.Fatalf("CompileString: %v", err)
 	}
 
-	got := decodeAgentValue(val)
+	got, err := decodeAgentValue(val)
+	if err != nil {
+		t.Fatalf("decodeAgentValue: %v", err)
+	}
 
 	wantModels := map[string]string{
 		"sonnet": "obj-sonnet-id",
@@ -112,7 +120,10 @@ func TestDecodeAgentValue_MixedFormModels(t *testing.T) {
 		t.Fatalf("CompileString: %v", err)
 	}
 
-	got := decodeAgentValue(val)
+	got, err := decodeAgentValue(val)
+	if err != nil {
+		t.Fatalf("decodeAgentValue: %v", err)
+	}
 
 	wantModels := map[string]string{
 		"sonnet": "simple-sonnet-id",
@@ -130,10 +141,13 @@ func TestDecodeAgentValue_Empty(t *testing.T) {
 		t.Fatalf("CompileString: %v", err)
 	}
 
-	got := decodeAgentValue(val)
+	got, err := decodeAgentValue(val)
+	if err != nil {
+		t.Fatalf("decodeAgentValue: %v", err)
+	}
 
 	if got.Agentdex != "" || got.Bin != "" || got.Command != "" || got.DefaultModel != "" ||
-		got.Description != "" || got.Origin != "" ||
+		got.Description != "" || got.Origin != "" || got.Flags != nil ||
 		len(got.Tags) != 0 || len(got.Uses) != 0 || len(got.Models) != 0 {
 		t.Errorf("expected zero-value AgentConfig, got %+v", got)
 	}
@@ -354,6 +368,91 @@ func TestUpsertContext_PreservesUsesAcrossEdit(t *testing.T) {
 	}
 	if reloaded["alpha"].Description != "Edited alpha." {
 		t.Errorf("alpha edit not applied: %q", reloaded["alpha"].Description)
+	}
+}
+
+// TestUpsertAgent_PreservesFlagsAcrossEdit guards a description edit against
+// dropping the flags table the launch path reads.
+func TestUpsertAgent_PreservesFlagsAcrossEdit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	initial := `agents: {
+	echo: {
+		bin: "echo"
+		command: "{{.bin}}{{.permission}}{{.print}}"
+		description: "old"
+		flags: {
+			permission: {
+				edit: ["--permission-mode", "acceptEdits"]
+				none: []
+			}
+			print: {
+				off: ["--brief"]
+				on: ["--print", "{{.prompt}}"]
+			}
+		}
+	}
+}
+`
+	path := filepath.Join(dir, "agents.cue")
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agents, _, err := loadAgentsFromDir(dir)
+	if err != nil {
+		t.Fatalf("loadAgentsFromDir: %v", err)
+	}
+	echo := agents["echo"]
+	if echo.Flags == nil {
+		t.Fatal("decode dropped flags")
+	}
+	echo.Description = "renamed"
+	if err := upsertAgent(path, echo); err != nil {
+		t.Fatalf("upsertAgent: %v", err)
+	}
+
+	reloaded, _, err := loadAgentsFromDir(dir)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded["echo"].Description != "renamed" {
+		t.Errorf("description = %q", reloaded["echo"].Description)
+	}
+	if reloaded["echo"].Flags == nil {
+		t.Fatal("edit dropped flags")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := cuecontext.New().CompileBytes(data)
+	if err := v.Err(); err != nil {
+		t.Fatalf("rewritten config: %v\n%s", err, data)
+	}
+	item := v.LookupPath(cue.ParsePath("agents")).LookupPath(cue.MakePath(cue.Str("echo")))
+	agent := orchestration.AgentFromValue(item, "echo")
+	got, err := agent.CommandFragments(orchestration.LaunchFlags{
+		PermissionSet: true,
+		Permission:    "edit",
+	}, "hi", orchestration.FragmentLaunch)
+	if err != nil {
+		t.Fatalf("CommandFragments: %v", err)
+	}
+	if got.Permission != " --permission-mode acceptEdits" || got.Print != " --brief" {
+		t.Errorf("fragments = %+v", got)
+	}
+	empty, err := agent.CommandFragments(orchestration.LaunchFlags{
+		PermissionSet: true,
+		Permission:    "none",
+		Print:         true,
+	}, "", orchestration.FragmentLaunch)
+	if err != nil {
+		t.Fatalf("empty permission: %v", err)
+	}
+	if empty.Permission != "" || empty.Print != " --print ''" {
+		t.Errorf("empty permission fragments = %+v", empty)
 	}
 }
 

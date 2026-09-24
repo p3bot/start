@@ -288,6 +288,7 @@ func executeTask(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, taskNa
 		Prompt:     composeResult.Prompt,
 		WorkingDir: env.WorkingDir,
 		DryRun:     flags.DryRun,
+		Launch:     flags.launchFlags(),
 	}
 
 	cmdStr, err := env.Executor.BuildCommand(execConfig)

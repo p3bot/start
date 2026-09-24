@@ -31,7 +31,11 @@ tasks) are template-resolved: file contents are read, prompts are rendered,
 and commands are executed. Agent modules emit the command template evaluated as a Go template:
 {{.bin}} and {{.model}} are filled (an empty model is omitted, including
 inside {{if}}), while runtime placeholders ({{.prompt}}, {{.role}},
-{{.role_file}}, {{.datetime}}) stay intact. The --model flag, when set,
+{{.role_file}}, {{.datetime}}) stay intact. --permission, --print, --resume,
+--effort, and --output are translated from the agent module into
+{{.permission}}, {{.print}}, {{.resume}}, {{.effort}}, and {{.output}}.
+Display does not shell-quote; {{.prompt}} stays visible, and {{.resume}} is
+filled only when --resume=<id> was passed. The --model flag, when set,
 overrides the agent's default_model in the {{.model}} substitution.
 
 Source priority for UTD modules is file > prompt > command. When a UTD module
@@ -204,7 +208,7 @@ func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, 
 	if err != nil {
 		return err
 	}
-	rendered, err := fillAgentCommand(command, item, r.resolveLaunchModel(flags.Model, agent), agent.Bin)
+	rendered, err := fillAgentCommand(command, item, r.resolveLaunchModel(flags.Model, agent), agent.Bin, agent, flags.launchFlags())
 	if err != nil {
 		return err
 	}

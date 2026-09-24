@@ -42,6 +42,21 @@ type Flags struct {
 	Global  bool
 	Refresh bool
 
+	// Launch-flag translation. String flags are set only when the user passed
+	// them (the Set fields); an empty value is still supplied. Print false
+	// means the flag was omitted. ResumeBare is the bare flag; otherwise
+	// ResumeID is the --resume=<id> value, which may itself be empty.
+	Permission    string
+	PermissionSet bool
+	Effort        string
+	EffortSet     bool
+	Output        string
+	OutputSet     bool
+	Print         bool
+	ResumeSet     bool
+	ResumeBare    bool
+	ResumeID      string
+
 	// NoRole and NoImplicitContexts are derived skip state, set by none-sentinel
 	// normalisation in PersistentPreRunE rather than bound to a flag. NoRole
 	// skips role assignment. NoImplicitContexts suppresses the contexts that
@@ -511,6 +526,7 @@ func executeStart(stdout, stderr io.Writer, stdin io.Reader, flags *Flags, selec
 		Prompt:     result.Prompt,
 		WorkingDir: env.WorkingDir,
 		DryRun:     flags.DryRun,
+		Launch:     flags.launchFlags(),
 	}
 
 	cmdStr, err := env.Executor.BuildCommand(execConfig)

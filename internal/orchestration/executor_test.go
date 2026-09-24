@@ -321,7 +321,7 @@ func TestFillAgentCommandForDisplay(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := FillAgentCommandForDisplay(tt.command, tt.bin, tt.model)
+			got, err := FillAgentCommandForDisplay(tt.command, tt.bin, tt.model, Agent{}, LaunchFlags{})
 			if err != nil {
 				t.Fatalf("FillAgentCommandForDisplay: %v", err)
 			}
@@ -340,7 +340,7 @@ func TestFillAgentCommandForDisplay(t *testing.T) {
 
 func TestFillAgentCommandForDisplay_InvalidTemplate(t *testing.T) {
 	t.Parallel()
-	_, err := FillAgentCommandForDisplay("{{.bin}} {{.model", "opt", "")
+	_, err := FillAgentCommandForDisplay("{{.bin}} {{.model", "opt", "", Agent{}, LaunchFlags{})
 	if err == nil {
 		t.Fatal("expected error for an unclosed template action")
 	}

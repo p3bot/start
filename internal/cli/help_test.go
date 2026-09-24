@@ -43,6 +43,8 @@ func TestTemplatesHelp_ContainsExpectedContent(t *testing.T) {
 	for _, want := range []string{
 		"# start Template Reference",
 		"{{.prompt}}",
+		"{{.permission}}",
+		"{{.print}}",
 		"{{.role_file}}",
 		"{{if .model}}",
 		"{{.instructions}}",

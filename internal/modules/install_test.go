@@ -899,6 +899,56 @@ task: {
 	}
 }
 
+func TestExtractModuleContent_PreservesAgentFlags(t *testing.T) {
+	t.Parallel()
+
+	moduleDir := createTestModule(t, "agent", `package agent
+
+agent: {
+	bin: "echo"
+	command: "{{.bin}}{{.permission}}{{.print}}{{.resume}}"
+	default_model: "sonnet"
+	flags: {
+		permission: {
+			edit: ["--permission-mode", "acceptEdits"]
+			none: []
+		}
+		print: {
+			off: ["--brief"]
+			on: ["--print", "{{.prompt}}"]
+		}
+		resume: {
+			latest: ["--continue"]
+			id: ["--resume", "{{.resume}}"]
+		}
+	}
+}
+`)
+
+	astResult, err := ExtractModuleContent(moduleDir, SearchResult{Category: "agents", Name: "echo"}, nil, "test.example/agent@v0.1.0", "")
+	if err != nil {
+		t.Fatalf("ExtractModuleContent() error: %v", err)
+	}
+	result := formatAST(t, astResult)
+	for _, want := range []string{
+		"flags:",
+		"acceptEdits",
+		"--brief",
+		"{{.prompt}}",
+		"--continue",
+		"{{.resume}}",
+		"default_model:",
+	} {
+		if !strings.Contains(result, want) {
+			t.Errorf("missing %s\nGot:\n%s", want, result)
+		}
+	}
+	if strings.Index(result, "command:") > strings.Index(result, "flags:") ||
+		strings.Index(result, "flags:") > strings.Index(result, "default_model:") {
+		t.Errorf("flags not between command and default_model\nGot:\n%s", result)
+	}
+}
+
 func TestExtractModuleContent_Role(t *testing.T) {
 	t.Parallel()
 

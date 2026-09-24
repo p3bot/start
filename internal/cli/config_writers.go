@@ -38,6 +38,9 @@ func agentEntry(a AgentConfig) *ast.StructLit {
 	if len(a.Models) > 0 {
 		fields["models"] = modelsExpr(a.Models)
 	}
+	if a.Flags != nil {
+		fields["flags"] = a.Flags
+	}
 	return assembleEntry("agents", a.Origin, fields)
 }
 

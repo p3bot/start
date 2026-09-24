@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/ast"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/modules"
 )
 
 // AgentConfig represents an agent configuration for editing.
@@ -20,13 +22,16 @@ type AgentConfig struct {
 	Models       map[string]string `json:"models,omitempty"`
 	Tags         []string          `json:"tags,omitempty"`
 	Uses         []string          `json:"uses,omitempty"`   // Colon-form addresses of modules pulled in via `start get`
+	Flags        ast.Expr          `json:"-"`                // flags table, written back unchanged by config edit
 	Source       string            `json:"source"`           // "global" or "local"
 	Origin       string            `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
 // decodeAgentValue populates an AgentConfig from a per-item CUE value (Name and
-// Source are left for the caller).
-func decodeAgentValue(val cue.Value) AgentConfig {
+// Source are left for the caller). A flags table is kept as an expression so a
+// later edit writes the same table back. A table that cannot be rewritten is
+// an error, so the edit path cannot drop it.
+func decodeAgentValue(val cue.Value) (AgentConfig, error) {
 	var agent AgentConfig
 
 	if v := val.LookupPath(cue.ParsePath("agentdex")); v.Exists() {
@@ -53,8 +58,15 @@ func decodeAgentValue(val cue.Value) AgentConfig {
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		agent.Origin, _ = v.String()
 	}
+	if v := val.LookupPath(cue.ParsePath("flags")); v.Exists() {
+		expr, err := modules.FormatFieldExpr(v)
+		if err != nil {
+			return agent, fmt.Errorf("flags: %w", err)
+		}
+		agent.Flags = expr
+	}
 
-	return agent
+	return agent, nil
 }
 
 func loadAgentsForScope(scope config.Scope) (map[string]AgentConfig, []string, error) {
@@ -86,7 +98,10 @@ func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		agent := decodeAgentValue(iter.Value())
+		agent, err := decodeAgentValue(iter.Value())
+		if err != nil {
+			return nil, nil, fmt.Errorf("agent %q: %w", name, err)
+		}
 		agent.Name = name
 		agents[name] = agent
 		order = append(order, name)

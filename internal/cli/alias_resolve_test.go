@@ -54,6 +54,8 @@ func TestResolveAliasArgs_Rewrites(t *testing.T) {
 		{"bare alias", []string{"pc"}, []string{"task", "review/pre-commit"}},
 		{"trailing arg", []string{"pc", "fix the lint"}, []string{"task", "review/pre-commit", "fix the lint"}},
 		{"trailing flag", []string{"pc", "--model", "opus"}, []string{"task", "review/pre-commit", "--model", "opus"}},
+		{"bare resume leaves alias positional", []string{"--resume", "pc"}, []string{"--resume", "task", "review/pre-commit"}},
+		{"resume equals is not positional", []string{"--resume=pc"}, []string{"--resume=pc"}},
 		{"flag before token", []string{"--debug", "pc"}, []string{"--debug", "task", "review/pre-commit"}},
 		{"flags-only alias", []string{"dev"}, []string{"--role", "go-expert", "--context", "cwd/agents-md"}},
 		{"case-insensitive", []string{"PC"}, []string{"task", "review/pre-commit"}},

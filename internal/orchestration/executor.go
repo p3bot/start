@@ -19,11 +19,20 @@ import (
 // quotedPlaceholderPattern detects placeholders that are incorrectly wrapped in quotes.
 // escapeForShell wraps non-empty values in single quotes, so templates should NOT
 // include quotes around any placeholder.
-var quotedPlaceholderPattern = regexp.MustCompile(`['"]{{\.(?:bin|model|role|role_file|prompt|datetime)}}['"]`)
+var quotedPlaceholderPattern = regexp.MustCompile(`['"]{{\.(?:bin|model|role|role_file|prompt|datetime|permission|effort|output|resume|print)}}['"]`)
 
 // singleBracePlaceholderPattern detects placeholders using {name} syntax instead of {{.name}}.
 // This is a common mistake when users expect simple substitution syntax.
-var singleBracePlaceholderPattern = regexp.MustCompile(`\{(bin|model|role|role_file|prompt|datetime)\}`)
+var singleBracePlaceholderPattern = regexp.MustCompile(`\{(bin|model|role|role_file|prompt|datetime|permission|effort|output|resume|print)\}`)
+
+// rawFragmentPlaceholders are inserted as pre-assembled argv, not as one shell-quoted word.
+var rawFragmentPlaceholders = map[string]bool{
+	"permission": true,
+	"effort":     true,
+	"output":     true,
+	"resume":     true,
+	"print":      true,
+}
 
 // Agent represents an agent configuration.
 type Agent struct {
@@ -34,6 +43,7 @@ type Agent struct {
 	DefaultModel string
 	Models       map[string]string
 	Description  string
+	Flags        *FlagTable
 }
 
 // ExecuteConfig holds the configuration for agent execution.
@@ -46,6 +56,7 @@ type ExecuteConfig struct {
 	PromptFile string
 	WorkingDir string
 	DryRun     bool
+	Launch     LaunchFlags
 }
 
 // CommandData holds data for command template substitution.
@@ -115,6 +126,16 @@ Update your command template:
 		placeholder = strings.TrimSuffix(placeholder, "}}'")
 		placeholder = strings.TrimSuffix(placeholder, "}}\"")
 
+		if rawFragmentPlaceholders[placeholder] {
+			return fmt.Errorf(`template contains quoted placeholder %s
+
+%s is inserted raw, including its own spaces.
+Remove the surrounding quotes from your command template:
+
+  Before: '%s'
+  After:  %s`, match, "{{."+placeholder+"}}", "{{."+placeholder+"}}", "{{."+placeholder+"}}")
+		}
+
 		return fmt.Errorf(`template contains quoted placeholder %s
 
 Placeholders are automatically shell-escaped and quoted.
@@ -128,6 +149,13 @@ Remove the surrounding quotes from your command template:
 
 // BuildCommand builds the agent command from template and config.
 func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
+	// Translate before LookPath or process start so a bad flag is usage,
+	// not a missing binary and not a launched command.
+	frags, err := cfg.Agent.CommandFragments(cfg.Launch, cfg.Prompt, FragmentLaunch)
+	if err != nil {
+		return "", err
+	}
+
 	if err := ValidateCommandTemplate(cfg.Agent.Command); err != nil {
 		return "", err
 	}
@@ -169,12 +197,17 @@ func (e *Executor) BuildCommand(cfg ExecuteConfig) (string, error) {
 	}
 
 	data := CommandData{
-		"bin":       escapeForShell(bin),
-		"model":     escapeForShell(model),
-		"role":      escapeForShell(cfg.Role),
-		"role_file": escapeForShell(roleFile),
-		"prompt":    escapeForShell(cfg.Prompt),
-		"datetime":  escapeForShell(time.Now().Format(time.RFC3339)),
+		"bin":        escapeForShell(bin),
+		"model":      escapeForShell(model),
+		"role":       escapeForShell(cfg.Role),
+		"role_file":  escapeForShell(roleFile),
+		"prompt":     escapeForShell(cfg.Prompt),
+		"datetime":   escapeForShell(time.Now().Format(time.RFC3339)),
+		"permission": frags.Permission,
+		"effort":     frags.Effort,
+		"output":     frags.Output,
+		"resume":     frags.Resume,
+		"print":      frags.Print,
 	}
 
 	cmdStr, err := executeCommandTemplate(cfg.Agent.Command, data)
@@ -204,15 +237,26 @@ func executeCommandTemplate(tmpl string, data CommandData) (string, error) {
 
 // FillAgentCommandForDisplay evaluates an agent command as a Go template with
 // the same emptiness rules as launch, without shell-quoting. Runtime keys stay
-// as the literal placeholders so get/describe still show them.
-func FillAgentCommandForDisplay(command, bin, model string) (string, error) {
+// as the literal placeholders so get/describe still show them. Flag fragments
+// use the same table as launch; {{.prompt}} stays visible and {{.resume}} is
+// filled only inside an id fragment.
+func FillAgentCommandForDisplay(command, bin, model string, agent Agent, launch LaunchFlags) (string, error) {
+	frags, err := agent.CommandFragments(launch, "", FragmentDisplay)
+	if err != nil {
+		return "", err
+	}
 	return executeCommandTemplate(command, CommandData{
-		"bin":       bin,
-		"model":     model,
-		"role":      "{{.role}}",
-		"role_file": "{{.role_file}}",
-		"prompt":    "{{.prompt}}",
-		"datetime":  "{{.datetime}}",
+		"bin":        bin,
+		"model":      model,
+		"role":       "{{.role}}",
+		"role_file":  "{{.role_file}}",
+		"prompt":     "{{.prompt}}",
+		"datetime":   "{{.datetime}}",
+		"permission": frags.Permission,
+		"effort":     frags.Effort,
+		"output":     frags.Output,
+		"resume":     frags.Resume,
+		"print":      frags.Print,
 	})
 }
 
@@ -440,6 +484,7 @@ func extractAgentFields(agentVal cue.Value, name string) Agent {
 	}
 
 	agent.Models = internalcue.AgentModels(agentVal)
+	agent.Flags = decodeAgentFlagTable(agentVal)
 
 	return agent
 }

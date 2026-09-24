@@ -16,6 +16,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/orchestration"
 )
 
 // snapshotSeparator is the 79-rune box-drawing line emitted by printSeparator.
@@ -144,7 +145,7 @@ func TestSnapshot_DescribeAgent(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{}, "", "")
+	printVerboseDump(&buf, result, &Flags{}, "", "", orchestration.Agent{}, orchestration.LaunchFlags{})
 
 	want := fmt.Sprintf(`Agent: claude
 %[1]s
@@ -188,7 +189,7 @@ func TestSnapshot_DescribeRole(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{}, "", "")
+	printVerboseDump(&buf, result, &Flags{}, "", "", orchestration.Agent{}, orchestration.LaunchFlags{})
 
 	want := fmt.Sprintf(`Role: code-reviewer
 %[1]s
@@ -219,7 +220,7 @@ func TestSnapshot_DescribeContext(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{}, "", "")
+	printVerboseDump(&buf, result, &Flags{}, "", "", orchestration.Agent{}, orchestration.LaunchFlags{})
 
 	want := fmt.Sprintf(`Context: environment
 %[1]s
@@ -254,7 +255,7 @@ func TestSnapshot_DescribeTask(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{}, "", "")
+	printVerboseDump(&buf, result, &Flags{}, "", "", orchestration.Agent{}, orchestration.LaunchFlags{})
 
 	want := fmt.Sprintf(`Task: myreview
 %[1]s
@@ -367,7 +368,7 @@ func TestSnapshot_DescribeAgentObjectForm(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printVerboseDump(&buf, result, &Flags{}, "", "")
+	printVerboseDump(&buf, result, &Flags{}, "", "", orchestration.Agent{}, orchestration.LaunchFlags{})
 
 	want := fmt.Sprintf(`Agent: objform
 %[1]s

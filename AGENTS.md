@@ -102,6 +102,11 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | `--agent` | `-a` | Override agent (launch: recipe or agentdex catalog id; skills: dest catalog ids) |
 | `--role` | `-r` | Override role (config name, file path, or http(s) URL); `none` skips role assignment |
 | `--model` | `-m` | Override the model |
+| `--permission` | | Permission mode, translated from the agent module `flags` table |
+| `--print` | | Print mode, translated from that table. Omitted inserts the module's off words when `print` is present |
+| `--resume` | | Resume: bare flag for latest, or `--resume=<id>`. The next word stays a prompt or task name |
+| `--effort` | | Effort level, translated from the agent module `flags` table |
+| `--output` | | Output format, translated from the agent module `flags` table |
 | `--context` | `-c` | Select contexts (tags, file paths, or http(s) URLs, repeatable); `none` drops auto-loaded required/default contexts (`none,foo` keeps only foo) |
 | `--dry-run` | | Preview without launching or writing |
 | `--quiet` | `-q` | Suppress non-essential output |
@@ -110,6 +115,8 @@ start alias import [file]         # Merge aliases from stdin or a file (--replac
 | `--color` | | Colour output: `auto` (default), `always`, `never` |
 | `--local` | `-l` | Target local config |
 | `--refresh` | | Bypass the 24h CUE index cache and resolve it live; commands that open agentdex also fetch catalog and models.dev live (inert on `install`/`update`/`doctor validate` for the CUE index) |
+
+`--permission`, `--print`, `--resume`, `--effort`, and `--output` are read by launch (`start`, `start task`, `start prompt`), `get`, and `describe`. Every other command accepts them and does not translate them or write config.
 
 ## Architecture
 

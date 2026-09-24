@@ -125,6 +125,12 @@ Examples:
 				flags.NoImplicitContexts = true
 				flags.Context = rest
 			}
+			// String flags need an explicit presence bit: an empty --permission=
+			// is supplied, and the zero value is also the omitted default.
+			// Resume presence is recorded by resumeFlag.Set during parse.
+			flags.PermissionSet = cmd.Flags().Changed("permission")
+			flags.EffortSet = cmd.Flags().Changed("effort")
+			flags.OutputSet = cmd.Flags().Changed("output")
 			return nil
 		},
 	}
@@ -139,6 +145,14 @@ Examples:
 	cmd.PersistentFlags().StringSliceVarP(&flags.Agent, "agent", "a", nil, "Override agent (launch: recipe or agentdex catalog id; skills: dest catalog ids)")
 	cmd.PersistentFlags().StringVarP(&flags.Role, "role", "r", "", "Override role (config name, file path, or http(s) URL); 'none' skips role assignment (also: nil, off, 0)")
 	cmd.PersistentFlags().StringVarP(&flags.Model, "model", "m", "", "Override model selection")
+	cmd.PersistentFlags().StringVar(&flags.Permission, "permission", "", "Permission mode, translated by the agent module")
+	cmd.PersistentFlags().BoolVar(&flags.Print, "print", false, "Print mode, translated by the agent module")
+	cmd.PersistentFlags().Var(&resumeFlag{flags: flags}, "resume", "Resume the latest session, or pass an id with --resume=<id>")
+	// Non-empty so a following word stays positional. See resumeBareSentinel.
+	cmd.PersistentFlags().Lookup("resume").NoOptDefVal = resumeBareSentinel
+	installResumeUsage(cmd)
+	cmd.PersistentFlags().StringVar(&flags.Effort, "effort", "", "Effort level, translated by the agent module")
+	cmd.PersistentFlags().StringVar(&flags.Output, "output", "", "Output format, translated by the agent module")
 	cmd.PersistentFlags().StringSliceVarP(&flags.Context, "context", "c", nil, "Select contexts (tags, file paths, or http(s) URLs); 'none' drops auto-loaded contexts (also: nil, off, 0)")
 	cmd.PersistentFlags().BoolVar(&flags.DryRun, "dry-run", false, "Preview without launching or writing")
 	cmd.PersistentFlags().BoolVarP(&flags.Quiet, "quiet", "q", false, "Suppress output")

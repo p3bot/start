@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/format"
@@ -253,6 +254,39 @@ func TestEntryByteIdenticalToInstall(t *testing.T) {
 			Bin:          "claude",
 			Command:      "claude --model {{model}}",
 			DefaultModel: "claude-opus-4-8",
+		})
+		assertSameBytes(t, installStruct, add)
+	})
+
+	t.Run("agent flags", func(t *testing.T) {
+		t.Parallel()
+		const origin = "github.com/x/agents/echo@v0.1.0"
+		v := ctx.CompileString(`{
+			bin: "echo"
+			command: "{{.bin}}{{.permission}}"
+			flags: {
+				permission: {
+					edit: ["--permission-mode", "acceptEdits"]
+					none: []
+				}
+			}
+		}`)
+		if err := v.Err(); err != nil {
+			t.Fatal(err)
+		}
+		installStruct, err := modules.FormatModuleStruct(v, "agents", origin, "")
+		if err != nil {
+			t.Fatalf("FormatModuleStruct: %v", err)
+		}
+		flags, err := modules.FormatFieldExpr(v.LookupPath(cue.ParsePath("flags")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		add := agentEntry(AgentConfig{
+			Origin:  origin,
+			Bin:     "echo",
+			Command: "{{.bin}}{{.permission}}",
+			Flags:   flags,
 		})
 		assertSameBytes(t, installStruct, add)
 	})

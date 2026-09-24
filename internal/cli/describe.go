@@ -314,8 +314,16 @@ func describeVerboseItem(w io.Writer, name string, scope config.Scope, cueKey, i
 	if err != nil {
 		return err
 	}
+	var agent orchestration.Agent
+	launch := flags.launchFlags()
+	if result.ItemType == "Agent" {
+		agent = orchestration.AgentFromValue(result.Value, result.Name)
+		if _, err := agent.CommandFragments(launch, "", orchestration.FragmentDisplay); err != nil {
+			return err
+		}
+	}
 	binOverride, modelOverride, joinErr := joinedAgentFill(result, flags, r)
-	printVerboseDump(w, result, flags, binOverride, modelOverride)
+	printVerboseDump(w, result, flags, binOverride, modelOverride, agent, launch)
 	return joinErr
 }
 
@@ -490,7 +498,7 @@ func loadConfigOrEmpty(scope config.Scope) (internalcue.LoadResult, error) {
 	return result, err
 }
 
-func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, modelOverride string) {
+func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, modelOverride string, agent orchestration.Agent, launch orchestration.LaunchFlags) {
 	cat := r.Category
 	label := tui.ColorDim.Sprint
 
@@ -555,7 +563,7 @@ func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, 
 		cmd := fields.Command
 		var fillErr error
 		if r.ItemType == "Agent" {
-			cmd, fillErr = fillAgentCommand(cmd, r.Value, modelOverride, binOverride)
+			cmd, fillErr = fillAgentCommand(cmd, r.Value, modelOverride, binOverride, agent, launch)
 		}
 		fmt.Fprintln(w)
 		if fillErr != nil {
@@ -563,6 +571,10 @@ func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, 
 		} else {
 			fmt.Fprintf(w, "%s %s\n", label("Command:"), cmd)
 		}
+	}
+
+	if r.ItemType == "Agent" {
+		writeAcceptedFlags(w, agent.Flags)
 	}
 
 	printSeparator(w)
@@ -574,7 +586,11 @@ func printVerboseDump(w io.Writer, r DescribeResult, flags *Flags, binOverride, 
 func printMetadataBlock(w io.Writer, r DescribeResult) {
 	switch r.ItemType {
 	case "Agent":
-		writeAgentMetadata(w, decodeAgentValue(r.Value))
+		agent, err := decodeAgentValue(r.Value)
+		if err != nil {
+			fmt.Fprintf(w, "[error: %s]\n", err)
+		}
+		writeAgentMetadata(w, agent)
 	case "Role":
 		role := decodeRoleValue(r.Value)
 		role.File, role.Command = "", ""
@@ -678,7 +694,7 @@ func resolveDescribeFile(filePath, origin string) (resolvedPath, content string,
 // same emptiness rules as launch. modelOverride (already resolved by the caller)
 // replaces default_model when non-empty. Both paths look the key up in the
 // models map; unknown keys pass through as the literal id.
-func fillAgentCommand(command string, v cue.Value, modelOverride, binOverride string) (string, error) {
+func fillAgentCommand(command string, v cue.Value, modelOverride, binOverride string, agent orchestration.Agent, launch orchestration.LaunchFlags) (string, error) {
 	bin := binOverride
 	if bin == "" {
 		if f := v.LookupPath(cue.ParsePath("bin")); f.Exists() {
@@ -698,7 +714,34 @@ func fillAgentCommand(command string, v cue.Value, modelOverride, binOverride st
 		}
 	}
 
-	return orchestration.FillAgentCommandForDisplay(command, bin, model)
+	return orchestration.FillAgentCommandForDisplay(command, bin, model, agent, launch)
+}
+
+func writeAcceptedFlags(w io.Writer, table *orchestration.FlagTable) {
+	if table == nil || !table.HasEntries() {
+		return
+	}
+	fmt.Fprintln(w)
+	tui.ColorDim.Fprintln(w, "Flags:")
+	if table.Permission != nil {
+		fmt.Fprintf(w, "  permission: %s\n", strings.Join(table.Permission.Keys, ", "))
+	}
+	if table.Effort != nil {
+		fmt.Fprintf(w, "  effort: %s\n", strings.Join(table.Effort.Keys, ", "))
+	}
+	if table.Output != nil {
+		fmt.Fprintf(w, "  output: %s\n", strings.Join(table.Output.Keys, ", "))
+	}
+	if table.HasPrint && table.PrintErr == nil {
+		fmt.Fprintln(w, "  print:")
+		fmt.Fprintf(w, "    off: %s\n", strings.Join(table.PrintOff.Words, " "))
+		fmt.Fprintf(w, "    on: %s\n", strings.Join(table.PrintOn.Words, " "))
+	}
+	if table.HasResume && table.ResumeErr == nil {
+		fmt.Fprintln(w, "  resume:")
+		fmt.Fprintf(w, "    latest: %s\n", strings.Join(table.ResumeLatest.Words, " "))
+		fmt.Fprintf(w, "    id: %s\n", strings.Join(table.ResumeID.Words, " "))
+	}
 }
 
 func deriveCacheDir(origin string) string {

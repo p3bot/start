@@ -224,6 +224,13 @@ func fieldExprFor(field string, v cue.Value) (ast.Expr, error) {
 	return formatFieldExpr(v)
 }
 
+// FormatFieldExpr converts a CUE value into an AST expression with the same
+// rules install uses for every field except prompt. Config edit uses it to
+// keep a nested field such as an agent flags table when it rewrites an entry.
+func FormatFieldExpr(v cue.Value) (ast.Expr, error) {
+	return formatFieldExpr(v)
+}
+
 // formatFieldExpr converts a CUE value into an AST expression node.
 func formatFieldExpr(v cue.Value) (ast.Expr, error) {
 	switch v.Kind() {
