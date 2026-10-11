@@ -637,6 +637,14 @@ func TestGetCommandHelp(t *testing.T) {
 	if getCmd.Flag("global") == nil {
 		t.Error("get command missing --global flag")
 	}
+	if getCmd.Flag("field") == nil {
+		t.Error("get command missing --field flag")
+	}
+	for _, c := range root.Commands() {
+		if c.Name() == "describe" && c.Flag("field") != nil {
+			t.Error("describe should not have --field")
+		}
+	}
 	if getCmd.Flag("local") == nil {
 		t.Error("get command missing inherited --local flag (expected via root persistent flags)")
 	}

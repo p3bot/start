@@ -41,6 +41,7 @@ func agentEntry(a AgentConfig) *ast.StructLit {
 	if a.Flags != nil {
 		fields["flags"] = a.Flags
 	}
+	putStringList(fields, "session_locator", a.SessionLocator)
 	return assembleEntry("agents", a.Origin, fields)
 }
 

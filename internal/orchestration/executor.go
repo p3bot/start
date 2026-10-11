@@ -399,7 +399,7 @@ func (e *Executor) ExecuteWithoutReplace(cfg ExecuteConfig) (string, error) {
 // It wraps the value in single quotes and escapes internal single quotes,
 // preventing shell command injection. The returned value is already quoted -
 // templates should use {{.prompt}} directly, NOT '{{.prompt}}'.
-// Empty stays empty so {{if .placeholder}} is false; quoting '' is truthy.
+// Empty stays empty so {{if .placeholder}} is false; a quoted empty string is truthy.
 //
 // Example: hello 'world' becomes 'hello '"'"'world'"'"'
 //

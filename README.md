@@ -255,7 +255,7 @@ start describe golang/assistant
 
 The `--global` and `--local` flags restrict output to a single config scope; omitting both shows the effective merged configuration.
 
-On an interactive terminal, `start get` and `start describe` render Markdown content (rendered prompts and `.md`/`.markdown` file bodies) with terminal styling. Piped or redirected output, `--color=never`, and `NO_COLOR` keep the content raw, so `start get` stays pipe-clean for scripting.
+On an interactive terminal, `start get` and `start describe` render Markdown content (rendered prompts and `.md`/`.markdown` file bodies) with terminal styling. Piped or redirected output, `--color=never`, and `NO_COLOR` keep the content raw, so `start get` stays pipe-clean for scripting. `start get --field` prints the stored field and is never styled.
 
 ### Dry Run
 
@@ -306,6 +306,9 @@ start describe <name>
 start get <name>
 start get contexts:cwd/agents-md
 start get skills:finding/one-by-one
+
+# Print one stored CUE field (unstyled; one entry per line for a list)
+start get <name> --field session_locator
 ```
 
 ### Modules Management

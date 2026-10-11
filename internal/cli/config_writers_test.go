@@ -291,6 +291,30 @@ func TestEntryByteIdenticalToInstall(t *testing.T) {
 		assertSameBytes(t, installStruct, add)
 	})
 
+	t.Run("agent session locator", func(t *testing.T) {
+		t.Parallel()
+		const origin = "github.com/x/agents/located@v0.1.0"
+		v := ctx.CompileString(`{
+			bin: "located"
+			command: "{{.bin}} --stay"
+			session_locator: ["session_id"]
+		}`)
+		if err := v.Err(); err != nil {
+			t.Fatal(err)
+		}
+		installStruct, err := modules.FormatModuleStruct(v, "agents", origin, "")
+		if err != nil {
+			t.Fatalf("FormatModuleStruct: %v", err)
+		}
+		add := agentEntry(AgentConfig{
+			Origin:         origin,
+			Bin:            "located",
+			Command:        "{{.bin}} --stay",
+			SessionLocator: []string{"session_id"},
+		})
+		assertSameBytes(t, installStruct, add)
+	})
+
 	t.Run("role", func(t *testing.T) {
 		t.Parallel()
 		const origin = "github.com/x/roles/go@v0.1.0"

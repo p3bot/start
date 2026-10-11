@@ -13,24 +13,26 @@ import (
 
 // AgentConfig represents an agent configuration for editing.
 type AgentConfig struct {
-	Name         string            `json:"name"`
-	Agentdex     string            `json:"agentdex,omitempty"`
-	Bin          string            `json:"bin,omitempty"`
-	Command      string            `json:"command,omitempty"`
-	DefaultModel string            `json:"defaultModel,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Models       map[string]string `json:"models,omitempty"`
-	Tags         []string          `json:"tags,omitempty"`
-	Uses         []string          `json:"uses,omitempty"`   // Colon-form addresses of modules pulled in via `start get`
-	Flags        ast.Expr          `json:"-"`                // flags table, written back unchanged by config edit
-	Source       string            `json:"source"`           // "global" or "local"
-	Origin       string            `json:"origin,omitempty"` // Registry module path when installed from registry
+	Name           string            `json:"name"`
+	Agentdex       string            `json:"agentdex,omitempty"`
+	Bin            string            `json:"bin,omitempty"`
+	Command        string            `json:"command,omitempty"`
+	DefaultModel   string            `json:"defaultModel,omitempty"`
+	Description    string            `json:"description,omitempty"`
+	Models         map[string]string `json:"models,omitempty"`
+	Tags           []string          `json:"tags,omitempty"`
+	Uses           []string          `json:"uses,omitempty"` // Colon-form addresses of modules pulled in via `start get`
+	Flags          ast.Expr          `json:"-"`              // flags table, written back unchanged by config edit
+	SessionLocator []string          `json:"sessionLocator,omitempty"`
+	Source         string            `json:"source"`           // "global" or "local"
+	Origin         string            `json:"origin,omitempty"` // Registry module path when installed from registry
 }
 
 // decodeAgentValue populates an AgentConfig from a per-item CUE value (Name and
 // Source are left for the caller). A flags table is kept as an expression so a
 // later edit writes the same table back. A table that cannot be rewritten is
-// an error, so the edit path cannot drop it.
+// an error, so the edit path cannot drop it. session_locator follows the same
+// rule: a value that is not a list of strings is an error rather than a drop.
 func decodeAgentValue(val cue.Value) (AgentConfig, error) {
 	var agent AgentConfig
 
@@ -65,6 +67,11 @@ func decodeAgentValue(val cue.Value) (AgentConfig, error) {
 		}
 		agent.Flags = expr
 	}
+	locator, err := internalcue.StringList(val, "session_locator")
+	if err != nil {
+		return agent, fmt.Errorf("session_locator: %w", err)
+	}
+	agent.SessionLocator = locator
 
 	return agent, nil
 }

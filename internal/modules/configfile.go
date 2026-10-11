@@ -22,12 +22,41 @@ func CategoryFieldOrder(category string) []string {
 	case "roles":
 		return []string{"description", "tags", "uses", "file", "command", "prompt", "optional"}
 	case "agents":
-		return []string{"description", "tags", "uses", "agentdex", "bin", "command", "flags", "default_model", "models"}
+		return []string{"description", "tags", "uses", "agentdex", "bin", "command", "flags", "default_model", "models", "session_locator"}
 	case "contexts":
 		return []string{"description", "tags", "uses", "file", "command", "prompt", "required", "default"}
 	default:
 		return []string{"description", "tags", "uses", "prompt"}
 	}
+}
+
+// CategoryHasField reports whether name is a CUE field of category.
+// The set is the schema. It includes fields CategoryFieldOrder does not rewrite,
+// such as origin, shell, timeout, and a task's agent.
+func CategoryHasField(category, name string) bool {
+	switch category {
+	case "agents":
+		return fieldName(name, "description", "tags", "origin", "uses", "agentdex", "bin", "command", "flags", "default_model", "models", "session_locator")
+	case "roles":
+		return fieldName(name, "description", "tags", "origin", "uses", "file", "command", "prompt", "shell", "timeout", "optional")
+	case "contexts":
+		return fieldName(name, "description", "tags", "origin", "uses", "file", "command", "prompt", "shell", "timeout", "required", "default")
+	case "tasks":
+		return fieldName(name, "description", "tags", "origin", "uses", "file", "command", "prompt", "shell", "timeout", "role", "agent")
+	case "skills":
+		return fieldName(name, "description", "tags", "origin", "uses", "file")
+	default:
+		return false
+	}
+}
+
+func fieldName(name string, names ...string) bool {
+	for _, n := range names {
+		if name == n {
+			return true
+		}
+	}
+	return false
 }
 
 // PromptExpr renders a prompt string as a CUE AST expression: a """ heredoc for

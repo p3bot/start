@@ -1020,6 +1020,31 @@ agent: {
 	if !strings.Contains(result, "models:") {
 		t.Errorf("missing models map\nGot:\n%s", result)
 	}
+	if strings.Contains(result, "session_locator") {
+		t.Errorf("omitted locator should stay omitted\nGot:\n%s", result)
+	}
+}
+
+func TestExtractModuleContent_PreservesSessionLocator(t *testing.T) {
+	t.Parallel()
+
+	moduleDir := createTestModule(t, "agent", `package agent
+
+agent: {
+	bin: "located"
+	command: "{{.bin}} --stay"
+	session_locator: ["session_id"]
+}
+`)
+
+	astResult, err := ExtractModuleContent(moduleDir, SearchResult{Category: "agents", Name: "located"}, nil, "test.example/agent@v0.1.0", "")
+	if err != nil {
+		t.Fatalf("ExtractModuleContent() error: %v", err)
+	}
+	result := formatAST(t, astResult)
+	if !strings.Contains(result, "session_locator:") || !strings.Contains(result, `"session_id"`) {
+		t.Fatalf("locator not written\nGot:\n%s", result)
+	}
 }
 
 func TestExtractModuleContent_RoleNameOverride(t *testing.T) {

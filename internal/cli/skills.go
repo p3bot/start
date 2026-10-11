@@ -328,6 +328,32 @@ func getSkill(stdout, stderr io.Writer, flags *Flags, client registry.Client, ma
 	return nil
 }
 
+// getSkillField prints one stored CUE field of a skill module. The skill body
+// is not read and is not styled.
+func getSkillField(w io.Writer, client registry.Client, match ModuleMatch, name string) error {
+	sourceDir, _, _, err := fetchSkillModule(context.Background(), client, modules.SearchResult{
+		Category: match.Category,
+		Name:     match.Name,
+		Entry:    match.Entry,
+	})
+	if err != nil {
+		return err
+	}
+	var reg any
+	if client != nil {
+		reg = client.Registry()
+	}
+	root, err := modules.BuildModuleValue(sourceDir, reg)
+	if err != nil {
+		return err
+	}
+	item, ok := modules.DescendToModuleValue(root, match.Category, match.Name)
+	if !ok {
+		return fmt.Errorf("skill %q has no module value", match.Name)
+	}
+	return writeStoredField(w, match.Category, item, name)
+}
+
 func describeSkill(w io.Writer, cmd *cobra.Command, flags *Flags, client registry.Client, match ModuleMatch) error {
 	ctx := context.Background()
 	sourceDir, origin, version, err := fetchSkillModule(ctx, client, modules.SearchResult{

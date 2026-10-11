@@ -70,6 +70,9 @@ func TestDecodeAgentValue_FullMetadata(t *testing.T) {
 	if got.Origin != "github.com/example/start-claude@v1" {
 		t.Errorf("Origin: got %q", got.Origin)
 	}
+	if len(got.SessionLocator) != 0 {
+		t.Errorf("SessionLocator should be absent, got %v", got.SessionLocator)
+	}
 	if got.Name != "" {
 		t.Errorf("Name should be zero (caller assigns), got %q", got.Name)
 	}
@@ -148,8 +151,41 @@ func TestDecodeAgentValue_Empty(t *testing.T) {
 
 	if got.Agentdex != "" || got.Bin != "" || got.Command != "" || got.DefaultModel != "" ||
 		got.Description != "" || got.Origin != "" || got.Flags != nil ||
-		len(got.Tags) != 0 || len(got.Uses) != 0 || len(got.Models) != 0 {
+		len(got.Tags) != 0 || len(got.Uses) != 0 || len(got.Models) != 0 ||
+		len(got.SessionLocator) != 0 {
 		t.Errorf("expected zero-value AgentConfig, got %+v", got)
+	}
+}
+
+func TestDecodeAgentValue_SessionLocator(t *testing.T) {
+	ctx := cuecontext.New()
+	val := ctx.CompileString(`{
+		command: "echo"
+		session_locator: ["session_id", "0"]
+	}`)
+	if err := val.Err(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := decodeAgentValue(val)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.SessionLocator, []string{"session_id", "0"}) {
+		t.Fatalf("SessionLocator = %#v", got.SessionLocator)
+	}
+}
+
+func TestDecodeAgentValue_BadSessionLocator(t *testing.T) {
+	ctx := cuecontext.New()
+	val := ctx.CompileString(`{
+		command: "echo"
+		session_locator: { id: "session_id" }
+	}`)
+	if err := val.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodeAgentValue(val); err == nil {
+		t.Fatal("a locator that is not a list of strings should fail")
 	}
 }
 

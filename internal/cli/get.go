@@ -2,12 +2,14 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/p3bot/start/internal/modules"
 	"github.com/p3bot/start/internal/orchestration"
 	"github.com/p3bot/start/internal/shell"
 	"github.com/p3bot/start/internal/tui"
@@ -38,6 +40,12 @@ Display does not shell-quote; {{.prompt}} stays visible, and {{.resume}} is
 filled only when --resume=<id> was passed. The --model flag, when set,
 overrides the agent's default_model in the {{.model}} substitution.
 
+--field names one stored CUE field and writes that value instead of the
+resolved content. Output is unstyled. A string, bool, int, or list of
+strings is printed; a missing optional field prints nothing. A field the
+category does not have, a map, or a struct is an error. A file path or URL
+has no field to select.
+
 Source priority for UTD modules is file > prompt > command. When a UTD module
 defines both file and prompt, get outputs the file. During role/task/context
 rendering by 'start' or 'start task', behaviour differs: the prompt is rendered
@@ -64,6 +72,7 @@ To inspect strictly within --local, ensure the module is already installed.`,
 	}
 
 	getCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
+	getCmd.Flags().Var(&fieldFlag{}, "field", "Print one stored CUE field instead of the resolved content")
 	parent.AddCommand(getCmd)
 }
 
@@ -107,11 +116,21 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if outcome.locator != "" {
+		if getFieldName(cmd) != "" {
+			return usageError(fmt.Errorf("--field does not apply to a file path or URL"))
+		}
 		return outputFileBody(stdout, flags, outcome.locator)
 	}
 	match := outcome.match
 
+	if name := getFieldName(cmd); name != "" && !modules.CategoryHasField(match.Category, name) {
+		return fmt.Errorf("%s has no field %q", match.Category, name)
+	}
+
 	if match.Category == "skills" {
+		if name := getFieldName(cmd); name != "" {
+			return getSkillField(stdout, r.client, enrichSkillMatch(r, match), name)
+		}
 		return getSkill(stdout, stderr, flags, r.client, enrichSkillMatch(r, match))
 	}
 
@@ -145,6 +164,10 @@ func runGet(cmd *cobra.Command, args []string) error {
 	item := items.LookupPath(cue.MakePath(cue.Str(match.Name)))
 	if !item.Exists() {
 		return notFoundError(fmt.Errorf("%s %q not found", strings.ToLower(cat.itemType), match.Name))
+	}
+
+	if name := getFieldName(cmd); name != "" {
+		return writeStoredField(stdout, match.Category, item, name)
 	}
 
 	if cat.itemType == "Agent" {
@@ -327,6 +350,112 @@ func printGetVerbose(stderr io.Writer, itemType, name string, item cue.Value, re
 	if command != "" {
 		fmt.Fprintf(stderr, "Command: %s\n", command)
 	}
+}
+
+// fieldFlag accepts one non-empty --field name. A second Set, or an empty
+// name, is a usage error so the flag cannot silently keep the last value.
+type fieldFlag struct {
+	name string
+	set  int
+}
+
+func (f *fieldFlag) String() string { return f.name }
+func (f *fieldFlag) Type() string   { return "name" }
+
+func (f *fieldFlag) Set(s string) error {
+	if f.set > 0 {
+		return errors.New("can be passed only once")
+	}
+	if s == "" {
+		return errors.New("requires a name")
+	}
+	f.set++
+	f.name = s
+	return nil
+}
+
+func getFieldName(cmd *cobra.Command) string {
+	f := cmd.Flags().Lookup("field")
+	if f == nil || !f.Changed {
+		return ""
+	}
+	return f.Value.String()
+}
+
+// errStoredShape is the reason a stored field cannot be printed as text.
+var errStoredShape = errors.New("not a string, bool, int, or list of strings")
+
+// writeStoredField writes one CUE field of item. An optional field that is
+// absent writes nothing and returns nil. Output is the value's text plus one
+// trailing newline, with no styling.
+func writeStoredField(w io.Writer, category string, item cue.Value, name string) error {
+	if !modules.CategoryHasField(category, name) {
+		return fmt.Errorf("%s has no field %q", category, name)
+	}
+	field := item.LookupPath(cue.ParsePath(name))
+	if !field.Exists() {
+		return nil
+	}
+	text, err := formatStoredField(field)
+	if err != nil {
+		return fmt.Errorf("field %q: %w", name, err)
+	}
+	fmt.Fprint(w, text)
+	return nil
+}
+
+func formatStoredField(v cue.Value) (string, error) {
+	switch v.Kind() {
+	case cue.StringKind:
+		s, err := v.String()
+		if err != nil {
+			return "", err
+		}
+		// A present empty field must not look omitted.
+		if s == "" {
+			return "\n", nil
+		}
+		return ensureTrailingNewline(s), nil
+	case cue.BoolKind:
+		b, err := v.Bool()
+		if err != nil {
+			return "", err
+		}
+		if b {
+			return "true\n", nil
+		}
+		return "false\n", nil
+	case cue.IntKind:
+		n, err := v.Int(nil)
+		if err != nil {
+			return "", err
+		}
+		return n.String() + "\n", nil
+	case cue.ListKind:
+		return formatStoredList(v)
+	default:
+		return "", errStoredShape
+	}
+}
+
+func formatStoredList(v cue.Value) (string, error) {
+	iter, err := v.List()
+	if err != nil {
+		return "", errStoredShape
+	}
+	var b strings.Builder
+	for iter.Next() {
+		if iter.Value().Kind() != cue.StringKind {
+			return "", errStoredShape
+		}
+		s, err := iter.Value().String()
+		if err != nil {
+			return "", errStoredShape
+		}
+		b.WriteString(s)
+		b.WriteByte('\n')
+	}
+	return b.String(), nil
 }
 
 // ensureTrailingNewline returns s with exactly one trailing newline; empty
