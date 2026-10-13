@@ -101,7 +101,7 @@ substring query for a bare term, a prefix query for a category-qualified term
 | ----------- | --------- |
 | 0 | Error: not found — or, when the registry index was unreachable, the retry-able error described under Search sources. |
 | 1 | Use it. If the match is registry-only, install it first, then use it. |
-| more than 1 | On a TTY, present a selection menu. Without a TTY, error and list the matches. |
+| more than 1 | On a TTY, present a selection menu. Without a TTY, error and list the matches. `start get --id` errors either way and does not open the menu. |
 
 The fallback query must be at least three characters; a shorter query is rejected
 with an error before the fallback search runs. The minimum counts the name being
@@ -126,7 +126,10 @@ in two *installed* categories: the bare name is then ambiguous and must be
 category-qualified (`tasks:<name>`) to resolve without a menu. This covers a
 registry-only same-name exact in another category too: the exact tier consults
 the registry, detects the twin, and treats it as the same kind of ambiguity —
-the same in a pipe (ambiguity error) as on a terminal (menu).
+the same in a pipe (ambiguity error) as on a terminal (menu). `start get --id`
+is the exception: several matches are an error on a terminal as well, and the
+error does not suggest running interactively, because the caller stores one id
+line and cannot answer a menu.
 
 The naming standard forbids any name from being an ancestor of another within a
 category, and the registry index is validated to enforce this (see the naming
@@ -343,6 +346,8 @@ names on a category-specific surface, `category:name` on a cross-category one �
 and instructs the user to specify an exact name, category-qualify it
 (`category:name`) when the collision spans categories, or run interactively. The
 listed forms are valid command arguments that round-trip back to the same entry.
+`start get --id` returns that error on a terminal too, without the interactive
+hint.
 
 ## Per-category behaviour
 

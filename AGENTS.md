@@ -56,6 +56,7 @@ start describe <name>           # Inspect a module; auto-installs prompt modules
 start describe skills:<name>    # Inspect a skill (fetched, not installed); shows files and dests
 start get <name>                # Output module content to stdout (pipe-clean; TTY: Markdown styled)
 start get <name> --field <name> # Print one stored CUE field; unstyled
+start get <name> --id           # Print the resolved category:name instead of the module text
 start get skills:<name>         # Print SKILL.md from the library (no dest or inventory write)
 start install <pkg>             # Install a module from the library
 start install skills:<name>     # Materialise a skill into detected (or --agent) dests; records skills.cue

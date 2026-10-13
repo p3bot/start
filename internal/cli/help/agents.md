@@ -35,6 +35,7 @@ start describe go-expert
 start describe --global
 start describe --local
 start get skills:finding/one-by-one
+start get <name> --id
 start describe skills:finding/one-by-one
 start config
 start config list

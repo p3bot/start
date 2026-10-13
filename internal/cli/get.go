@@ -46,6 +46,14 @@ strings is printed; a missing optional field prints nothing. A field the
 category does not have, a map, or a struct is an error. A file path or URL
 has no field to select.
 
+--id prints the resolved category:name instead of the module text. It takes
+no value. One match writes that id to stdout, for example
+tasks:review/pre-commit. --verbose metadata and install notices stay on
+stderr. Several matches are an error that names them and asks for an exact
+name or a category-qualified name; the selection menu is not opened. A file
+path or URL is rejected, and --id cannot be combined with --field. Omitting
+the name still prompts on a terminal.
+
 Source priority for UTD modules is file > prompt > command. When a UTD module
 defines both file and prompt, get outputs the file. During role/task/context
 rendering by 'start' or 'start task', behaviour differs: the prompt is rendered
@@ -54,7 +62,8 @@ and file contents are injected via {{.file_contents}}, command output via
 what 'start' renders into the agent prompt — use 'start describe' to inspect the
 prompt.
 
-Stdout receives only the module content. Selection menus, registry progress,
+Stdout receives only the module content, or with --id only the resolved
+category:name. Selection menus, registry progress,
 auto-install notices, and --verbose metadata are written to stderr so the
 output remains pipe-clean. On an interactive terminal, Markdown content
 (rendered prompts and .md/.markdown file bodies) is styled; piped, redirected,
@@ -72,6 +81,7 @@ To inspect strictly within --local, ensure the module is already installed.`,
 	}
 
 	getCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
+	getCmd.Flags().Bool("id", false, "Print the resolved category:name instead of the module text")
 	getCmd.Flags().Var(&fieldFlag{}, "field", "Print one stored CUE field instead of the resolved content")
 	parent.AddCommand(getCmd)
 }
@@ -83,6 +93,11 @@ func runGet(cmd *cobra.Command, args []string) error {
 
 	if err := validateScopeFlags(getFlags(cmd)); err != nil {
 		return err
+	}
+
+	idOnly := getIDOnly(cmd)
+	if idOnly && getFieldName(cmd) != "" {
+		return usageError(fmt.Errorf("--id and --field cannot be combined"))
 	}
 
 	stdout := cmd.OutOrStdout()
@@ -107,6 +122,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 	// stderr in the stdout slot so fetch progress, auto-install notices, and
 	// selection menus do not corrupt the piped content on stdout.
 	r := newResolver(cfg, flags, stderr, stderr, stdin)
+	r.noMenu = idOnly
 	if wd, err := os.Getwd(); err == nil {
 		r.workingDir = wd
 	}
@@ -119,6 +135,9 @@ func runGet(cmd *cobra.Command, args []string) error {
 		if getFieldName(cmd) != "" {
 			return usageError(fmt.Errorf("--field does not apply to a file path or URL"))
 		}
+		if idOnly {
+			return usageError(fmt.Errorf("--id does not apply to a file path or URL"))
+		}
 		return outputFileBody(stdout, flags, outcome.locator)
 	}
 	match := outcome.match
@@ -127,7 +146,11 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s has no field %q", match.Category, name)
 	}
 
+	// Skills are fetched, not installed. The id is known from the match.
 	if match.Category == "skills" {
+		if idOnly {
+			return writeResolvedID(stdout, stderr, flags, cfg.Value, match)
+		}
 		if name := getFieldName(cmd); name != "" {
 			return getSkillField(stdout, r.client, enrichSkillMatch(r, match), name)
 		}
@@ -153,6 +176,11 @@ func runGet(cmd *cobra.Command, args []string) error {
 		}
 		cfg = r.cfg
 		notifyScopeWidenedIfLocal(stderr, flags, r.didInstall)
+	}
+
+	// The module is installed. Print its id instead of rendering the body.
+	if idOnly {
+		return writeResolvedID(stdout, stderr, flags, cfg.Value, match)
 	}
 
 	cat := describeCategoryFor(match.Category)
@@ -240,51 +268,13 @@ func getAgent(stdout, stderr io.Writer, flags *Flags, r *resolver, name string, 
 }
 
 // getUTD resolves a UTD module and writes its content to stdout. Source
-// priority is file > prompt > command; the trim block below flips
-// TemplateProcessor's inverse intrinsic priority by clearing higher-priority
-// sources before Process runs. Shell and Timeout pass through untouched.
+// priority is file > prompt > command; prepareGetUTD flips TemplateProcessor's
+// inverse intrinsic priority by clearing higher-priority sources before
+// Process runs. Shell and Timeout pass through untouched.
 func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item cue.Value) error {
-	fields := orchestration.ExtractUTDFields(item)
-	if !orchestration.IsUTDValid(fields) {
-		return fmt.Errorf("module %q has no content fields (expected one of: file, prompt, command)", name)
-	}
-
-	resolvedFile := ""
-	fromModuleCache := false
-	if fields.File != "" {
-		if strings.HasPrefix(fields.File, "@module/") {
-			fromModuleCache = true
-			origin := orchestration.ExtractOrigin(item)
-			if origin == "" {
-				return fmt.Errorf("module %q has @module/ file path but no origin field", name)
-			}
-			resolved, err := orchestration.ResolveModulePath(fields.File, origin)
-			if err != nil {
-				return fmt.Errorf("resolving module path %s: %w", fields.File, err)
-			}
-			fields.File = resolved
-		}
-		// Expand ~/ and relative paths so verbose Path:/Cache: reports the same
-		// location DefaultFileReader will read from. On expansion failure, keep
-		// the literal config string and log the cause under --debug.
-		resolvedFile = fields.File
-		if expanded, expandErr := orchestration.ExpandFilePath(fields.File); expandErr == nil {
-			resolvedFile = expanded
-		} else {
-			debugf(stderr, flags, dbgResolve, "expanding %s: %v", fields.File, expandErr)
-		}
-	}
-
-	// Process picks Prompt before File, so clearing Prompt when File is set is
-	// what makes get's file > prompt priority hold. Clearing Command also
-	// suppresses Process's lazy {{.command_output}} expansion so get never
-	// shells out unless command is the primary source. Do not extend this trim
-	// to Shell or Timeout — they apply regardless of which source wins.
-	if fields.File != "" {
-		fields.Prompt = ""
-		fields.Command = ""
-	} else if fields.Prompt != "" {
-		fields.Command = ""
+	fields, resolvedFile, fromModuleCache, err := prepareGetUTD(stderr, flags, name, item)
+	if err != nil {
+		return err
 	}
 
 	workingDir, err := os.Getwd()
@@ -318,8 +308,126 @@ func getUTD(stdout, stderr io.Writer, flags *Flags, name, itemType string, item 
 	return nil
 }
 
+// prepareGetUTD resolves the file path verbose reports and trims fields down
+// to the winning source. It does not read the file or run the command.
+// Process picks Prompt before File, so clearing Prompt when File is set is
+// what makes get's file > prompt priority hold. Clearing Command also
+// suppresses Process's lazy {{.command_output}} expansion so get never shells
+// out unless command is the primary source. Do not extend this trim to Shell
+// or Timeout — they apply regardless of which source wins.
+func prepareGetUTD(stderr io.Writer, flags *Flags, name string, item cue.Value) (fields orchestration.UTDFields, resolvedFile string, fromModuleCache bool, err error) {
+	fields = orchestration.ExtractUTDFields(item)
+	if !orchestration.IsUTDValid(fields) {
+		return fields, "", false, &noContentError{name: name}
+	}
+
+	if fields.File != "" {
+		if strings.HasPrefix(fields.File, "@module/") {
+			fromModuleCache = true
+			origin := orchestration.ExtractOrigin(item)
+			if origin == "" {
+				return fields, "", false, fmt.Errorf("module %q has @module/ file path but no origin field", name)
+			}
+			resolved, resolveErr := orchestration.ResolveModulePath(fields.File, origin)
+			if resolveErr != nil {
+				return fields, "", false, fmt.Errorf("resolving module path %s: %w", fields.File, resolveErr)
+			}
+			fields.File = resolved
+		}
+		// Expand ~/ and relative paths so verbose Path:/Cache: reports the same
+		// location DefaultFileReader will read from. On expansion failure, keep
+		// the literal config string and log the cause under --debug.
+		resolvedFile = fields.File
+		if expanded, expandErr := orchestration.ExpandFilePath(fields.File); expandErr == nil {
+			resolvedFile = expanded
+		} else {
+			debugf(stderr, flags, dbgResolve, "expanding %s: %v", fields.File, expandErr)
+		}
+	}
+
+	if fields.File != "" {
+		fields.Prompt = ""
+		fields.Command = ""
+	} else if fields.Prompt != "" {
+		fields.Command = ""
+	}
+	return fields, resolvedFile, fromModuleCache, nil
+}
+
+func getIDOnly(cmd *cobra.Command) bool {
+	v, err := cmd.Flags().GetBool("id")
+	return err == nil && v
+}
+
+// noContentError is a module with no file, prompt, or command. Verbose id
+// output still succeeds: there is no path that can fail.
+type noContentError struct{ name string }
+
+func (e *noContentError) Error() string {
+	return fmt.Sprintf("module %q has no content fields (expected one of: file, prompt, command)", e.name)
+}
+
+// writeResolvedID prints category:name and, under --verbose, the same metadata
+// lines a content get would write. A prompt-module caller installs first, so
+// the metadata is read from that saved copy. A verbose path that cannot be
+// built fails the command before the id is printed.
+func writeResolvedID(stdout, stderr io.Writer, flags *Flags, cfg cue.Value, match ModuleMatch) error {
+	if flags.Verbose {
+		if err := writeResolvedIDVerbose(stderr, flags, cfg, match); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintln(stdout, formatAddress(match.Category, match.Name))
+	return nil
+}
+
+// writeResolvedIDVerbose writes get's stderr metadata for one resolved match.
+// A path or command that cannot be built is returned: a zero status would
+// claim that detail was produced. No content fields is not such a failure.
+func writeResolvedIDVerbose(stderr io.Writer, flags *Flags, cfg cue.Value, match ModuleMatch) error {
+	if match.Category == "skills" {
+		fmt.Fprintf(stderr, "Skill: %s\n", match.Name)
+		return nil
+	}
+	itemType, item, ok := configuredItem(cfg, match.Category, match.Name)
+	if !ok {
+		if itemType == "" {
+			return nil
+		}
+		fmt.Fprintf(stderr, "Type: %s\nName: %s\n", itemType, match.Name)
+		return nil
+	}
+	if itemType == "Agent" {
+		printGetVerbose(stderr, "Agent", match.Name, item, "", "", false)
+		return nil
+	}
+	fields, resolvedFile, fromCache, err := prepareGetUTD(stderr, flags, match.Name, item)
+	if err != nil {
+		var empty *noContentError
+		if errors.As(err, &empty) {
+			printGetVerbose(stderr, itemType, match.Name, item, "", "", false)
+			return nil
+		}
+		return err
+	}
+	printGetVerbose(stderr, itemType, match.Name, item, resolvedFile, fields.Command, fromCache)
+	return nil
+}
+
+// configuredItem returns the installed CUE value for a resolved prompt module.
+// itemType is set whenever the category is known, including when the value is
+// absent, so a verbose id line can still name the type.
+func configuredItem(cfg cue.Value, category, name string) (itemType string, item cue.Value, ok bool) {
+	cat := describeCategoryFor(category)
+	if cat == nil {
+		return "", cue.Value{}, false
+	}
+	item = cfg.LookupPath(cue.ParsePath(cat.key)).LookupPath(cue.MakePath(cue.Str(name)))
+	return cat.itemType, item, item.Exists()
+}
+
 // utdSource reports the winning UTD source from post-trim fields, mirroring the
-// file > prompt > command priority the trim block in getUTD enforces.
+// file > prompt > command priority prepareGetUTD enforces.
 func utdSource(fields orchestration.UTDFields) markdownSource {
 	switch {
 	case fields.File != "":

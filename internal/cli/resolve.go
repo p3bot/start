@@ -77,6 +77,11 @@ type resolver struct {
 	// The late task-declared-role check may flip it true (forceLiveReResolve).
 	wantLive bool
 
+	// noMenu refuses a multi-match instead of opening the selection menu, even
+	// on a terminal. start get --id sets it: the caller stores one id line and
+	// cannot answer a numbered prompt.
+	noMenu bool
+
 	catalogOpts []agentdex.Option
 	workingDir  string
 }

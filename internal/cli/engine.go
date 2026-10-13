@@ -303,7 +303,7 @@ func (r *resolver) unreachableErr() error {
 
 // selector builds the interactive selection context from the resolver's IO.
 func (r *resolver) selector() *selector {
-	return &selector{stdin: r.stdin, stdout: r.stdout, stderr: r.stderr, flags: r.flags}
+	return &selector{stdin: r.stdin, stdout: r.stdout, stderr: r.stderr, flags: r.flags, noMenu: r.noMenu}
 }
 
 // categoryKeys projects the scoped describeCategories to the plain category
@@ -385,23 +385,22 @@ type selector struct {
 	stdout io.Writer
 	stderr io.Writer
 	flags  *Flags
+	// noMenu reports every multi-match as an error, including on a terminal.
+	// start get --id sets it so a caller storing an id is never offered a menu.
+	noMenu bool
 }
 
 // selectMatch reduces more than one match to one: a selection menu on a TTY, an
 // error listing the matches otherwise. The listed forms are valid arguments
-// that round-trip back to the same entry.
+// that round-trip back to the same entry. noMenu skips the menu on a terminal
+// and omits the interactive hint, because that path has no menu to enter.
 func (s *selector) selectMatch(matches []ModuleMatch, scope resolveScope, query string) (ModuleMatch, error) {
 	sort.SliceStable(matches, func(i, j int) bool {
 		return matchLabel(matches[i], scope) < matchLabel(matches[j], scope)
 	})
 
-	if !isTerminal(s.stdin) {
-		labels := make([]string, len(matches))
-		for i, m := range matches {
-			labels[i] = matchLabel(m, scope)
-		}
-		return ModuleMatch{}, usageError(fmt.Errorf("ambiguous %s %q matches: %s\nSpecify an exact name, category-qualify it (category:name), or run interactively",
-			scope.displayType, query, strings.Join(labels, ", ")))
+	if s.noMenu || !isTerminal(s.stdin) {
+		return ModuleMatch{}, ambiguousMatchError(matches, scope, query, s.noMenu)
 	}
 
 	displayCount := min(len(matches), maxModuleResults)
@@ -451,6 +450,21 @@ func (s *selector) selectMatch(matches []ModuleMatch, scope resolveScope, query 
 	}
 	fmt.Fprintln(s.stdout)
 	return selected, nil
+}
+
+// ambiguousMatchError lists every match and tells the caller how to retry.
+// noMenu drops the interactive hint: that path has no menu to enter.
+func ambiguousMatchError(matches []ModuleMatch, scope resolveScope, query string, noMenu bool) error {
+	labels := make([]string, len(matches))
+	for i, m := range matches {
+		labels[i] = matchLabel(m, scope)
+	}
+	hint := "Specify an exact name, category-qualify it (category:name), or run interactively"
+	if noMenu {
+		hint = "Specify an exact name or a category-qualified name (category:name)"
+	}
+	return usageError(fmt.Errorf("ambiguous %s %q matches: %s\n%s",
+		scope.displayType, query, strings.Join(labels, ", "), hint))
 }
 
 // matchByTypedName selects the one shown entry a typed name uniquely
