@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/p3bot/start/internal/modules"
 	"github.com/p3bot/start/internal/orchestration"
 	"github.com/p3bot/start/internal/shell"
@@ -40,11 +41,15 @@ Display does not shell-quote; {{.prompt}} stays visible, and {{.resume}} is
 filled only when --resume=<id> was passed. The --model flag, when set,
 overrides the agent's default_model in the {{.model}} substitution.
 
---field names one stored CUE field and writes that value instead of the
-resolved content. Output is unstyled. A string, bool, int, or list of
-strings is printed; a missing optional field prints nothing. A field the
-category does not have, a map, or a struct is an error. A file path or URL
-has no field to select.
+--field names a stored CUE field, or a path under that field, and writes
+that value instead of the resolved content. A name that is not itself a
+field selects that label anywhere underneath when the label is unique, and
+the rest of the path applies. permission selects flags.permission, and
+edit[0] selects the first word of flags.permission.edit. Output is
+unstyled. A string, bool, int, or list of strings is printed as text. Any
+other value is printed as CUE. A missing optional field prints nothing. A
+name the module does not have is an error. A file path or URL has no field
+to select.
 
 --id prints the resolved category:name instead of the module text. It takes
 no value. One match writes that id to stdout, for example
@@ -82,7 +87,7 @@ To inspect strictly within --local, ensure the module is already installed.`,
 
 	getCmd.Flags().BoolVar(&flags.Global, "global", false, "Restrict to global config only")
 	getCmd.Flags().Bool("id", false, "Print the resolved category:name instead of the module text")
-	getCmd.Flags().Var(&fieldFlag{}, "field", "Print one stored CUE field instead of the resolved content")
+	getCmd.Flags().Var(&fieldFlag{}, "field", "Print a stored CUE field or a path under it")
 	parent.AddCommand(getCmd)
 }
 
@@ -98,6 +103,11 @@ func runGet(cmd *cobra.Command, args []string) error {
 	idOnly := getIDOnly(cmd)
 	if idOnly && getFieldName(cmd) != "" {
 		return usageError(fmt.Errorf("--id and --field cannot be combined"))
+	}
+	if name := getFieldName(cmd); name != "" {
+		if _, err := parseStoredFieldPath(name); err != nil {
+			return usageError(err)
+		}
 	}
 
 	stdout := cmd.OutOrStdout()
@@ -141,10 +151,6 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return outputFileBody(stdout, flags, outcome.locator)
 	}
 	match := outcome.match
-
-	if name := getFieldName(cmd); name != "" && !modules.CategoryHasField(match.Category, name) {
-		return fmt.Errorf("%s has no field %q", match.Category, name)
-	}
 
 	// Skills are fetched, not installed. The id is known from the match.
 	if match.Category == "skills" {
@@ -468,7 +474,7 @@ type fieldFlag struct {
 }
 
 func (f *fieldFlag) String() string { return f.name }
-func (f *fieldFlag) Type() string   { return "name" }
+func (f *fieldFlag) Type() string   { return "path" }
 
 func (f *fieldFlag) Set(s string) error {
 	if f.set > 0 {
@@ -490,20 +496,97 @@ func getFieldName(cmd *cobra.Command) string {
 	return f.Value.String()
 }
 
-// errStoredShape is the reason a stored field cannot be printed as text.
-var errStoredShape = errors.New("not a string, bool, int, or list of strings")
+// parseStoredFieldPath parses a --field value as a CUE path.
+// The first component is a string label. A later component may be an index
+// or a quoted key, as in flags.output."stream-json".
+func parseStoredFieldPath(name string) (cue.Path, error) {
+	p := cue.ParsePath(name)
+	if err := p.Err(); err != nil {
+		return cue.Path{}, fmt.Errorf("field %q: %s", name, err.Error())
+	}
+	sels := p.Selectors()
+	if len(sels) == 0 || !sels[0].IsString() {
+		return cue.Path{}, fmt.Errorf("field %q: requires a name", name)
+	}
+	return p, nil
+}
 
-// writeStoredField writes one CUE field of item. An optional field that is
-// absent writes nothing and returns nil. Output is the value's text plus one
-// trailing newline, with no styling.
+// writeStoredField writes the value at path name. A schema field that is
+// absent writes nothing. A longer path that is absent is an error. A
+// string, bool, int, or list of strings is text.
+// Any other value is CUE. A path whose first label is not a field of the
+// module selects that label anywhere underneath when it is unique, then
+// applies the rest of the path, including indexes.
 func writeStoredField(w io.Writer, category string, item cue.Value, name string) error {
-	if !modules.CategoryHasField(category, name) {
+	p, err := parseStoredFieldPath(name)
+	if err != nil {
+		return usageError(err)
+	}
+	if field := item.LookupPath(p); field.Exists() {
+		return printStoredValue(w, name, field)
+	}
+	sels := p.Selectors()
+	root := sels[0].Unquoted()
+	if modules.CategoryHasField(category, root) {
+		// A missing top-level field is optional. A longer path is a name
+		// the module does not have, whether or not that field is present.
+		if len(sels) == 1 {
+			return nil
+		}
 		return fmt.Errorf("%s has no field %q", category, name)
 	}
-	field := item.LookupPath(cue.ParsePath(name))
-	if !field.Exists() {
-		return nil
+	found, paths := findNestedLabel(item, root)
+	switch len(paths) {
+	case 0:
+		return fmt.Errorf("%s has no field %q", category, name)
+	case 1:
+		field := found
+		if len(sels) > 1 {
+			field = found.LookupPath(cue.MakePath(sels[1:]...))
+			if !field.Exists() {
+				return fmt.Errorf("%s has no field %q", category, name)
+			}
+		}
+		return printStoredValue(w, paths[0], field)
+	default:
+		return fmt.Errorf("%s has more than one field %q: %s", category, name, strings.Join(paths, ", "))
 	}
+}
+
+// findNestedLabel returns every field labeled name under item, at any depth,
+// in source order. paths are the addresses of those fields from item.
+func findNestedLabel(item cue.Value, name string) (cue.Value, []string) {
+	var (
+		found cue.Value
+		paths []string
+	)
+	var walk func(cue.Value, string)
+	walk = func(v cue.Value, prefix string) {
+		iter, err := v.Fields()
+		if err != nil {
+			return
+		}
+		for iter.Next() {
+			sel := iter.Selector()
+			if !sel.IsString() {
+				continue
+			}
+			path := sel.String()
+			if prefix != "" {
+				path = prefix + "." + path
+			}
+			if sel.Unquoted() == name {
+				found = iter.Value()
+				paths = append(paths, path)
+			}
+			walk(iter.Value(), path)
+		}
+	}
+	walk(item, "")
+	return found, paths
+}
+
+func printStoredValue(w io.Writer, name string, field cue.Value) error {
 	text, err := formatStoredField(field)
 	if err != nil {
 		return fmt.Errorf("field %q: %w", name, err)
@@ -540,30 +623,50 @@ func formatStoredField(v cue.Value) (string, error) {
 		}
 		return n.String() + "\n", nil
 	case cue.ListKind:
-		return formatStoredList(v)
+		if text, ok := formatStoredStringList(v); ok {
+			return text, nil
+		}
+		return formatCUEValue(v)
 	default:
-		return "", errStoredShape
+		return formatCUEValue(v)
 	}
 }
 
-func formatStoredList(v cue.Value) (string, error) {
+// formatStoredStringList prints a list of strings one entry per line.
+// ok is false when the value is not that shape, so the caller prints CUE.
+func formatStoredStringList(v cue.Value) (string, bool) {
 	iter, err := v.List()
 	if err != nil {
-		return "", errStoredShape
+		return "", false
 	}
 	var b strings.Builder
 	for iter.Next() {
 		if iter.Value().Kind() != cue.StringKind {
-			return "", errStoredShape
+			return "", false
 		}
 		s, err := iter.Value().String()
 		if err != nil {
-			return "", errStoredShape
+			return "", false
 		}
 		b.WriteString(s)
 		b.WriteByte('\n')
 	}
-	return b.String(), nil
+	return b.String(), true
+}
+
+// formatCUEValue prints a stored struct, map, or other composite as CUE.
+func formatCUEValue(v cue.Value) (string, error) {
+	syn := v.Syntax(
+		cue.Concrete(true),
+		cue.Definitions(true),
+		cue.Hidden(true),
+		cue.Optional(true),
+	)
+	b, err := cueformat.Node(syn)
+	if err != nil {
+		return "", err
+	}
+	return ensureTrailingNewline(string(b)), nil
 }
 
 // ensureTrailingNewline returns s with exactly one trailing newline; empty

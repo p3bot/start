@@ -53,7 +53,23 @@ agents: {
 		session_locator: ["session_id"]
 		tags: ["one", "two"]
 		models: sonnet: "claude-sonnet"
-		flags: permission: auto: ["--permission-mode", "auto"]
+		flags: {
+			permission: {
+				default: []
+				edit: ["--permission-mode", "acceptEdits"]
+				plan: ["--permission-mode", "plan"]
+			}
+			effort: low: ["--effort", "low"]
+			output: "stream-json": ["--output-format", "streaming-json"]
+			print: {
+				off: ["{{.prompt}}"]
+				on: ["--single", "{{.prompt}}"]
+			}
+			resume: {
+				latest: ["--continue"]
+				id: ["--resume", "{{.resume}}"]
+			}
+		}
 	}
 	plain: {
 		bin: "plain"
@@ -127,6 +143,101 @@ func TestGetPlainAgentDoesNotPrintLocator(t *testing.T) {
 	}
 	if strings.Contains(stdout, "session_id") {
 		t.Fatalf("plain get printed the locator: %q", stdout)
+	}
+}
+
+func TestGetFieldFlagTables(t *testing.T) {
+	dir := isolateGetHome(t)
+	writeGetSettings(t, dir, fieldConfig)
+
+	permission := "{\n\tdefault: []\n\tedit: [\"--permission-mode\", \"acceptEdits\"]\n\tplan: [\"--permission-mode\", \"plan\"]\n}\n"
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"located", "--field", "permission"}, permission},
+		{[]string{"located", "--field", "flags.permission"}, permission},
+		{[]string{"agents:located", "--field", "permission"}, permission},
+		{[]string{"located", "--field", "flags.permission.edit"}, "--permission-mode\nacceptEdits\n"},
+		{[]string{"located", "--field", "edit"}, "--permission-mode\nacceptEdits\n"},
+		{[]string{"located", "--field", "permission.edit"}, "--permission-mode\nacceptEdits\n"},
+		{[]string{"located", "--field", "edit[0]"}, "--permission-mode\n"},
+		{[]string{"located", "--field", "permission.edit[1]"}, "acceptEdits\n"},
+		{[]string{"located", "--field", "default"}, ""},
+		{[]string{"located", "--field", "sonnet"}, "claude-sonnet\n"},
+		{[]string{"located", "--field", `flags.output."stream-json"`}, "--output-format\nstreaming-json\n"},
+		{[]string{"located", "--field", "tags[0]"}, "one\n"},
+		{[]string{"located", "--field", "models"}, "{\n\tsonnet: \"claude-sonnet\"\n}\n"},
+		{[]string{"inline-role", "--field", "role"}, "{\n\tprompt: \"inline\"\n}\n"},
+		{[]string{"inline-role", "--field", "role.prompt"}, "inline\n"},
+		{[]string{"plain", "--field", "flags"}, ""},
+	}
+	for _, tc := range cases {
+		stdout, stderr, err := runGetCmd(t, tc.args...)
+		if err != nil {
+			t.Fatalf("%v: %v\nstderr: %s", tc.args, err, stderr)
+		}
+		if stdout != tc.want {
+			t.Fatalf("%v stdout = %q, want %q", tc.args, stdout, tc.want)
+		}
+	}
+}
+
+func TestGetFieldNestedAnyShape(t *testing.T) {
+	dir := isolateGetHome(t)
+	writeGetSettings(t, dir, `
+agents: {
+	bad: {
+		command: "echo hi"
+		flags: permission: "edit"
+	}
+	worse: {
+		command: "echo hi"
+		flags: "nope"
+	}
+	both: {
+		command: "echo hi"
+		flags: permission: edit: ["--permission-mode", "acceptEdits"]
+		models: permission: "other"
+	}
+}
+`)
+
+	stdout, stderr, err := runGetCmd(t, "bad", "--field", "permission")
+	if err != nil {
+		t.Fatalf("string permission: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "edit\n" {
+		t.Fatalf("string permission = %q", stdout)
+	}
+
+	stdout, stderr, err = runGetCmd(t, "worse", "--field", "flags")
+	if err != nil {
+		t.Fatalf("string flags: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "nope\n" {
+		t.Fatalf("string flags = %q", stdout)
+	}
+
+	stdout, _, err = runGetCmd(t, "worse", "--field", "permission")
+	if err == nil || !strings.Contains(err.Error(), `no field "permission"`) {
+		t.Fatalf("missing permission: %v", err)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q", stdout)
+	}
+
+	stdout, _, err = runGetCmd(t, "both", "--field", "permission")
+	if err == nil || !strings.Contains(err.Error(), "more than one field") {
+		t.Fatalf("ambiguous permission: %v", err)
+	}
+	for _, want := range []string{"flags.permission", "models.permission"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q", stdout)
 	}
 }
 
@@ -220,15 +331,20 @@ func TestGetFieldRefusesShapeAndUnknown(t *testing.T) {
 	writeGetSettings(t, dir, fieldConfig)
 
 	cases := [][]string{
-		{"located", "--field", "models"},
-		{"located", "--field", "flags"},
 		{"role-body", "--field", "session_locator"},
-		{"inline-role", "--field", "role"},
+		{"role-body", "--field", "permission"},
+		{"located", "--field", "permissions"},
+		{"located", "--field", "flags.missing"},
+		{"plain", "--field", "flags.permission"},
+		{"plain", "--field", "flags.missing"},
+		{"located", "--field", "permission.nope"},
+		{"located", "--field", "edit[5]"},
+		{"plain", "--field", "permission"},
 	}
 	for _, args := range cases {
 		stdout, _, err := runGetCmd(t, args...)
-		if err == nil {
-			t.Fatalf("%v: expected error", args)
+		if err == nil || !strings.Contains(err.Error(), "no field") {
+			t.Fatalf("%v: %v", args, err)
 		}
 		if stdout != "" {
 			t.Fatalf("%v stdout = %q, want empty", args, stdout)
@@ -314,6 +430,7 @@ func TestGetFieldUsage(t *testing.T) {
 		{"--field=", "located"},
 		{"--field", "session_locator", "--field", "command", "located"},
 		{"located", "--field"},
+		{"located", "--field", "stream-json"},
 	}
 	for _, args := range cases {
 		stdout, _, err := runGetCmd(t, args...)
@@ -412,8 +529,8 @@ func TestFormatStoredField(t *testing.T) {
 		{"one", "session_id\n", false},
 		{"two", "session_id\n0\n", false},
 		{"empty", "", false},
-		{"obj", "", true},
-		{"nums", "", true},
+		{"obj", "{\n\ta: \"b\"\n}\n", false},
+		{"nums", "[1]\n", false},
 	}
 	for _, tc := range cases {
 		got, err := formatStoredField(val.LookupPath(cue.ParsePath(tc.field)))

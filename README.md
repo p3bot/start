@@ -307,8 +307,11 @@ start get <name>
 start get contexts:cwd/agents-md
 start get skills:finding/one-by-one
 
-# Print one stored CUE field (unstyled; one entry per line for a list)
+# Print one stored CUE field or a path under it (unstyled)
 start get <name> --field session_locator
+start get grok --field permission
+start get grok --field edit[0]
+start get grok --field flags.permission
 
 # Print the resolved category:name instead of the module text
 start get <name> --id
