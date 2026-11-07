@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -322,6 +323,7 @@ func TestComposer_ComposeWithRole(t *testing.T) {
 		roles: {
 			assistant: {
 				prompt: "You are a helpful assistant."
+				priority: 1
 			}
 			reviewer: {
 				prompt: "You are a code reviewer."
@@ -351,6 +353,20 @@ func TestComposer_ComposeWithRole(t *testing.T) {
 		}
 	})
 
+	t.Run("no priority role runs without a role", func(t *testing.T) {
+		plain := ctx.CompileString(`roles: { reviewer: { prompt: "You are a code reviewer." } }`)
+		result, err := composer.ComposeWithRole(plain, ContextSelection{}, "", "")
+		if err != nil {
+			t.Fatalf("ComposeWithRole() error = %v", err)
+		}
+		if result.RoleName != "" || result.Role != "" {
+			t.Errorf("RoleName = %q, Role = %q, want both empty", result.RoleName, result.Role)
+		}
+		if result.RoleOutcome.State != SectionNone {
+			t.Errorf("RoleOutcome.State = %v, want SectionNone", result.RoleOutcome.State)
+		}
+	})
+
 	t.Run("uses specified role", func(t *testing.T) {
 		result, err := composer.ComposeWithRole(cfg, ContextSelection{IncludeRequired: true}, "reviewer", "")
 		if err != nil {
@@ -374,9 +390,9 @@ func TestComposer_ComposeWithRole(t *testing.T) {
 }
 
 // TestComposeWithRole_RoleOutcome verifies the choke-point stamp: a resolvable
-// role yields SectionListed, a config with no roles yields SectionNone, and a
-// role failure carrying an error row stays SectionListed so the diagnostic
-// table survives — never collapsing to SectionNone.
+// role yields SectionListed, a config with no roles yields SectionNone, and
+// skipped or error rows stay SectionListed so the diagnostic table survives —
+// never collapsing to SectionNone.
 func TestComposeWithRole_RoleOutcome(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
@@ -385,7 +401,7 @@ func TestComposeWithRole_RoleOutcome(t *testing.T) {
 	composer := NewComposer(processor, "")
 
 	t.Run("resolvable role is SectionListed", func(t *testing.T) {
-		cfg := ctx.CompileString(`roles: { assistant: { prompt: "You are a helpful assistant." } }`)
+		cfg := ctx.CompileString(`roles: { assistant: { prompt: "You are a helpful assistant.", priority: 1 } }`)
 		if err := cfg.Err(); err != nil {
 			t.Fatalf("compile config: %v", err)
 		}
@@ -415,14 +431,54 @@ func TestComposeWithRole_RoleOutcome(t *testing.T) {
 		}
 	})
 
-	t.Run("required-role failure stays SectionListed", func(t *testing.T) {
-		cfg := ctx.CompileString(`roles: { broken: { file: "./does-not-exist.md" } }`)
+	t.Run("skipped candidates stay SectionListed without error", func(t *testing.T) {
+		cfg := ctx.CompileString(`roles: { project: { file: "./does-not-exist.md", priority: 10 } }`)
 		if err := cfg.Err(); err != nil {
 			t.Fatalf("compile config: %v", err)
 		}
 		result, err := composer.ComposeWithRole(cfg, ContextSelection{}, "", "")
+		if err != nil {
+			t.Fatalf("ComposeWithRole() error = %v", err)
+		}
+		if result.RoleName != "" {
+			t.Errorf("RoleName = %q, want empty", result.RoleName)
+		}
+		if result.RoleOutcome.State != SectionListed {
+			t.Errorf("RoleOutcome.State = %v, want SectionListed", result.RoleOutcome.State)
+		}
+		if len(result.RoleResolutions) != 1 || result.RoleResolutions[0].Status != "skipped" {
+			t.Errorf("RoleResolutions = %+v, want one skipped row", result.RoleResolutions)
+		}
+	})
+
+	t.Run("selected role that fails to build is recorded as an error row", func(t *testing.T) {
+		cfg := ctx.CompileString(`roles: { home: { prompt: "{{.unclosed", priority: 50 } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.ComposeWithRole(cfg, ContextSelection{}, "", "")
+		if err != nil {
+			t.Fatalf("ComposeWithRole() error = %v, want nil for a selected role", err)
+		}
+		if result.Role != "" {
+			t.Errorf("Role = %q, want empty after build failure", result.Role)
+		}
+		if len(result.RoleResolutions) != 1 {
+			t.Fatalf("RoleResolutions = %+v, want one row", result.RoleResolutions)
+		}
+		if got := result.RoleResolutions[0]; got.Status != "error" || got.Error == "" {
+			t.Errorf("row = %+v, want status error with a message", got)
+		}
+	})
+
+	t.Run("named-role failure stays SectionListed", func(t *testing.T) {
+		cfg := ctx.CompileString(`roles: { broken: { file: "./does-not-exist.md" } }`)
+		if err := cfg.Err(); err != nil {
+			t.Fatalf("compile config: %v", err)
+		}
+		result, err := composer.ComposeWithRole(cfg, ContextSelection{}, "broken", "")
 		if err == nil {
-			t.Fatal("expected error for required role with missing file")
+			t.Fatal("expected error for named role with missing file")
 		}
 		if result.RoleOutcome.State != SectionListed {
 			t.Errorf("RoleOutcome.State = %v, want SectionListed (error row must survive)", result.RoleOutcome.State)
@@ -683,45 +739,90 @@ func TestExtractUTDFields(t *testing.T) {
 	}
 }
 
-func TestGetDefaultRole(t *testing.T) {
+func TestSelectDefaultRole(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
 
 	tests := []struct {
-		name     string
-		config   string
-		wantRole string
+		name         string
+		config       string
+		wantRole     string
+		wantStatuses []string // per resolution, in order
 	}{
 		{
-			name: "returns first role in definition order",
-			config: `
-				roles: {
-					first: { prompt: "First role." }
-					second: { prompt: "Second role." }
-				}
-			`,
-			wantRole: "first",
-		},
-		{
-			name:     "returns empty when no roles defined",
+			name:     "no roles defined",
 			config:   `{}`,
 			wantRole: "",
 		},
 		{
-			name: "returns empty when settings exists but no roles",
-			config: `
-				settings: {
-					default_agent: "claude"
-				}
-			`,
+			name:     "empty roles",
+			config:   `roles: {}`,
 			wantRole: "",
 		},
 		{
-			name: "returns empty when roles is empty",
-			config: `
-				roles: {}
-			`,
+			name: "roles without priority are never selected",
+			config: `roles: {
+				first: { prompt: "First role." }
+				second: { prompt: "Second role." }
+			}`,
 			wantRole: "",
+		},
+		{
+			name: "lowest priority wins regardless of config order",
+			config: `roles: {
+				home: { prompt: "Home.", priority: 50 }
+				plain: { prompt: "Plain." }
+				project: { prompt: "Project.", priority: 10 }
+			}`,
+			wantRole:     "project",
+			wantStatuses: []string{"loaded"},
+		},
+		{
+			name: "ties keep config order",
+			config: `roles: {
+				b: { prompt: "B.", priority: 5 }
+				a: { prompt: "A.", priority: 5 }
+			}`,
+			wantRole:     "b",
+			wantStatuses: []string{"loaded"},
+		},
+		{
+			name: "missing file is skipped for the next candidate",
+			config: `roles: {
+				plain: { prompt: "Plain." }
+				home: { prompt: "Home.", priority: 50 }
+				project: { file: "/nonexistent/role.md", priority: 10 }
+			}`,
+			wantRole:     "home",
+			wantStatuses: []string{"skipped", "loaded"},
+		},
+		{
+			name: "no available candidate selects no role",
+			config: `roles: {
+				plain: { prompt: "Plain." }
+				project: { file: "/nonexistent/1.md", priority: 10 }
+				home: { file: "/nonexistent/2.md", priority: 50 }
+			}`,
+			wantRole:     "",
+			wantStatuses: []string{"skipped", "skipped"},
+		},
+		{
+			name: "legacy optional true does not make a candidate",
+			config: `roles: {
+				legacy: { prompt: "Legacy.", optional: true }
+			}`,
+			wantRole: "",
+		},
+		{
+			name: "priority below 1 or non-integer is not a candidate",
+			config: `roles: {
+				zero: { prompt: "Zero.", priority: 0 }
+				negative: { prompt: "Negative.", priority: -5 }
+				text: { prompt: "Text.", priority: "high" }
+				valid: { prompt: "Valid.", priority: 10 }
+			}`,
+			wantRole:     "valid",
+			wantStatuses: []string{"loaded"},
 		},
 	}
 
@@ -732,207 +833,23 @@ func TestGetDefaultRole(t *testing.T) {
 				t.Fatalf("compile config: %v", err)
 			}
 
-			processor := NewTemplateProcessor(nil, nil, "")
-			composer := NewComposer(processor, "")
-
-			result, _, err := composer.selectDefaultRole(cfg)
+			composer := NewComposer(NewTemplateProcessor(nil, nil, ""), "")
+			roleName, resolutions, err := composer.selectDefaultRole(cfg)
 			if err != nil {
 				t.Fatalf("selectDefaultRole() error: %v", err)
 			}
-			if result != tt.wantRole {
-				t.Errorf("selectDefaultRole() = %q, want %q", result, tt.wantRole)
+			if roleName != tt.wantRole {
+				t.Errorf("selectDefaultRole() = %q, want %q", roleName, tt.wantRole)
+			}
+			var got []string
+			for _, r := range resolutions {
+				got = append(got, r.Status)
+			}
+			if !slices.Equal(got, tt.wantStatuses) {
+				t.Errorf("statuses = %v, want %v", got, tt.wantStatuses)
 			}
 		})
 	}
-}
-
-func TestSelectDefaultRole(t *testing.T) {
-	t.Parallel()
-	ctx := cuecontext.New()
-
-	t.Run("optional role skipped when file missing", func(t *testing.T) {
-		config := `
-			roles: {
-				"optional-missing": {
-					file: "/nonexistent/path/role.md"
-					optional: true
-				}
-				"fallback": {
-					prompt: "Fallback role"
-				}
-			}
-		`
-		cfg := ctx.CompileString(config)
-		if err := cfg.Err(); err != nil {
-			t.Fatalf("compile config: %v", err)
-		}
-
-		processor := NewTemplateProcessor(nil, nil, "")
-		composer := NewComposer(processor, "")
-
-		roleName, resolutions, err := composer.selectDefaultRole(cfg)
-		if err != nil {
-			t.Fatalf("selectDefaultRole() error = %v", err)
-		}
-
-		if roleName != "fallback" {
-			t.Errorf("roleName = %q, want 'fallback'", roleName)
-		}
-
-		if len(resolutions) != 2 {
-			t.Fatalf("expected 2 resolutions, got %d", len(resolutions))
-		}
-
-		if resolutions[0].Status != "skipped" {
-			t.Errorf("first resolution status = %q, want 'skipped'", resolutions[0].Status)
-		}
-		if resolutions[1].Status != "loaded" {
-			t.Errorf("second resolution status = %q, want 'loaded'", resolutions[1].Status)
-		}
-	})
-
-	t.Run("required role errors when file missing", func(t *testing.T) {
-		config := `
-			roles: {
-				"required-missing": {
-					file: "/nonexistent/path/role.md"
-					optional: false
-				}
-			}
-		`
-		cfg := ctx.CompileString(config)
-		if err := cfg.Err(); err != nil {
-			t.Fatalf("compile config: %v", err)
-		}
-
-		processor := NewTemplateProcessor(nil, nil, "")
-		composer := NewComposer(processor, "")
-
-		_, resolutions, err := composer.selectDefaultRole(cfg)
-		if err == nil {
-			t.Error("expected error for required role with missing file")
-		}
-
-		if len(resolutions) == 0 {
-			t.Fatal("expected at least one resolution")
-		}
-		if resolutions[0].Status != "error" {
-			t.Errorf("resolution status = %q, want 'error'", resolutions[0].Status)
-		}
-	})
-
-	t.Run("first valid role selected from chain", func(t *testing.T) {
-		config := `
-			roles: {
-				"optional-missing-1": {
-					file: "/nonexistent/1.md"
-					optional: true
-				}
-				"optional-missing-2": {
-					file: "/nonexistent/2.md"
-					optional: true
-				}
-				"valid": {
-					prompt: "Valid role"
-				}
-				"not-reached": {
-					prompt: "Should not reach this"
-				}
-			}
-		`
-		cfg := ctx.CompileString(config)
-		if err := cfg.Err(); err != nil {
-			t.Fatalf("compile config: %v", err)
-		}
-
-		processor := NewTemplateProcessor(nil, nil, "")
-		composer := NewComposer(processor, "")
-
-		roleName, resolutions, err := composer.selectDefaultRole(cfg)
-		if err != nil {
-			t.Fatalf("selectDefaultRole() error = %v", err)
-		}
-
-		if roleName != "valid" {
-			t.Errorf("roleName = %q, want 'valid'", roleName)
-		}
-
-		// Should have 3 resolutions (2 skipped + 1 loaded)
-		if len(resolutions) != 3 {
-			t.Fatalf("expected 3 resolutions, got %d", len(resolutions))
-		}
-	})
-
-	t.Run("all optional missing returns error", func(t *testing.T) {
-		config := `
-			roles: {
-				"optional-1": {
-					file: "/nonexistent/1.md"
-					optional: true
-				}
-				"optional-2": {
-					file: "/nonexistent/2.md"
-					optional: true
-				}
-			}
-		`
-		cfg := ctx.CompileString(config)
-		if err := cfg.Err(); err != nil {
-			t.Fatalf("compile config: %v", err)
-		}
-
-		processor := NewTemplateProcessor(nil, nil, "")
-		composer := NewComposer(processor, "")
-
-		_, _, err := composer.selectDefaultRole(cfg)
-		if err == nil {
-			t.Error("expected error when all optional roles fail")
-		}
-		if !strings.Contains(err.Error(), "no roles available") {
-			t.Errorf("error = %q, want containing 'no roles available'", err.Error())
-		}
-	})
-
-	t.Run("mixed optional and required chain", func(t *testing.T) {
-		config := `
-			roles: {
-				"optional-missing": {
-					file: "/nonexistent/optional.md"
-					optional: true
-				}
-				"required-valid": {
-					prompt: "Required role"
-				}
-			}
-		`
-		cfg := ctx.CompileString(config)
-		if err := cfg.Err(); err != nil {
-			t.Fatalf("compile config: %v", err)
-		}
-
-		processor := NewTemplateProcessor(nil, nil, "")
-		composer := NewComposer(processor, "")
-
-		roleName, resolutions, err := composer.selectDefaultRole(cfg)
-		if err != nil {
-			t.Fatalf("selectDefaultRole() error = %v", err)
-		}
-
-		if roleName != "required-valid" {
-			t.Errorf("roleName = %q, want 'required-valid'", roleName)
-		}
-
-		if len(resolutions) != 2 {
-			t.Fatalf("expected 2 resolutions, got %d", len(resolutions))
-		}
-		if resolutions[0].Status != "skipped" {
-			t.Errorf("first status = %q, want 'skipped'", resolutions[0].Status)
-		}
-		if resolutions[1].Status != "loaded" {
-			t.Errorf("second status = %q, want 'loaded'", resolutions[1].Status)
-		}
-	})
-
 }
 
 // TestSelectDefaultRole_ModulePath is separate from TestSelectDefaultRole
@@ -963,6 +880,7 @@ func TestSelectDefaultRole_ModulePath(t *testing.T) {
 				"library/assistant": {
 					origin: "github.com/test/roles/library/assistant@v1.0.0"
 					file: "@module/role.md"
+					priority: 1
 				}
 			}
 		`)
@@ -983,17 +901,16 @@ func TestSelectDefaultRole_ModulePath(t *testing.T) {
 	})
 
 	t.Run("surfaces resolver error when module not cached", func(t *testing.T) {
-		// Optional so the iteration records it as skipped rather than aborting,
-		// letting us assert on the captured checkErr.
 		cfg := ctx.CompileString(`
 			roles: {
 				"missing/mod": {
 					origin: "github.com/test/roles/missing/mod@v9.9.9"
 					file: "@module/role.md"
-					optional: true
+					priority: 1
 				}
 				"fallback": {
 					prompt: "Fallback"
+					priority: 2
 				}
 			}
 		`)
@@ -1021,10 +938,11 @@ func TestSelectDefaultRole_ModulePath(t *testing.T) {
 			roles: {
 				"no-origin": {
 					file: "@module/role.md"
-					optional: true
+					priority: 1
 				}
 				"fallback": {
 					prompt: "Fallback"
+					priority: 2
 				}
 			}
 		`)
@@ -1236,7 +1154,7 @@ func TestResolveModuleFile(t *testing.T) {
 	}
 }
 
-func TestComposeWithRole_OptionalBehavior(t *testing.T) {
+func TestComposeWithRole_NamedRole(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()
 	tmpDir := t.TempDir()
@@ -1249,9 +1167,9 @@ func TestComposeWithRole_OptionalBehavior(t *testing.T) {
 	t.Run("explicit role always errors on failure", func(t *testing.T) {
 		config := `
 			roles: {
-				"optional-missing": {
+				"candidate-missing": {
 					file: "/nonexistent/role.md"
-					optional: true
+					priority: 1
 				}
 			}
 		`
@@ -1263,10 +1181,10 @@ func TestComposeWithRole_OptionalBehavior(t *testing.T) {
 		processor := NewTemplateProcessor(nil, nil, tmpDir)
 		composer := NewComposer(processor, tmpDir)
 
-		// Explicit role selection should error even if optional: true
-		_, err := composer.ComposeWithRole(cfg, ContextSelection{}, "optional-missing", "")
+		// A named role errors even when it is also an automatic candidate.
+		_, err := composer.ComposeWithRole(cfg, ContextSelection{}, "candidate-missing", "")
 		if err == nil {
-			t.Error("expected error for explicit role with missing file, even if optional")
+			t.Error("expected error for named role with missing file")
 		}
 	})
 

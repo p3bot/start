@@ -1314,7 +1314,7 @@ roles: {
 	"code-reviewer": {
 		description: "Reviews code"
 		prompt:      "You are an expert code reviewer."
-		optional:    true
+		priority:    10
 		tags: ["review", "quality"]
 	}
 }`,
@@ -1324,7 +1324,7 @@ roles: {
 			want: []string{
 				"Description: Reviews code",
 				"Prompt: You are an expert code reviewer.",
-				"Optional: true",
+				"Priority: 10",
 				"Tags: review, quality",
 			},
 		},
@@ -1342,7 +1342,7 @@ roles: {
 			notWant: []string{
 				"Description:",
 				"Prompt:",
-				"Optional:",
+				"Priority:",
 				"Tags:",
 			},
 		},

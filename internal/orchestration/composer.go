@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,11 +44,10 @@ type Context struct {
 
 // RoleResolution tracks the resolution status of a role during fallback.
 type RoleResolution struct {
-	Name     string // Role name (map key or file path)
-	Status   string // "loaded", "skipped", "error"
-	File     string // Source file path (if file-based)
-	Optional bool   // Whether this role is optional
-	Error    string // Error message if resolution failed
+	Name   string // Role name (map key or file path)
+	Status string // "loaded", "skipped", "error"
+	File   string // Source file path (if file-based)
+	Error  string // Error message if resolution failed
 }
 
 // Composer handles prompt composition from CUE configuration.
@@ -294,12 +294,12 @@ func (c *Composer) Compose(cfg cue.Value, selection ContextSelection, customText
 
 // ComposeWithRole composes prompt and resolves role.
 // When roleName is provided (explicit --role), errors are fatal.
-// When using default selection, optional roles are skipped gracefully.
+// Otherwise the role is selected automatically by priority, or none.
 func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, roleName, customText string) (result ComposeResult, err error) {
 	// Stamp the role outcome from one choke point so every exit — the normal
 	// return and both error early-returns — agrees with the final resolutions
-	// slice: a row is appended iff roles are configured, so SectionListed and
-	// SectionNone are an exact partition. The render layer discards
+	// slice: a row is appended iff a role is named or a priority candidate
+	// exists, so SectionListed and SectionNone are an exact partition. The render layer discards
 	// RoleResolutions unless the state is SectionListed, so a missed stamp on an
 	// error return would render "Role: none" while error rows exist.
 	defer func() {
@@ -334,45 +334,29 @@ func (c *Composer) ComposeWithRole(cfg cue.Value, selection ContextSelection, ro
 		var roleFilePath string
 		var roleErr error
 
+		rowFile := roleName
 		if IsLocator(roleName) {
 			// A remote role materialises to .start/temp/ so {{role_file}} points
 			// at a real file; a local role returns its own on-disk path.
 			roleContent, roleFilePath, roleErr = ReadRoleLocator(c.tempManager, roleName)
-			res := RoleResolution{
-				Name: roleName,
-				File: roleName,
-			}
-			if roleErr != nil {
-				res.Status = "error"
-				res.Error = roleErr.Error()
-			} else {
-				res.Status = "loaded"
-			}
-			result.RoleResolutions = append(result.RoleResolutions, res)
 		} else {
 			roleContent, roleFilePath, roleErr = c.resolveRole(cfg, roleName)
-
-			if len(result.RoleResolutions) == 0 || result.RoleResolutions[len(result.RoleResolutions)-1].Name != roleName {
-				res := RoleResolution{
-					Name: roleName,
-					File: roleFilePath,
-				}
-				if roleErr != nil {
-					res.Status = "error"
-					res.Error = roleErr.Error()
-				} else {
-					res.Status = "loaded"
-				}
-				result.RoleResolutions = append(result.RoleResolutions, res)
-			}
+			rowFile = roleFilePath
 		}
 
+		// A selected role already owns the last row; record its build outcome there.
+		if explicitRole {
+			result.RoleResolutions = append(result.RoleResolutions, RoleResolution{Name: roleName, File: rowFile})
+		}
+		row := &result.RoleResolutions[len(result.RoleResolutions)-1]
 		if roleErr != nil {
+			row.Status = "error"
+			row.Error = roleErr.Error()
 			if explicitRole {
 				return result, fmt.Errorf("role %q: %w", roleName, roleErr)
 			}
-			// Non-explicit role failure is shown in the role table via ○ status
 		} else {
+			row.Status = "loaded"
 			result.Role = roleContent
 			result.RoleFile = roleFilePath
 		}
@@ -572,13 +556,11 @@ func (c *Composer) resolveRole(cfg cue.Value, name string) (content, filePath st
 	return result.Content, roleFilePath, nil
 }
 
-// selectDefaultRole returns the default role name and resolution tracking.
-// Roles are checked in definition order:
-// - Optional roles with missing files are skipped
-// - Required roles with missing files cause an error
-// - First available role is selected
-// Returns empty roleName with nil error if no roles are defined.
-// Returns error if all roles fail or a required role fails.
+// selectDefaultRole picks the role used when none is named. Only roles with a
+// priority are candidates, tried lowest first with ties in config order; the
+// first whose file is available wins. A candidate whose file is missing is
+// recorded as skipped. No available candidate yields an empty name, not an
+// error, so the agent runs without a role.
 func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolutions []RoleResolution, err error) {
 	roles := cfg.LookupPath(cue.ParsePath(internalcue.KeyRoles))
 	if !roles.Exists() {
@@ -590,61 +572,49 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 		return "", nil, fmt.Errorf("iterating roles: %w", err)
 	}
 
+	type candidate struct {
+		name     string
+		priority int64
+		val      cue.Value
+	}
+	var candidates []candidate
 	for iter.Next() {
-		name := iter.Selector().Unquoted()
-		roleVal := iter.Value()
-
-		optional := false
-		if opt := roleVal.LookupPath(cue.ParsePath("optional")); opt.Exists() {
-			optional, _ = opt.Bool()
-		}
-
-		var filePath string
-		if file := roleVal.LookupPath(cue.ParsePath("file")); file.Exists() {
-			filePath, _ = file.String()
-		}
-
-		// Non-file roles (command/prompt only) are always available at selection time.
-		available := true
-		var checkErr string
-
-		if filePath != "" {
-			if ok, msg := roleFileAvailable(filePath, roleVal); !ok {
-				available = false
-				checkErr = msg
-			}
-		}
-
-		res := RoleResolution{
-			Name:     name,
-			File:     filePath,
-			Optional: optional,
-		}
-
-		if available {
-			res.Status = "loaded"
-			resolutions = append(resolutions, res)
-			return name, resolutions, nil
-		}
-
-		if optional {
-			res.Status = "skipped"
-			res.Error = checkErr
-			resolutions = append(resolutions, res)
+		p, ok := RolePriority(iter.Value())
+		if !ok {
 			continue
 		}
+		candidates = append(candidates, candidate{iter.Selector().Unquoted(), p, iter.Value()})
+	}
+	slices.SortStableFunc(candidates, func(a, b candidate) int { return cmp.Compare(a.priority, b.priority) })
 
-		res.Status = "error"
-		res.Error = checkErr
-		resolutions = append(resolutions, res)
-		return "", resolutions, fmt.Errorf("role %q: %s", name, checkErr)
+	for _, cand := range candidates {
+		var filePath string
+		if file := cand.val.LookupPath(cue.ParsePath("file")); file.Exists() {
+			filePath, _ = file.String()
+		}
+		res := RoleResolution{Name: cand.name, File: filePath, Status: "loaded"}
+		if filePath != "" {
+			if ok, msg := roleFileAvailable(filePath, cand.val); !ok {
+				res.Status = "skipped"
+				res.Error = msg
+				resolutions = append(resolutions, res)
+				continue
+			}
+		}
+		return cand.name, append(resolutions, res), nil
 	}
 
-	if len(resolutions) > 0 {
-		return "", resolutions, fmt.Errorf("no roles available — all configured roles reference missing files\n  Run 'start config roles' to check your role configuration\n  Run 'start install <role-name>' to install a role from the registry")
-	}
+	return "", resolutions, nil
+}
 
-	return "", nil, nil
+// RolePriority returns a role's priority when it is an integer of 1 or more.
+// Any other value, or none, means the role is never selected automatically.
+func RolePriority(roleVal cue.Value) (int64, bool) {
+	p, err := roleVal.LookupPath(cue.ParsePath(internalcue.KeyPriority)).Int64()
+	if err != nil || p < 1 {
+		return 0, false
+	}
+	return p, true
 }
 
 // roleFileAvailable reports whether a role's file path is resolvable and present.

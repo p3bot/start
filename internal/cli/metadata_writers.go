@@ -63,7 +63,7 @@ func writeAgentMetadata(w io.Writer, agent AgentConfig) {
 
 func writeRoleMetadata(w io.Writer, role RoleConfig) {
 	if role.Description == "" && role.File == "" && role.Command == "" &&
-		role.Prompt == "" && !role.Optional && len(role.Tags) == 0 {
+		role.Prompt == "" && role.Priority == 0 && len(role.Tags) == 0 {
 		return
 	}
 
@@ -82,8 +82,8 @@ func writeRoleMetadata(w io.Writer, role RoleConfig) {
 	if role.Prompt != "" {
 		fmt.Fprintf(w, "%s %s\n", label("Prompt:"), truncatePrompt(role.Prompt, 100))
 	}
-	if role.Optional {
-		fmt.Fprintf(w, "%s true\n", label("Optional:"))
+	if role.Priority > 0 {
+		fmt.Fprintf(w, "%s %d\n", label("Priority:"), role.Priority)
 	}
 	if len(role.Tags) > 0 {
 		fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(role.Tags, ", "))

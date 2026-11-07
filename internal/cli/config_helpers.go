@@ -805,3 +805,31 @@ func lookupInstalledName[T any](items map[string]T, typeName, name string) (stri
 	var zero T
 	return "", zero, notFoundError(fmt.Errorf("%s %q not found", typeName, name))
 }
+
+// promptPriority reads a role's automatic-selection rank. Zero means the role
+// is never selected automatically. Enter keeps current; "-" clears it.
+func promptPriority(w io.Writer, r io.Reader, current int) (int, error) {
+	if current > 0 {
+		fmt.Fprintf(w, "Priority %s %s: ", tui.Bracket("%d", current), tui.Annotate("lower runs first, - to clear, Enter to keep"))
+	} else {
+		fmt.Fprintf(w, "Priority %s: ", tui.Annotate("lower runs first, Enter to never select automatically"))
+	}
+
+	input, err := bufio.NewReader(r).ReadString('\n')
+	if err != nil {
+		return 0, fmt.Errorf("reading input: %w", err)
+	}
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "":
+		return current, nil
+	case "-":
+		return 0, nil
+	}
+	p, err := strconv.Atoi(input)
+	if err != nil || p < 1 {
+		return 0, fmt.Errorf("priority must be a whole number of 1 or more, got %q", input)
+	}
+	return p, nil
+}

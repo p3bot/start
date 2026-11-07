@@ -368,6 +368,29 @@ hint.
 - Sentinels skip resolution entirely: `--role none` skips role assignment, just
   as the context `none` and `default` sentinels above are never searched.
 
+## Default role selection
+
+When no role is named, the match rule does not run. The role comes from the
+first source that applies:
+
+1. `--role none` launches without a role.
+2. `--role <id>` resolves through the match rule. Failure is an error.
+3. A task's `role` field (`start task` only) resolves the same way.
+4. Otherwise the merged config is scanned for roles with a `priority` field.
+   Candidates are tried lowest priority first; equal priorities keep config
+   order (global before local, a same-named local entry in its global slot).
+   The first candidate whose file exists is used. A role with no `file` is
+   always available. A candidate whose file is missing is shown as skipped.
+5. No available candidate launches without a role. This is not an error.
+
+A role without `priority` is never selected automatically, however many roles
+are installed. Nor is one whose `priority` is not a whole number of 1 or more;
+`start doctor` flags such a value. The library's cwd and home roles carry priorities
+(`cwd/dotagents/default` 10, `cwd/role-md` 20, `home/dotagents/default` 50), so
+a project role wins over the home role regardless of install order. A role still
+carrying the retired `optional: true` is ignored by selection and flagged by
+`start doctor`.
+
 ## Worked examples
 
 Assume installed and indexed tasks include `cwd/project/review`,

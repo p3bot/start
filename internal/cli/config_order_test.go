@@ -694,7 +694,7 @@ func TestConfigRoleAdd_PreservesOrder(t *testing.T) {
 
 	// New role should append, not sort alphabetically.
 	// Prompts: name, description (empty), content choice "3" (inline prompt), prompt text, blank line to finish, tags (skip)
-	if err := configRoleAdd(slowStdin("beta\n\n3\nBeta role\n\n\n"), &bytes.Buffer{}, false); err != nil {
+	if err := configRoleAdd(slowStdin("beta\n\n3\nBeta role\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
 

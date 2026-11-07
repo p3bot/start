@@ -283,7 +283,7 @@ func TestWriteRoleMetadata_AllFields(t *testing.T) {
 		File:        "@module/prompts/reviewer.md",
 		Command:     "echo reviewer",
 		Prompt:      "You are an expert code reviewer.",
-		Optional:    true,
+		Priority:    10,
 		Tags:        []string{"review", "quality"},
 	}
 
@@ -295,7 +295,7 @@ Description: Reviews code carefully.
 File: @module/prompts/reviewer.md
 Command: echo reviewer
 Prompt: You are an expert code reviewer.
-Optional: true
+Priority: 10
 Tags: review, quality
 `
 	if buf.String() != want {
@@ -303,18 +303,17 @@ Tags: review, quality
 	}
 }
 
-func TestWriteRoleMetadata_OptionalSkippedWhenFalse(t *testing.T) {
+func TestWriteRoleMetadata_PrioritySkippedWhenZero(t *testing.T) {
 	noColorForTest(t)
 	role := RoleConfig{
-		Description: "no optional",
-		Optional:    false,
+		Description: "no priority",
 	}
 
 	var buf bytes.Buffer
 	writeRoleMetadata(&buf, role)
 
-	if strings.Contains(buf.String(), "Optional:") {
-		t.Errorf("expected no Optional line when false, got %q", buf.String())
+	if strings.Contains(buf.String(), "Priority:") {
+		t.Errorf("expected no Priority line when zero, got %q", buf.String())
 	}
 }
 

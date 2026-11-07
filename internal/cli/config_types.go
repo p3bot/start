@@ -9,6 +9,7 @@ import (
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
 	"github.com/p3bot/start/internal/modules"
+	"github.com/p3bot/start/internal/orchestration"
 )
 
 // AgentConfig represents an agent configuration for editing.
@@ -138,7 +139,7 @@ type RoleConfig struct {
 	Prompt      string   `json:"prompt,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Uses        []string `json:"uses,omitempty"`     // Colon-form addresses of modules pulled in via `start get`
-	Optional    bool     `json:"optional,omitempty"` // If true, skip gracefully when file is missing
+	Priority    int      `json:"priority,omitempty"` // Automatic-selection rank, lowest first; 0 means never selected automatically
 	Source      string   `json:"source"`             // "global" or "local"
 	Origin      string   `json:"origin,omitempty"`   // Registry module path when installed from registry
 }
@@ -167,8 +168,8 @@ func decodeRoleValue(val cue.Value) RoleConfig {
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		role.Origin, _ = v.String()
 	}
-	if v := val.LookupPath(cue.ParsePath("optional")); v.Exists() {
-		role.Optional, _ = v.Bool()
+	if p, ok := orchestration.RolePriority(val); ok {
+		role.Priority = int(p)
 	}
 
 	return role

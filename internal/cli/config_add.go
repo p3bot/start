@@ -205,16 +205,9 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		return fmt.Errorf("specify only one of: file, command, or prompt")
 	}
 
-	var optional bool
-	if file != "" {
-		fmt.Fprintf(stdout, "Optional %s? %s ", tui.Annotate("skip if file missing"), tui.Bracket("y/N"))
-		reader := bufio.NewReader(stdin)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("reading input: %w", err)
-		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		optional = input == "y" || input == "yes"
+	priority, err := promptPriority(stdout, stdin, 0)
+	if err != nil {
+		return err
 	}
 
 	tags, err := promptTags(stdout, stdin, nil, false)
@@ -228,7 +221,7 @@ func configRoleAdd(stdin io.Reader, stdout io.Writer, local bool) error {
 		File:        file,
 		Command:     command,
 		Prompt:      prompt,
-		Optional:    optional,
+		Priority:    priority,
 		Tags:        tags,
 	}
 

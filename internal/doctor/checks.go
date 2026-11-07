@@ -366,6 +366,12 @@ func CheckRoles(cfgValue cue.Value) SectionResult {
 		if result != nil {
 			section.Results = append(section.Results, *result)
 		}
+		if legacy := checkLegacyOptional(role, name); legacy != nil {
+			section.Results = append(section.Results, *legacy)
+		}
+		if invalid := checkRolePriority(role, name); invalid != nil {
+			section.Results = append(section.Results, *invalid)
+		}
 	}
 
 	if count > 0 {
@@ -373,6 +379,41 @@ func CheckRoles(cfgValue cue.Value) SectionResult {
 	}
 
 	return section
+}
+
+// checkLegacyOptional warns about a role that still sets optional: true. The
+// field no longer selects a role automatically; priority does. A false or
+// defaulted optional changes nothing, so it is not reported.
+func checkLegacyOptional(role cue.Value, name string) *CheckResult {
+	v := role.LookupPath(cue.ParsePath("optional"))
+	if on, err := v.Bool(); err != nil || !on {
+		return nil
+	}
+	return &CheckResult{
+		Status:  StatusWarn,
+		Label:   name,
+		Message: "optional: true is ignored; automatic selection uses priority",
+		Fix:     fmt.Sprintf("Run 'start update' if %q is installed from the library, or replace optional: true with priority: <n> (lower runs first)", name),
+		Indent:  1,
+	}
+}
+
+// checkRolePriority warns about a priority that selection ignores, such as 0,
+// a negative number, or a non-integer.
+func checkRolePriority(role cue.Value, name string) *CheckResult {
+	if !role.LookupPath(cue.ParsePath(internalcue.KeyPriority)).Exists() {
+		return nil
+	}
+	if _, ok := orchestration.RolePriority(role); ok {
+		return nil
+	}
+	return &CheckResult{
+		Status:  StatusWarn,
+		Label:   name,
+		Message: "priority is ignored; it must be a whole number of 1 or more",
+		Fix:     fmt.Sprintf("Set priority on %q to 1 or more (lower runs first), or remove it to select the role only by name", name),
+		Indent:  1,
+	}
 }
 
 // CheckContexts validates configured context files exist.

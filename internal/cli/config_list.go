@@ -25,7 +25,7 @@ type ConfigListItem struct {
 	Role         string            `json:"role,omitempty"`
 	Required     bool              `json:"required,omitempty"`
 	Default      bool              `json:"default,omitempty"`
-	Optional     bool              `json:"optional,omitempty"`
+	Priority     int               `json:"priority,omitempty"`
 	Models       map[string]string `json:"models,omitempty"`
 	Tags         []string          `json:"tags,omitempty"`
 	Uses         []string          `json:"uses,omitempty"`
@@ -67,7 +67,7 @@ func buildConfigListItem(m configMatch, scope config.Scope) (ConfigListItem, err
 		item.Command = role.Command
 		item.Description = role.Description
 		item.File = role.File
-		item.Optional = role.Optional
+		item.Priority = role.Priority
 		item.Prompt = role.Prompt
 		item.Tags = role.Tags
 		item.Uses = role.Uses
@@ -147,7 +147,7 @@ func collectConfigListItems(scope config.Scope, category string) ([]ConfigListIt
 			r := roles[name]
 			items = append(items, ConfigListItem{
 				Category: "role", Name: name, Command: r.Command, Description: r.Description,
-				File: r.File, Optional: r.Optional, Prompt: r.Prompt,
+				File: r.File, Priority: r.Priority, Prompt: r.Prompt,
 				Tags: r.Tags, Uses: r.Uses, Source: r.Source, Origin: r.Origin,
 			})
 		}

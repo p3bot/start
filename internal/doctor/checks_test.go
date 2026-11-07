@@ -633,6 +633,81 @@ func TestCheckRoles_FileMissing(t *testing.T) {
 	}
 }
 
+func TestCheckRoles_InvalidPriority(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		priority string
+		wantWarn bool
+	}{
+		{"valid is silent", "priority: 10", false},
+		{"absent is silent", "", false},
+		{"zero warns", "priority: 0", true},
+		{"negative warns", "priority: -5", true},
+		{"non-integer warns", `priority: "high"`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := cuecontext.New().CompileString(`roles: { r: { prompt: "p", ` + tt.priority + ` } }`)
+			if err := v.Err(); err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+
+			var warned bool
+			for _, r := range CheckRoles(v).Results {
+				if r.Status == StatusWarn && strings.Contains(r.Message, "priority is ignored") {
+					warned = true
+					if !r.IsIssue() || r.Fix == "" {
+						t.Errorf("invalid priority warning must be an actionable issue: %+v", r)
+					}
+				}
+			}
+			if warned != tt.wantWarn {
+				t.Errorf("warned = %v, want %v", warned, tt.wantWarn)
+			}
+		})
+	}
+}
+
+func TestCheckRoles_LegacyOptional(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		optional string
+		wantWarn bool
+	}{
+		{"true warns", "optional: true", true},
+		{"false is silent", "optional: false", false},
+		{"schema default is silent", "optional: bool | *false", false},
+		{"absent is silent", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := cuecontext.New().CompileString(`roles: { r: { prompt: "p", ` + tt.optional + ` } }`)
+			if err := v.Err(); err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+
+			section := CheckRoles(v)
+
+			var warned bool
+			for _, r := range section.Results {
+				if r.Status == StatusWarn && strings.Contains(r.Message, "priority") {
+					warned = true
+					if !r.IsIssue() || r.Fix == "" {
+						t.Errorf("legacy warning must be an actionable issue: %+v", r)
+					}
+				}
+			}
+			if warned != tt.wantWarn {
+				t.Errorf("warned = %v, want %v (results %+v)", warned, tt.wantWarn, section.Results)
+			}
+		})
+	}
+}
+
 func TestCheckRoles_PromptFallback(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()

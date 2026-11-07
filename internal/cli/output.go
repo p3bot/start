@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/p3bot/start/internal/orchestration"
@@ -170,6 +171,9 @@ func printRoleTable(w io.Writer, outcome orchestration.SectionOutcome, resolutio
 	case orchestration.SectionListed:
 		fmt.Fprintln(w)
 		printRoleRows(w, resolutions)
+		if !slices.ContainsFunc(resolutions, func(r orchestration.RoleResolution) bool { return r.Status != "skipped" }) {
+			tui.ColorDim.Fprintln(w, "  none selected")
+		}
 	case orchestration.SectionSkipped:
 		fmt.Fprintf(w, " skipped %s\n", tui.Annotate("via %s", outcome.Reason))
 	default: // SectionNone and any unstamped state degrade to the neutral line.

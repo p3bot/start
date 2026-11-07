@@ -164,8 +164,8 @@ func reorderRoles(stdout io.Writer, stdin io.Reader, local bool) error {
 	formatItem := func(i int, name string) string {
 		role := roles[name]
 		markers := ""
-		if role.Optional {
-			markers += " " + tui.Bracket("optional")
+		if role.Priority > 0 {
+			markers += " " + tui.Bracket("priority %d", role.Priority)
 		}
 		return fmt.Sprintf("  %d. %s%s", i+1, name, markers)
 	}

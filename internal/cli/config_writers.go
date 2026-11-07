@@ -2,8 +2,11 @@ package cli
 
 import (
 	"sort"
+	"strconv"
 
 	"cuelang.org/go/cue/ast"
+	"cuelang.org/go/cue/token"
+	internalcue "github.com/p3bot/start/internal/cue"
 	"github.com/p3bot/start/internal/modules"
 )
 
@@ -53,7 +56,7 @@ func roleEntry(r RoleConfig) *ast.StructLit {
 	putString(fields, "file", r.File)
 	putString(fields, "command", r.Command)
 	putPrompt(fields, r.Prompt)
-	putBool(fields, "optional", r.Optional)
+	putInt(fields, internalcue.KeyPriority, r.Priority)
 	return assembleEntry("roles", r.Origin, fields)
 }
 
@@ -125,6 +128,12 @@ func putStringList(m map[string]ast.Expr, name string, items []string) {
 func putBool(m map[string]ast.Expr, name string, val bool) {
 	if val {
 		m[name] = ast.NewBool(true)
+	}
+}
+
+func putInt(m map[string]ast.Expr, name string, val int) {
+	if val != 0 {
+		m[name] = ast.NewLit(token.INT, strconv.Itoa(val))
 	}
 }
 

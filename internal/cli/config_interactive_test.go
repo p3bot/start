@@ -57,7 +57,7 @@ func TestLoadNamesForCategory(t *testing.T) {
 	if err := configAgentAdd(slowStdin("my-agent\nagent\n"+`agent "{{.prompt}}"`+"\n\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 		t.Fatalf("setup agent add failed: %v", err)
 	}
-	if err := configRoleAdd(slowStdin("my-role\n\n3\nYou are a role.\n\n\n"), &bytes.Buffer{}, false); err != nil {
+	if err := configRoleAdd(slowStdin("my-role\n\n3\nYou are a role.\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 		t.Fatalf("setup role add failed: %v", err)
 	}
 	if err := configContextAdd(slowStdin("my-context\n\n3\nContext info.\n\n\n\n\n"), &bytes.Buffer{}, false); err != nil {

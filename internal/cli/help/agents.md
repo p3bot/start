@@ -12,6 +12,10 @@ Global flags: --color=auto|always|never, --quiet, --verbose, --debug, --local.
 Nine commands accept --json (list, library, search, update, doctor, doctor
 validate, config get, config list, config settings); see `start help schemas`.
 
+Role selection: `--role` or a task's `role` names the role. Otherwise only roles
+with a `priority` are candidates, tried lowest number first (ties in config
+order); the first whose file exists is used. No candidate means no role.
+
 ```
 start
 start --role go-expert

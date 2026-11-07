@@ -323,7 +323,7 @@ func TestEntryByteIdenticalToInstall(t *testing.T) {
 			tags: ["go", "expert"]
 			uses: ["contexts:start/library/publishing"]
 			file: "go.md"
-			optional: true
+			priority: 10
 		}`)
 		installStruct, err := modules.FormatModuleStruct(v, "roles", origin, "")
 		if err != nil {
@@ -336,7 +336,7 @@ func TestEntryByteIdenticalToInstall(t *testing.T) {
 			Tags:        []string{"go", "expert"},
 			Uses:        []string{"contexts:start/library/publishing"},
 			File:        "go.md",
-			Optional:    true,
+			Priority:    10,
 		})
 		assertSameBytes(t, installStruct, add)
 	})

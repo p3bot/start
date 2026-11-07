@@ -203,6 +203,12 @@ miss) so a joined recipe can resolve its bin; models.dev stays CacheOnly
 Auto-setup and doctor always use Latest. Launch `--agent` leftover
 aliases and catalog-id prefixing are documented in `docs/module-resolution.md`.
 
+When no role is named (`--role` or a task's `role`), `selectDefaultRole` in
+`composer.go` considers only roles with a `priority`, lowest first with ties in
+config order, and uses the first whose file exists; no candidate means no role.
+A role without `priority` is never auto-selected. See "Default role selection"
+in `docs/module-resolution.md`.
+
 ### Candidate Gathering
 
 Beneath the per-surface match rules, one shared primitive in `internal/modules`

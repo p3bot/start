@@ -90,6 +90,7 @@ agents: {
 roles: {
 	assistant: {
 		prompt: "You are a helpful assistant."
+		priority: 1
 	}
 }
 
@@ -514,7 +515,7 @@ func TestExecuteTask_NoRolesConfig(t *testing.T) {
 	}
 }
 
-// TestExecuteStart_RoleFailureRendersTable drives a required-role failure through
+// TestExecuteStart_RoleFailureRendersTable drives a named-role failure through
 // printComposeError and asserts the diagnostic role row still renders — the
 // section is SectionListed, not collapsed to "Role: none".
 func TestExecuteStart_RoleFailureRendersTable(t *testing.T) {
@@ -523,7 +524,7 @@ func TestExecuteStart_RoleFailureRendersTable(t *testing.T) {
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
-	// A required (non-optional) role referencing a missing file fails resolution.
+	// A named role referencing a missing file fails resolution.
 	config := `
 agents: {
 	echo: {
@@ -546,7 +547,7 @@ settings: { default_agent: "echo" }
 	}
 	chdir(t, tmpDir)
 
-	flags := &Flags{DryRun: true}
+	flags := &Flags{DryRun: true, Role: "broken"}
 	selection := orchestration.ContextSelection{IncludeRequired: true}
 
 	stdout := new(bytes.Buffer)
@@ -554,7 +555,7 @@ settings: { default_agent: "echo" }
 
 	err := executeStart(stdout, stderr, strings.NewReader(""), flags, selection, "")
 	if err == nil {
-		t.Fatal("Expected error for missing required role, got nil")
+		t.Fatal("Expected error for missing named role, got nil")
 	}
 
 	output := stdout.String()
@@ -563,6 +564,51 @@ settings: { default_agent: "echo" }
 	}
 	if strings.Contains(output, "Role: none") {
 		t.Errorf("Role failure must not collapse to 'Role: none', got:\n%s", output)
+	}
+}
+
+// TestExecuteStart_NoCandidateRunsWithoutRole asserts that when no role is
+// named, a role without priority is never chosen and a candidate whose file is
+// missing is skipped, so the launch proceeds with no role.
+func TestExecuteStart_NoCandidateRunsWithoutRole(t *testing.T) {
+	tmpDir := isolateConfigEnv(t)
+	configDir := filepath.Join(tmpDir, ".start")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	config := `
+agents: {
+	echo: {
+		bin: "echo"
+		command: "{{.bin}} 'Agent executed'"
+	}
+}
+
+roles: {
+	plain: { prompt: "Never chosen automatically." }
+	project: { file: "./missing-role.md", priority: 10 }
+}
+
+settings: { default_agent: "echo" }
+`
+	if err := os.WriteFile(filepath.Join(configDir, "settings.cue"), []byte(config), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	chdir(t, tmpDir)
+
+	stdout := new(bytes.Buffer)
+	err := executeStart(stdout, new(bytes.Buffer), strings.NewReader(""), &Flags{DryRun: true},
+		orchestration.ContextSelection{IncludeRequired: true}, "")
+	if err != nil {
+		t.Fatalf("executeStart() error = %v", err)
+	}
+
+	output := stdout.String()
+	if strings.Contains(output, "plain") {
+		t.Errorf("role without priority must not be selected, got:\n%s", output)
+	}
+	if !strings.Contains(output, "project") || !strings.Contains(output, "none selected") {
+		t.Errorf("expected skipped candidate and 'none selected', got:\n%s", output)
 	}
 }
 

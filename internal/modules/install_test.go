@@ -1139,21 +1139,24 @@ task: {
 	}
 }
 
-func TestExtractModuleContent_OptionalRoleField(t *testing.T) {
+// TestExtractModuleContent_PriorityRoleField asserts install copies a role's
+// priority and drops the retired optional field from a legacy module.
+func TestExtractModuleContent_PriorityRoleField(t *testing.T) {
 	t.Parallel()
 
 	moduleDir := createTestModule(t, "role", `package role
 
 role: {
-	description: "Optional role"
+	description: "Candidate role"
 	prompt: "You might be needed."
+	priority: 10
 	optional: true
 }
 `)
 
 	module := SearchResult{
 		Category: "roles",
-		Name:     "optional-role",
+		Name:     "candidate-role",
 	}
 
 	astResult, err := ExtractModuleContent(moduleDir, module, nil, "test.example/role@v0.1.0", "")
@@ -1162,8 +1165,11 @@ role: {
 	}
 	result := formatAST(t, astResult)
 
-	if !strings.Contains(result, "optional:") || !strings.Contains(result, "true") {
-		t.Errorf("missing optional field\nGot:\n%s", result)
+	if !strings.Contains(result, "priority:") || !strings.Contains(result, "10") {
+		t.Errorf("missing priority field\nGot:\n%s", result)
+	}
+	if strings.Contains(result, "optional") {
+		t.Errorf("retired optional field must not be installed\nGot:\n%s", result)
 	}
 }
 

@@ -203,7 +203,7 @@ func TestConfigRole_FullWorkflow(t *testing.T) {
 
 	t.Run("add role with prompt", func(t *testing.T) {
 		// Prompts: name, description, content choice "3"→inline, prompt text, blank line to finish, tags (skip)
-		if err := configRoleAdd(slowStdin("reviewer\nCode review expert\n3\nYou are a code reviewer. Review code for bugs and style issues.\n\n\n"), &bytes.Buffer{}, false); err != nil {
+		if err := configRoleAdd(slowStdin("reviewer\nCode review expert\n3\nYou are a code reviewer. Review code for bugs and style issues.\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("add failed: %v", err)
 		}
 	})
@@ -787,7 +787,7 @@ func TestConfigRemove_MultipleArgs(t *testing.T) {
 		if err := configAgentAdd(slowStdin("shared\nshared\n"+`shared "{{.prompt}}"`+"\n\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("add agent failed: %v", err)
 		}
-		if err := configRoleAdd(slowStdin("shared\n\n3\nShared role prompt.\n\n\n"), &bytes.Buffer{}, false); err != nil {
+		if err := configRoleAdd(slowStdin("shared\n\n3\nShared role prompt.\n\n\n\n"), &bytes.Buffer{}, false); err != nil {
 			t.Fatalf("add role failed: %v", err)
 		}
 
@@ -954,7 +954,7 @@ func TestConfigAgentAdd_NoModelsWhenNoDefaultModel(t *testing.T) {
 	}
 }
 
-func TestConfigRoleAdd_OptionalWithFileSource(t *testing.T) {
+func TestConfigRoleAdd_PriorityWithFileSource(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
@@ -964,19 +964,19 @@ func TestConfigRoleAdd_OptionalWithFileSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Prompts: name, description, content choice (Enter→file), file path, optional "y", tags (skip)
-	err := configRoleAdd(slowStdin("opt-role\nOptional role\n\n~/.config/start/roles/opt.md\ny\n\n"), &bytes.Buffer{}, false)
+	// Prompts: name, description, content choice (Enter→file), file path, priority "15", tags (skip)
+	err := configRoleAdd(slowStdin("opt-role\nCandidate role\n\n~/.config/start/roles/opt.md\n15\n\n"), &bytes.Buffer{}, false)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
 
 	content, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-	if !strings.Contains(normWS(string(content)), "optional: true") {
-		t.Errorf("roles.cue missing optional: true: %s", content)
+	if !strings.Contains(normWS(string(content)), "priority: 15") {
+		t.Errorf("roles.cue missing priority: 15: %s", content)
 	}
 }
 
-func TestConfigRoleAdd_NoOptionalWithPromptSource(t *testing.T) {
+func TestConfigRoleAdd_NoPriorityWhenSkipped(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
@@ -986,16 +986,15 @@ func TestConfigRoleAdd_NoOptionalWithPromptSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Prompts: name, description, content choice "3"→inline, prompt text, blank line, tags (skip)
-	// No optional prompt since content source is not file
-	err := configRoleAdd(slowStdin("prompt-role\nA role\n3\nDo stuff.\n\n\n"), &bytes.Buffer{}, false)
+	// Prompts: name, description, content choice "3"→inline, prompt text, blank line, priority (skip), tags (skip)
+	err := configRoleAdd(slowStdin("prompt-role\nA role\n3\nDo stuff.\n\n\n\n"), &bytes.Buffer{}, false)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
 
 	content, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-	if strings.Contains(string(content), "optional") {
-		t.Errorf("roles.cue should not have optional for prompt-based role: %s", content)
+	if strings.Contains(string(content), "priority") {
+		t.Errorf("roles.cue should not have priority when skipped: %s", content)
 	}
 }
 
@@ -1047,7 +1046,7 @@ func TestConfigAgentEdit_JoinedSkipsBinaryPrompt(t *testing.T) {
 	}
 }
 
-func TestConfigRoleEdit_OptionalPrompt(t *testing.T) {
+func TestConfigRoleEdit_PriorityPrompt(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	chdir(t, tmpDir)
@@ -1057,21 +1056,31 @@ func TestConfigRoleEdit_OptionalPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add a role with file source, optional=false
+	// Add a role with file source and no priority
 	err := configRoleAdd(slowStdin("edit-role\nEditable\n\n~/.config/start/roles/edit.md\n\n\n"), &bytes.Buffer{}, false)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
 
-	// Edit: description (keep), keep content (Y), optional "y", tags (keep)
-	err = configRoleEdit(slowStdin("\n\ny\n\n"), &bytes.Buffer{}, false, "edit-role")
+	// Edit: description (keep), keep content (Y), priority "30", tags (keep)
+	err = configRoleEdit(slowStdin("\n\n30\n\n"), &bytes.Buffer{}, false, "edit-role")
 	if err != nil {
 		t.Fatalf("edit failed: %v", err)
 	}
 
 	content, _ := os.ReadFile(filepath.Join(globalDir, "roles.cue"))
-	if !strings.Contains(normWS(string(content)), "optional: true") {
-		t.Errorf("roles.cue missing optional: true after edit: %s", content)
+	if !strings.Contains(normWS(string(content)), "priority: 30") {
+		t.Errorf("roles.cue missing priority: 30 after edit: %s", content)
+	}
+
+	// Edit again: "-" clears the priority.
+	err = configRoleEdit(slowStdin("\n\n-\n\n"), &bytes.Buffer{}, false, "edit-role")
+	if err != nil {
+		t.Fatalf("second edit failed: %v", err)
+	}
+	content, _ = os.ReadFile(filepath.Join(globalDir, "roles.cue"))
+	if strings.Contains(string(content), "priority") {
+		t.Errorf("roles.cue should drop priority after clear: %s", content)
 	}
 }
 

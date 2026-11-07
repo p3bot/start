@@ -20,7 +20,7 @@ func CategoryFieldOrder(category string) []string {
 	case "tasks":
 		return []string{"description", "tags", "uses", "role", "file", "command", "prompt"}
 	case "roles":
-		return []string{"description", "tags", "uses", "file", "command", "prompt", "optional"}
+		return []string{"description", "tags", "uses", "file", "command", "prompt", "priority"}
 	case "agents":
 		return []string{"description", "tags", "uses", "agentdex", "bin", "command", "flags", "default_model", "models", "session_locator"}
 	case "contexts":
@@ -38,7 +38,7 @@ func CategoryHasField(category, name string) bool {
 	case "agents":
 		return fieldName(name, "description", "tags", "origin", "uses", "agentdex", "bin", "command", "flags", "default_model", "models", "session_locator")
 	case "roles":
-		return fieldName(name, "description", "tags", "origin", "uses", "file", "command", "prompt", "shell", "timeout", "optional")
+		return fieldName(name, "description", "tags", "origin", "uses", "file", "command", "prompt", "shell", "timeout", "priority")
 	case "contexts":
 		return fieldName(name, "description", "tags", "origin", "uses", "file", "command", "prompt", "shell", "timeout", "required", "default")
 	case "tasks":

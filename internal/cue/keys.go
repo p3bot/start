@@ -12,6 +12,9 @@ const (
 	// Agent sub-field keys for the `models` alias map.
 	KeyModels = "models"
 	KeyID     = "id"
+
+	// KeyPriority ranks a role for automatic selection; lower is tried first.
+	KeyPriority = "priority"
 )
 
 // ConfigFiles maps each category key to its CUE config filename.

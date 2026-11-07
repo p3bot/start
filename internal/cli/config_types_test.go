@@ -196,7 +196,7 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 		file:        "@module/prompts/reviewer.md"
 		command:     "echo reviewer"
 		prompt:      "You are an expert code reviewer."
-		optional:    true
+		priority:    10
 		tags: ["review", "quality"]
 		uses: ["contexts:start/library/publishing"]
 		origin: "github.com/example/start-reviewer@v1"
@@ -223,8 +223,8 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 	if got.Prompt != "You are an expert code reviewer." {
 		t.Errorf("Prompt: got %q", got.Prompt)
 	}
-	if !got.Optional {
-		t.Error("Optional: got false, want true")
+	if got.Priority != 10 {
+		t.Errorf("Priority: got %d, want 10", got.Priority)
 	}
 	if !reflect.DeepEqual(got.Tags, []string{"review", "quality"}) {
 		t.Errorf("Tags: got %v", got.Tags)
@@ -237,17 +237,27 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 	}
 }
 
-func TestDecodeRoleValue_OptionalDefaultsFalse(t *testing.T) {
-	ctx := cuecontext.New()
-	val := ctx.CompileString(`{ prompt: "hi" }`)
-	if err := val.Err(); err != nil {
-		t.Fatalf("CompileString: %v", err)
+func TestDecodeRoleValue_PriorityDefaultsZero(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+	}{
+		{"absent", `{ prompt: "hi" }`},
+		{"zero", `{ prompt: "hi", priority: 0 }`},
+		{"negative", `{ prompt: "hi", priority: -5 }`},
+		{"non-integer", `{ prompt: "hi", priority: "high" }`},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val := cuecontext.New().CompileString(tt.source)
+			if err := val.Err(); err != nil {
+				t.Fatalf("CompileString: %v", err)
+			}
 
-	got := decodeRoleValue(val)
-
-	if got.Optional {
-		t.Error("Optional: expected false when field absent, got true")
+			if got := decodeRoleValue(val); got.Priority != 0 {
+				t.Errorf("Priority: expected 0 for a priority selection ignores, got %d", got.Priority)
+			}
+		})
 	}
 }
 
