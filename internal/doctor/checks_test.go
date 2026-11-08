@@ -580,6 +580,42 @@ func TestCheckAgents_NoBinField(t *testing.T) {
 	}
 }
 
+func TestCheckAgents_InvalidSessionLocator(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		locator  string
+		wantWarn bool
+	}{
+		{"list is silent", `session_locator: ["id"]`, false},
+		{"absent is silent", "", false},
+		{"string warns", `session_locator: "id"`, true},
+		{"non-string item warns", `session_locator: ["id", 2]`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := cuecontext.New().CompileString(`agents: { a: { description: "d", ` + tt.locator + ` } }`)
+			if err := v.Err(); err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+
+			var warned bool
+			for _, r := range CheckAgents(v).Results {
+				if strings.Contains(r.Message, "session_locator") {
+					warned = r.Status == StatusWarn
+					if r.Label != "a" || r.Fix == "" || !r.IsIssue() || !strings.Contains(r.Message, "config edit") {
+						t.Errorf("invalid session_locator must be an actionable warning naming the agent and the edit refusal: %+v", r)
+					}
+				}
+			}
+			if warned != tt.wantWarn {
+				t.Errorf("warned = %v, want %v", warned, tt.wantWarn)
+			}
+		})
+	}
+}
+
 func TestCheckRoles_NoneConfigured(t *testing.T) {
 	t.Parallel()
 	cctx := cuecontext.New()
@@ -656,10 +692,51 @@ func TestCheckRoles_InvalidPriority(t *testing.T) {
 
 			var warned bool
 			for _, r := range CheckRoles(v).Results {
-				if r.Status == StatusWarn && strings.Contains(r.Message, "priority is ignored") {
+				if r.Status == StatusWarn && strings.Contains(r.Message, "priority must be a whole number of 1 or more") {
+					if !strings.Contains(r.Message, "config edit") {
+						t.Errorf("priority warning must name the edit refusal: %q", r.Message)
+					}
 					warned = true
 					if !r.IsIssue() || r.Fix == "" {
 						t.Errorf("invalid priority warning must be an actionable issue: %+v", r)
+					}
+				}
+			}
+			if warned != tt.wantWarn {
+				t.Errorf("warned = %v, want %v", warned, tt.wantWarn)
+			}
+		})
+	}
+}
+
+func TestCheckTasks_InvalidMinMembers(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		minMembers string
+		wantWarn   bool
+	}{
+		{"valid is silent", "min_members: 2", false},
+		{"absent is silent", "", false},
+		{"zero warns", "min_members: 0", true},
+		{"negative warns", "min_members: -1", true},
+		{"fraction warns", "min_members: 1.5", true},
+		{"string warns", `min_members: "2"`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := cuecontext.New().CompileString(`tasks: { pair: { prompt: "p", ` + tt.minMembers + ` } }`)
+			if err := v.Err(); err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+
+			var warned bool
+			for _, r := range CheckTasks(v).Results {
+				if strings.Contains(r.Message, "min_members") {
+					warned = r.Status == StatusWarn
+					if r.Label != "pair" || r.Fix == "" || !r.IsIssue() || !strings.Contains(r.Message, "config edit") {
+						t.Errorf("invalid min_members must be an actionable warning naming the task and the edit refusal: %+v", r)
 					}
 				}
 			}

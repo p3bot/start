@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -431,4 +433,91 @@ func readString(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+func TestUnkeptFieldBlocksOnlyThatEntrysRewrite(t *testing.T) {
+	tests := []struct {
+		category, field, file, config string
+		edit                          func(io.Reader, io.Writer, bool, string) error
+	}{
+		{"agent", "session_locator", "agents.cue", "agents: {\n\tgood: bin: \"good\"\n\tbad: {\n\t\tbin: \"bad\"\n\t\tsession_locator: \"id\"\n\t}\n}\n", configAgentEdit},
+		{"role", "priority", "roles.cue", "roles: {\n\tgood: prompt: \"body\"\n\tbad: {\n\t\tprompt: \"body\"\n\t\tpriority: 0\n\t}\n}\n", configRoleEdit},
+		{"task", "min_members", "tasks.cue", "tasks: {\n\tgood: prompt: \"body\"\n\tbad: {\n\t\tprompt: \"body\"\n\t\tmin_members: 0\n\t}\n}\n", configTaskEdit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.category, func(t *testing.T) {
+			dir := isolateGetHome(t)
+			path := filepath.Join(dir, ".start", tt.file)
+			if err := os.WriteFile(path, []byte(tt.config), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			cmd := NewRootCmd()
+			stdout := &bytes.Buffer{}
+			cmd.SetOut(stdout)
+			cmd.SetErr(&bytes.Buffer{})
+			cmd.SetArgs([]string{"config", "list", "--json", "--local"})
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("config list --json: %v", err)
+			}
+			for _, name := range []string{`"good"`, `"bad"`} {
+				if !strings.Contains(stdout.String(), name) {
+					t.Errorf("config list --json omits %s:\n%s", name, stdout.String())
+				}
+			}
+
+			err := tt.edit(strings.NewReader("renamed\n"), &bytes.Buffer{}, true, "bad")
+			if err == nil || !strings.Contains(err.Error(), tt.field) {
+				t.Fatalf("edit of bad: err = %v, want a %s refusal", err, tt.field)
+			}
+			if code := ExitCodeFromError(err); code != ExitConfig {
+				t.Errorf("edit of bad: exit code = %d, want %d", code, ExitConfig)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != tt.config {
+				t.Fatalf("refused edit changed the config:\n%s", after)
+			}
+		})
+	}
+}
+
+func TestUnkeptTaskLeavesSiblingEditable(t *testing.T) {
+	dir := isolateGetHome(t)
+	path := filepath.Join(dir, ".start", "tasks.cue")
+	if err := os.WriteFile(path, []byte("tasks: {\n\tgood: prompt: \"body\"\n\tbad: {prompt: \"body\", min_members: 0}\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := configTaskEdit(slowStdin("renamed\n\n\n\n"), &bytes.Buffer{}, true, "good"); err != nil {
+		t.Fatalf("edit of good: %v", err)
+	}
+	tasks, _, err := loadTasksFromDir(filepath.Join(dir, ".start"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tasks["good"].Description != "renamed" || tasks["bad"].unkept == nil {
+		t.Fatalf("want good renamed and bad still unkept, got %+v", tasks)
+	}
+}
+
+func TestConfigEditKeepsFieldsItDoesNotManage(t *testing.T) {
+	dir := isolateGetHome(t)
+	path := filepath.Join(dir, ".start", "tasks.cue")
+	stored := "tasks: good: {\n\t// runs under bash\n\tshell:   \"bash\"\n\tprompt:  \"body\"\n\tagent:   \"claude\"\n\ttimeout: 30\n}\n"
+	if err := os.WriteFile(path, []byte(stored), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := configTaskEdit(slowStdin("renamed\n\n\n\n"), &bytes.Buffer{}, true, "good"); err != nil {
+		t.Fatalf("edit of good: %v", err)
+	}
+	got := readString(t, path)
+	for _, want := range []string{`description: "renamed"`, "// runs under bash", `shell:   "bash"`, `agent:   "claude"`, "timeout: 30"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("after edit, missing %q:\n%s", want, got)
+		}
+	}
 }

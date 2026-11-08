@@ -10,6 +10,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/p3bot/start/internal/modules"
 )
 
 func isolateGetHome(t *testing.T) string {
@@ -490,6 +491,100 @@ func TestGetFieldSessionLocatorSurvivesRewrite(t *testing.T) {
 	}
 	if stdout != "session_id\n" {
 		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+const minMembersConfig = `
+tasks: {
+	pair: {
+		prompt: "body"
+		min_members: 2
+	}
+	solo: prompt: "body"
+}
+`
+
+func TestGetFieldMinMembersPrintsInteger(t *testing.T) {
+	dir := isolateGetHome(t)
+	writeGetSettings(t, dir, minMembersConfig)
+
+	stdout, stderr, err := runGetCmd(t, "tasks:pair", "--field", "min_members")
+	if err != nil {
+		t.Fatalf("get: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "2\n" {
+		t.Fatalf("stdout = %q, want %q", stdout, "2\n")
+	}
+}
+
+func TestGetFieldOmittedMinMembersPrintsNothing(t *testing.T) {
+	dir := isolateGetHome(t)
+	writeGetSettings(t, dir, minMembersConfig)
+
+	stdout, stderr, err := runGetCmd(t, "tasks:solo", "--field", "min_members")
+	if err != nil {
+		t.Fatalf("omitted min_members: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+}
+
+func TestInstalledMinMembersSurvivesRewrite(t *testing.T) {
+	dir := isolateGetHome(t)
+	moduleDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(moduleDir, "cue.mod"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "cue.mod", "module.cue"),
+		[]byte("module: \"test.example/pair@v1\"\nlanguage: version: \"v0.15.1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "task.cue"),
+		[]byte("package pair\n\ntask: {\n\tdescription: \"old\"\n\tprompt: \"body\"\n\tmin_members: 2\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := modules.ExtractModuleContent(moduleDir, modules.SearchResult{Category: "tasks", Name: "pair"}, nil, "test.example/pair@v1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, ".start", "tasks.cue")
+	if err := modules.UpsertConfigModule(path, "tasks", "pair", content); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, _, err := loadTasksFromDir(filepath.Join(dir, ".start"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair := tasks["pair"]
+	if pair.MinMembers != 2 {
+		t.Fatalf("installed MinMembers = %d, want 2", pair.MinMembers)
+	}
+	pair.Description = "renamed"
+	if err := upsertTask(path, pair); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "min_members: 2") {
+		t.Fatalf("rewrite dropped min_members:\n%s", text)
+	}
+	if !strings.Contains(text, `"renamed"`) {
+		t.Fatalf("rewrite did not change the description:\n%s", text)
+	}
+
+	stdout, stderr, err := runGetCmd(t, "tasks:pair", "--field", "min_members")
+	if err != nil {
+		t.Fatalf("get: %v\nstderr: %s", err, stderr)
+	}
+	if stdout != "2\n" {
+		t.Fatalf("stdout = %q, want %q", stdout, "2\n")
 	}
 }
 

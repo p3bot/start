@@ -291,10 +291,20 @@ permissively like `tags`; a module without `uses` behaves exactly as before.
 
 - It is preserved through every config writer: install, update, add, edit, and
   reorder all mutate config through one AST layer in `internal/modules`
-  (`UpsertConfigModule`/`ReorderConfigCategory`, with entry structs built by
-  `FormatModuleStruct` for install/update and the `internal/cli` struct builders
-  for add/edit). All iterate the shared `CategoryFieldOrder`, so `uses` and field
-  order are retained uniformly and the comment header survives every mutation.
+  (`UpsertConfigModule`/`PatchConfigModule`/`ReorderConfigCategory`, with entry
+  structs built by `FormatModuleStruct` for install/update and the
+  `internal/cli` struct builders for add/edit). All iterate the shared
+  `CategoryFieldOrder`, so `uses` and field order are retained uniformly and the
+  comment header survives every mutation. Install/update replace a stored entry
+  whole from registry content; add/edit patch it (`PatchConfigModule`), touching
+  only `origin` and the `CategoryFieldOrder` fields, so fields the cli structs do
+  not hold (`shell`, `timeout`, a task's `agent`, unknown fields) and comments
+  inside the entry survive. An entry that is not a plain struct of its own
+  fields (`#Base & {...}`, an embedding, a comprehension) is refused as a
+  user-config fault, since its managed fields may come from elsewhere. The
+  patched file is also built with its config directory in memory before it is
+  written (`internalcue.CheckBuildsWith`), so a split declaration, a `let` the
+  entry read, or a conflict with another file is refused rather than saved.
 - It surfaces in `config list --json` and `config get --json` through the `Uses`
   field on `ConfigListItem`, populated in both `collectConfigListItems` and
   `buildConfigListItem`. `list --json` (the installed-inventory summary) omits it.

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/fatih/color"
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
@@ -431,6 +432,7 @@ func TestWriteTaskMetadata_AllFields(t *testing.T) {
 		Command:     "git diff --staged",
 		Prompt:      "Review the staged changes.",
 		Role:        "code-reviewer",
+		MinMembers:  2,
 		Tags:        []string{"review", "git"},
 	}
 
@@ -443,6 +445,7 @@ File: @module/tasks/review.md
 Command: git diff --staged
 Prompt: Review the staged changes.
 Role: code-reviewer
+Min members: 2
 Tags: review, git
 `
 	if buf.String() != want {
@@ -456,6 +459,17 @@ func TestWriteTaskMetadata_NoFields_EmitsNothing(t *testing.T) {
 	writeTaskMetadata(&buf, TaskConfig{})
 	if buf.Len() != 0 {
 		t.Errorf("expected empty output, got %q", buf.String())
+	}
+}
+
+func TestWriteTaskMetadata_MinMembersAloneIsShown(t *testing.T) {
+	noColorForTest(t)
+	var buf bytes.Buffer
+	writeTaskMetadata(&buf, TaskConfig{MinMembers: 3})
+
+	want := "\nMin members: 3\n"
+	if buf.String() != want {
+		t.Errorf("output mismatch\n--- want ---\n%q\n--- got ---\n%q", want, buf.String())
 	}
 }
 
@@ -513,5 +527,24 @@ func TestPromptTruncationLimit_AppliesToRoleContextTask(t *testing.T) {
 		if strings.Contains(b.String(), longPrompt) {
 			t.Errorf("%s: prompt should have been truncated", name)
 		}
+	}
+}
+
+func TestPrintMetadataBlock_TaskInvalidMinMembersReportsAndContinues(t *testing.T) {
+	t.Parallel()
+	val := cuecontext.New().CompileString(`{description: "pair review", prompt: "body", min_members: 0}`)
+	if err := val.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	printMetadataBlock(&buf, DescribeResult{ItemType: "Task", Name: "pair", Value: val})
+	out := buf.String()
+
+	if !strings.Contains(out, "[error: min_members:") {
+		t.Errorf("missing min_members error line:\n%s", out)
+	}
+	if !strings.Contains(out, "pair review") {
+		t.Errorf("metadata after the error was not written:\n%s", out)
 	}
 }

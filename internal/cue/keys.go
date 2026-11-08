@@ -15,6 +15,14 @@ const (
 
 	// KeyPriority ranks a role for automatic selection; lower is tried first.
 	KeyPriority = "priority"
+
+	// KeyMinMembers is the smallest roster a task needs. start stores it and
+	// does not read it at launch.
+	KeyMinMembers = "min_members"
+
+	// KeySessionLocator is an agent's list of strings locating a session.
+	// start stores it and does not read it at launch.
+	KeySessionLocator = "session_locator"
 )
 
 // ConfigFiles maps each category key to its CUE config filename.

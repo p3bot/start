@@ -309,6 +309,7 @@ start get skills:finding/one-by-one
 
 # Print one stored CUE field or a path under it (unstyled)
 start get <name> --field session_locator
+start get tasks:<name> --field min_members   # Prints nothing when the task omits it
 start get grok --field permission
 start get grok --field edit[0]
 start get grok --field flags.permission

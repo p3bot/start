@@ -117,7 +117,7 @@ func writeContextMetadata(w io.Writer, ctx ContextConfig) {
 
 func writeTaskMetadata(w io.Writer, task TaskConfig) {
 	if task.Description == "" && task.File == "" && task.Command == "" &&
-		task.Prompt == "" && task.Role == "" && len(task.Tags) == 0 {
+		task.Prompt == "" && task.Role == "" && task.MinMembers == 0 && len(task.Tags) == 0 {
 		return
 	}
 
@@ -138,6 +138,9 @@ func writeTaskMetadata(w io.Writer, task TaskConfig) {
 	}
 	if task.Role != "" {
 		fmt.Fprintf(w, "%s %s\n", label("Role:"), task.Role)
+	}
+	if task.MinMembers > 0 {
+		fmt.Fprintf(w, "%s %d\n", label("Min members:"), task.MinMembers)
 	}
 	if len(task.Tags) > 0 {
 		fmt.Fprintf(w, "%s %s\n", label("Tags:"), strings.Join(task.Tags, ", "))

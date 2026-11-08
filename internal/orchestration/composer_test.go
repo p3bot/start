@@ -657,6 +657,36 @@ func TestComposer_ContextWithFile(t *testing.T) {
 	}
 }
 
+func TestComposer_ResolveTaskIgnoresMinMembers(t *testing.T) {
+	t.Parallel()
+	cfg := cuecontext.New().CompileString(`
+		tasks: {
+			pair: {
+				prompt: "Review {{.instructions}}"
+				min_members: 2
+			}
+			solo: prompt: "Review {{.instructions}}"
+		}
+	`)
+	if err := cfg.Err(); err != nil {
+		t.Fatalf("compile config: %v", err)
+	}
+	tmpDir := t.TempDir()
+	composer := NewComposer(NewTemplateProcessor(nil, &mockShellRunner{}, tmpDir), tmpDir)
+
+	pair, err := composer.ResolveTask(cfg, "pair", "the diff")
+	if err != nil {
+		t.Fatalf("ResolveTask(pair) error = %v", err)
+	}
+	solo, err := composer.ResolveTask(cfg, "solo", "the diff")
+	if err != nil {
+		t.Fatalf("ResolveTask(solo) error = %v", err)
+	}
+	if pair.Content != solo.Content {
+		t.Fatalf("min_members changed the prompt: %q vs %q", pair.Content, solo.Content)
+	}
+}
+
 func TestGetTaskRole(t *testing.T) {
 	t.Parallel()
 	ctx := cuecontext.New()

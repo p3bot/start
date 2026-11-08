@@ -227,6 +227,10 @@ func CheckAgents(cfgValue cue.Value, catalogOpts ...agentdex.Option) SectionResu
 		name := iter.Selector().Unquoted()
 		agent := iter.Value()
 
+		if invalid := checkAgentSessionLocator(agent, name); invalid != nil {
+			section.Results = append(section.Results, *invalid)
+		}
+
 		adVal := agent.LookupPath(cue.ParsePath("agentdex"))
 		if adVal.Exists() {
 			id, err := adVal.String()
@@ -285,6 +289,22 @@ func CheckAgents(cfgValue cue.Value, catalogOpts ...agentdex.Option) SectionResu
 	}
 
 	return section
+}
+
+// checkAgentSessionLocator warns about a session_locator the config commands
+// cannot rewrite. Launch does not read it, so nothing else reports it.
+func checkAgentSessionLocator(agent cue.Value, name string) *CheckResult {
+	_, err := internalcue.StringList(agent, internalcue.KeySessionLocator)
+	if err == nil {
+		return nil
+	}
+	return &CheckResult{
+		Status:  StatusWarn,
+		Label:   name,
+		Message: fmt.Sprintf("%s %v; 'start config edit' refuses this agent", internalcue.KeySessionLocator, err),
+		Fix:     fmt.Sprintf("Set %s on %q to a list of strings, or remove it", internalcue.KeySessionLocator, name),
+		Indent:  1,
+	}
 }
 
 func checkJoinedAgent(name, id string, idx *agentdex.Index, openErr error) CheckResult {
@@ -398,20 +418,26 @@ func checkLegacyOptional(role cue.Value, name string) *CheckResult {
 	}
 }
 
-// checkRolePriority warns about a priority that selection ignores, such as 0,
-// a negative number, or a non-integer.
+// checkRolePriority warns about a priority that is not a whole number of 1 or
+// more, which selection ignores and the config commands cannot rewrite.
 func checkRolePriority(role cue.Value, name string) *CheckResult {
-	if !role.LookupPath(cue.ParsePath(internalcue.KeyPriority)).Exists() {
-		return nil
-	}
-	if _, ok := orchestration.RolePriority(role); ok {
+	return checkPositiveIntField(role, name, internalcue.KeyPriority,
+		"selection ignores it and 'start config edit' refuses this role",
+		fmt.Sprintf("Set priority on %q to 1 or more (lower runs first), or remove it to select the role only by name", name))
+}
+
+// checkPositiveIntField warns when field is present but not a whole number of
+// 1 or more. Launch is unaffected, so this is a warning rather than a failure.
+func checkPositiveIntField(val cue.Value, name, field, consequence, fix string) *CheckResult {
+	_, err := internalcue.PositiveInt(val, field)
+	if err == nil {
 		return nil
 	}
 	return &CheckResult{
 		Status:  StatusWarn,
 		Label:   name,
-		Message: "priority is ignored; it must be a whole number of 1 or more",
-		Fix:     fmt.Sprintf("Set priority on %q to 1 or more (lower runs first), or remove it to select the role only by name", name),
+		Message: fmt.Sprintf("%s %v; %s", field, err, consequence),
+		Fix:     fix,
 		Indent:  1,
 	}
 }
@@ -459,7 +485,7 @@ func CheckContexts(cfgValue cue.Value) SectionResult {
 	return section
 }
 
-// CheckTasks validates configured task files exist.
+// CheckTasks validates configured task files, role references, and min_members.
 func CheckTasks(cfgValue cue.Value) SectionResult {
 	section := SectionResult{Name: "Tasks"}
 
@@ -497,6 +523,10 @@ func CheckTasks(cfgValue cue.Value) SectionResult {
 		if roleResult := checkTaskRole(task, name, cfgValue); roleResult != nil {
 			section.Results = append(section.Results, *roleResult)
 		}
+
+		if invalid := checkTaskMinMembers(task, name); invalid != nil {
+			section.Results = append(section.Results, *invalid)
+		}
 	}
 
 	if count > 0 {
@@ -504,6 +534,14 @@ func CheckTasks(cfgValue cue.Value) SectionResult {
 	}
 
 	return section
+}
+
+// checkTaskMinMembers warns about a min_members the config commands cannot
+// rewrite.
+func checkTaskMinMembers(task cue.Value, name string) *CheckResult {
+	return checkPositiveIntField(task, name, internalcue.KeyMinMembers,
+		"'start config edit' refuses this task",
+		fmt.Sprintf("Set %s on %q to 1 or more, or remove it", internalcue.KeyMinMembers, name))
 }
 
 func checkTaskRole(taskVal cue.Value, taskName string, cfgValue cue.Value) *CheckResult {

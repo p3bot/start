@@ -9,7 +9,6 @@ import (
 	"github.com/p3bot/start/internal/config"
 	internalcue "github.com/p3bot/start/internal/cue"
 	"github.com/p3bot/start/internal/modules"
-	"github.com/p3bot/start/internal/orchestration"
 )
 
 // AgentConfig represents an agent configuration for editing.
@@ -27,13 +26,18 @@ type AgentConfig struct {
 	SessionLocator []string          `json:"sessionLocator,omitempty"`
 	Source         string            `json:"source"`           // "global" or "local"
 	Origin         string            `json:"origin,omitempty"` // Registry module path when installed from registry
+
+	unkept error // A stored managed field this struct cannot hold; writing the agent back would drop it
 }
+
+// writable reports whether writing a's managed fields back keeps their stored values.
+func (a AgentConfig) writable() error { return keptForRewrite("agent", a.Name, a.unkept) }
 
 // decodeAgentValue populates an AgentConfig from a per-item CUE value (Name and
 // Source are left for the caller). A flags table is kept as an expression so a
-// later edit writes the same table back. A table that cannot be rewritten is
-// an error, so the edit path cannot drop it. session_locator follows the same
-// rule: a value that is not a list of strings is an error rather than a drop.
+// later edit writes the same table back. A table that cannot be rewritten, or a
+// session_locator that is not a list of strings, is returned as an error
+// alongside the rest of the agent.
 func decodeAgentValue(val cue.Value) (AgentConfig, error) {
 	var agent AgentConfig
 
@@ -68,9 +72,9 @@ func decodeAgentValue(val cue.Value) (AgentConfig, error) {
 		}
 		agent.Flags = expr
 	}
-	locator, err := internalcue.StringList(val, "session_locator")
+	locator, err := internalcue.StringList(val, internalcue.KeySessionLocator)
 	if err != nil {
-		return agent, fmt.Errorf("session_locator: %w", err)
+		return agent, fmt.Errorf("%s: %w", internalcue.KeySessionLocator, err)
 	}
 	agent.SessionLocator = locator
 
@@ -107,9 +111,7 @@ func loadAgentsFromDir(dir string) (map[string]AgentConfig, []string, error) {
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
 		agent, err := decodeAgentValue(iter.Value())
-		if err != nil {
-			return nil, nil, fmt.Errorf("agent %q: %w", name, err)
-		}
+		agent.unkept = err
 		agent.Name = name
 		agents[name] = agent
 		order = append(order, name)
@@ -142,11 +144,17 @@ type RoleConfig struct {
 	Priority    int      `json:"priority,omitempty"` // Automatic-selection rank, lowest first; 0 means never selected automatically
 	Source      string   `json:"source"`             // "global" or "local"
 	Origin      string   `json:"origin,omitempty"`   // Registry module path when installed from registry
+
+	unkept error // A stored managed field this struct cannot hold; writing the role back would drop it
 }
 
+// writable reports whether writing r's managed fields back keeps their stored values.
+func (r RoleConfig) writable() error { return keptForRewrite("role", r.Name, r.unkept) }
+
 // decodeRoleValue populates a RoleConfig from a per-item CUE value (Name and
-// Source are left for the caller).
-func decodeRoleValue(val cue.Value) RoleConfig {
+// Source are left for the caller). A priority that is not a whole number of 1
+// or more is returned as an error alongside the rest of the role.
+func decodeRoleValue(val cue.Value) (RoleConfig, error) {
 	var role RoleConfig
 
 	if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
@@ -168,11 +176,13 @@ func decodeRoleValue(val cue.Value) RoleConfig {
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		role.Origin, _ = v.String()
 	}
-	if p, ok := orchestration.RolePriority(val); ok {
-		role.Priority = int(p)
+	priority, err := internalcue.PositiveInt(val, internalcue.KeyPriority)
+	if err != nil {
+		return role, fmt.Errorf("%s: %w", internalcue.KeyPriority, err)
 	}
+	role.Priority = priority
 
-	return role
+	return role, nil
 }
 
 func loadRolesForScope(scope config.Scope) (map[string]RoleConfig, []string, error) {
@@ -204,7 +214,8 @@ func loadRolesFromDir(dir string) (map[string]RoleConfig, []string, error) {
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		role := decodeRoleValue(iter.Value())
+		role, err := decodeRoleValue(iter.Value())
+		role.unkept = err
 		role.Name = name
 		roles[name] = role
 		order = append(order, name)
@@ -309,14 +320,21 @@ type TaskConfig struct {
 	Prompt      string   `json:"prompt,omitempty"`
 	Role        string   `json:"role,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
-	Uses        []string `json:"uses,omitempty"`   // Colon-form addresses of modules pulled in via `start get`
-	Source      string   `json:"source"`           // "global" or "local"
-	Origin      string   `json:"origin,omitempty"` // Registry module path when installed from registry
+	Uses        []string `json:"uses,omitempty"`       // Colon-form addresses of modules pulled in via `start get`
+	MinMembers  int      `json:"minMembers,omitempty"` // Smallest roster the task needs; 0 when unset. Not read at launch
+	Source      string   `json:"source"`               // "global" or "local"
+	Origin      string   `json:"origin,omitempty"`     // Registry module path when installed from registry
+
+	unkept error // A stored managed field this struct cannot hold; writing the task back would drop it
 }
 
+// writable reports whether writing t's managed fields back keeps their stored values.
+func (t TaskConfig) writable() error { return keptForRewrite("task", t.Name, t.unkept) }
+
 // decodeTaskValue populates a TaskConfig from a per-item CUE value (Name and
-// Source are left for the caller).
-func decodeTaskValue(val cue.Value) TaskConfig {
+// Source are left for the caller). A min_members that is not a whole number of
+// 1 or more is returned as an error alongside the rest of the task.
+func decodeTaskValue(val cue.Value) (TaskConfig, error) {
 	var task TaskConfig
 
 	if v := val.LookupPath(cue.ParsePath("description")); v.Exists() {
@@ -341,8 +359,13 @@ func decodeTaskValue(val cue.Value) TaskConfig {
 	if v := val.LookupPath(cue.ParsePath("origin")); v.Exists() {
 		task.Origin, _ = v.String()
 	}
+	minMembers, err := internalcue.PositiveInt(val, internalcue.KeyMinMembers)
+	if err != nil {
+		return task, fmt.Errorf("%s: %w", internalcue.KeyMinMembers, err)
+	}
+	task.MinMembers = minMembers
 
-	return task
+	return task, nil
 }
 
 func loadTasksForScope(scope config.Scope) (map[string]TaskConfig, []string, error) {
@@ -374,7 +397,8 @@ func loadTasksFromDir(dir string) (map[string]TaskConfig, []string, error) {
 
 	for iter.Next() {
 		name := iter.Selector().Unquoted()
-		task := decodeTaskValue(iter.Value())
+		task, err := decodeTaskValue(iter.Value())
+		task.unkept = err
 		task.Name = name
 		tasks[name] = task
 		order = append(order, name)

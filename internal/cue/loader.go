@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -77,7 +78,7 @@ func (l *Loader) Load(dirs []string) (LoadResult, error) {
 			continue
 		}
 
-		v, err := l.loadDir(dir)
+		v, err := l.loadDir(dir, nil)
 		if err != nil {
 			return result, fmt.Errorf("loading %s: %w", dir, err)
 		}
@@ -274,15 +275,28 @@ func (l *Loader) LoadSingle(dir string) (cue.Value, error) {
 		return cue.Value{}, fmt.Errorf("%w in %s", ErrNoCUEFiles, dir)
 	}
 
-	return l.loadDir(dir)
+	return l.loadDir(dir, nil)
 }
 
-// loadDir loads a CUE instance from a directory.
-func (l *Loader) loadDir(dir string) (cue.Value, error) {
+// CheckBuildsWith reports whether the config directory holding path builds
+// when path holds data instead of its contents on disk. Nothing is written.
+func CheckBuildsWith(path string, data []byte) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolving config path: %w", err)
+	}
+	_, err = NewLoader().loadDir(filepath.Dir(abs), map[string]load.Source{abs: load.FromBytes(data)})
+	return err
+}
+
+// loadDir loads a CUE instance from a directory. An overlay file is read from
+// memory in place of the disk.
+func (l *Loader) loadDir(dir string, overlay map[string]load.Source) (cue.Value, error) {
 	cfg := &load.Config{
 		Dir: dir,
 		// "*" loads both packaged modules and package-less config files.
 		Package: "*",
+		Overlay: overlay,
 	}
 
 	insts := load.Instances([]string{"."}, cfg)

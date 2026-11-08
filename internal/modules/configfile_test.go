@@ -23,7 +23,23 @@ func TestCategoryHasField(t *testing.T) {
 			t.Errorf("%s should have %s", tc.category, tc.name)
 		}
 	}
+	if !CategoryHasField("tasks", "min_members") {
+		t.Error("tasks should have min_members")
+	}
+	if CategoryHasField("roles", "min_members") || CategoryHasField("agents", "min_members") {
+		t.Error("min_members is a task field only")
+	}
 	if CategoryHasField("nope", "command") {
 		t.Fatal("unknown category should have no fields")
+	}
+}
+
+func TestCategoryFieldOrderWritesTaskMinMembers(t *testing.T) {
+	t.Parallel()
+	if !fieldName("min_members", CategoryFieldOrder("tasks")...) {
+		t.Fatalf("tasks order %v omits min_members", CategoryFieldOrder("tasks"))
+	}
+	if fieldName("min_members", CategoryFieldOrder("roles")...) {
+		t.Fatal("roles order should not write min_members")
 	}
 }

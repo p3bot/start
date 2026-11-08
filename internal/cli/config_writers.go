@@ -1,32 +1,53 @@
 package cli
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/token"
 	internalcue "github.com/p3bot/start/internal/cue"
+	"github.com/p3bot/start/internal/fault"
 	"github.com/p3bot/start/internal/modules"
 )
 
 // upsertAgent writes agent into its category file through the shared AST layer,
-// creating the file with the managed header when absent and preserving sibling
-// entries and comments. The same applies to upsertRole/upsertContext/upsertTask.
+// creating the file with the managed header when absent. A stored entry is
+// patched, so its fields the struct does not hold, its comments, and sibling
+// entries are kept. The same applies to upsertRole/upsertContext/upsertTask.
 func upsertAgent(path string, a AgentConfig) error {
-	return modules.UpsertConfigModule(path, "agents", a.Name, agentEntry(a))
+	if err := a.writable(); err != nil {
+		return err
+	}
+	return modules.PatchConfigModule(path, "agents", a.Name, agentEntry(a))
 }
 
 func upsertRole(path string, r RoleConfig) error {
-	return modules.UpsertConfigModule(path, "roles", r.Name, roleEntry(r))
+	if err := r.writable(); err != nil {
+		return err
+	}
+	return modules.PatchConfigModule(path, "roles", r.Name, roleEntry(r))
+}
+
+// keptForRewrite refuses a write of an entry whose decode could not hold a
+// managed field, since that field is written back from its decoded value.
+func keptForRewrite(kind, name string, unkept error) error {
+	if unkept == nil {
+		return nil
+	}
+	return fault.UserConfig(fmt.Errorf("%s %q cannot be rewritten without losing %w; fix it with 'start config open' first", kind, name, unkept))
 }
 
 func upsertContext(path string, c ContextConfig) error {
-	return modules.UpsertConfigModule(path, "contexts", c.Name, contextEntry(c))
+	return modules.PatchConfigModule(path, "contexts", c.Name, contextEntry(c))
 }
 
 func upsertTask(path string, t TaskConfig) error {
-	return modules.UpsertConfigModule(path, "tasks", t.Name, taskEntry(t))
+	if err := t.writable(); err != nil {
+		return err
+	}
+	return modules.PatchConfigModule(path, "tasks", t.Name, taskEntry(t))
 }
 
 func agentEntry(a AgentConfig) *ast.StructLit {
@@ -44,7 +65,7 @@ func agentEntry(a AgentConfig) *ast.StructLit {
 	if a.Flags != nil {
 		fields["flags"] = a.Flags
 	}
-	putStringList(fields, "session_locator", a.SessionLocator)
+	putStringList(fields, internalcue.KeySessionLocator, a.SessionLocator)
 	return assembleEntry("agents", a.Origin, fields)
 }
 
@@ -82,6 +103,7 @@ func taskEntry(t TaskConfig) *ast.StructLit {
 	putString(fields, "file", t.File)
 	putString(fields, "command", t.Command)
 	putPrompt(fields, t.Prompt)
+	putInt(fields, internalcue.KeyMinMembers, t.MinMembers)
 	return assembleEntry("tasks", t.Origin, fields)
 }
 

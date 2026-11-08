@@ -610,11 +610,8 @@ func (c *Composer) selectDefaultRole(cfg cue.Value) (roleName string, resolution
 // RolePriority returns a role's priority when it is an integer of 1 or more.
 // Any other value, or none, means the role is never selected automatically.
 func RolePriority(roleVal cue.Value) (int64, bool) {
-	p, err := roleVal.LookupPath(cue.ParsePath(internalcue.KeyPriority)).Int64()
-	if err != nil || p < 1 {
-		return 0, false
-	}
-	return p, true
+	p, err := internalcue.PositiveInt(roleVal, internalcue.KeyPriority)
+	return int64(p), err == nil && p > 0
 }
 
 // roleFileAvailable reports whether a role's file path is resolvable and present.

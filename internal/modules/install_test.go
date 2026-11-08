@@ -1047,6 +1047,31 @@ agent: {
 	}
 }
 
+func TestExtractModuleContent_TaskMinMembers(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"set", "task: {\n\tprompt: \"body\"\n\tmin_members: 2\n}\n", true},
+		{"omitted", "task: prompt: \"body\"\n", false},
+	} {
+		moduleDir := createTestModule(t, "task", "package task\n\n"+tc.body)
+		astResult, err := ExtractModuleContent(moduleDir, SearchResult{Category: "tasks", Name: "pair"}, nil, "test.example/task@v0.1.0", "")
+		if err != nil {
+			t.Fatalf("%s: ExtractModuleContent() error: %v", tc.name, err)
+		}
+		result := formatAST(t, astResult)
+		if got := strings.Contains(result, "min_members: 2"); got != tc.want {
+			t.Errorf("%s: min_members written = %v, want %v\nGot:\n%s", tc.name, got, tc.want, result)
+		}
+		if !tc.want && strings.Contains(result, "min_members") {
+			t.Errorf("%s: omitted min_members should stay omitted\nGot:\n%s", tc.name, result)
+		}
+	}
+}
+
 func TestExtractModuleContent_RoleNameOverride(t *testing.T) {
 	t.Parallel()
 

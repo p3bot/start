@@ -131,6 +131,9 @@ func configAgentEdit(stdin io.Reader, stdout io.Writer, local bool, name string)
 	if err != nil {
 		return err
 	}
+	if err := agent.writable(); err != nil {
+		return err
+	}
 
 	// Edit in the dir where the agent actually lives.
 	configDir := paths.Dir(agent.Source == "local")
@@ -209,6 +212,9 @@ func configRoleEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 	}
 	resolvedName, role, err := lookupInstalledName(allRoles, "role", name)
 	if err != nil {
+		return err
+	}
+	if err := role.writable(); err != nil {
 		return err
 	}
 
@@ -400,6 +406,9 @@ func configTaskEdit(stdin io.Reader, stdout io.Writer, local bool, name string) 
 	}
 	resolvedName, task, err := lookupInstalledName(allTasks, "task", name)
 	if err != nil {
+		return err
+	}
+	if err := task.writable(); err != nil {
 		return err
 	}
 

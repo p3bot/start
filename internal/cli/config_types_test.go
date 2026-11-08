@@ -189,6 +189,30 @@ func TestDecodeAgentValue_BadSessionLocator(t *testing.T) {
 	}
 }
 
+func TestDecodeTaskValueOmittedMinMembersIsZero(t *testing.T) {
+	val := cuecontext.New().CompileString(`{prompt: "body"}`)
+	got, err := decodeTaskValue(val)
+	if err != nil {
+		t.Fatalf("decodeTaskValue: %v", err)
+	}
+	if got.MinMembers != 0 {
+		t.Fatalf("MinMembers = %d, want 0", got.MinMembers)
+	}
+}
+
+func TestDecodeTaskValueRejectsMinMembersThatCannotBeKept(t *testing.T) {
+	for _, bad := range []string{`0`, `-1`, `1.5`, `"2"`} {
+		val := cuecontext.New().CompileString(`{prompt: "body", min_members: ` + bad + `}`)
+		if err := val.Err(); err != nil {
+			t.Fatal(err)
+		}
+		_, err := decodeTaskValue(val)
+		if err == nil || !strings.Contains(err.Error(), "min_members") {
+			t.Errorf("min_members %s: err = %v, want a min_members error", bad, err)
+		}
+	}
+}
+
 func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 	ctx := cuecontext.New()
 	val := ctx.CompileString(`{
@@ -205,7 +229,10 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 		t.Fatalf("CompileString: %v", err)
 	}
 
-	got := decodeRoleValue(val)
+	got, err := decodeRoleValue(val)
+	if err != nil {
+		t.Fatalf("decodeRoleValue: %v", err)
+	}
 
 	if !reflect.DeepEqual(got.Uses, []string{"contexts:start/library/publishing"}) {
 		t.Errorf("Uses: got %v", got.Uses)
@@ -237,27 +264,30 @@ func TestDecodeRoleValue_FullMetadata(t *testing.T) {
 	}
 }
 
-func TestDecodeRoleValue_PriorityDefaultsZero(t *testing.T) {
-	tests := []struct {
-		name   string
-		source string
-	}{
-		{"absent", `{ prompt: "hi" }`},
-		{"zero", `{ prompt: "hi", priority: 0 }`},
-		{"negative", `{ prompt: "hi", priority: -5 }`},
-		{"non-integer", `{ prompt: "hi", priority: "high" }`},
+func TestDecodeRoleValue_AbsentPriorityIsZero(t *testing.T) {
+	val := cuecontext.New().CompileString(`{ prompt: "hi" }`)
+	got, err := decodeRoleValue(val)
+	if err != nil {
+		t.Fatalf("decodeRoleValue: %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			val := cuecontext.New().CompileString(tt.source)
-			if err := val.Err(); err != nil {
-				t.Fatalf("CompileString: %v", err)
-			}
+	if got.Priority != 0 {
+		t.Errorf("Priority = %d, want 0", got.Priority)
+	}
+}
 
-			if got := decodeRoleValue(val); got.Priority != 0 {
-				t.Errorf("Priority: expected 0 for a priority selection ignores, got %d", got.Priority)
-			}
-		})
+func TestDecodeRoleValue_RejectsPriorityThatCannotBeKept(t *testing.T) {
+	for _, bad := range []string{`0`, `-5`, `1.5`, `"high"`} {
+		val := cuecontext.New().CompileString(`{ prompt: "hi", priority: ` + bad + ` }`)
+		if err := val.Err(); err != nil {
+			t.Fatal(err)
+		}
+		got, err := decodeRoleValue(val)
+		if err == nil || !strings.Contains(err.Error(), "priority") {
+			t.Errorf("priority %s: err = %v, want a priority error", bad, err)
+		}
+		if got.Priority != 0 {
+			t.Errorf("priority %s: Priority = %d, want 0", bad, got.Priority)
+		}
 	}
 }
 
@@ -333,12 +363,19 @@ func TestDecodeTaskValue_FullMetadata(t *testing.T) {
 		tags: ["review", "git"]
 		uses: ["contexts:start/library/publishing"]
 		origin: "github.com/example/start-review@v1"
+		min_members: 2
 	}`)
 	if err := val.Err(); err != nil {
 		t.Fatalf("CompileString: %v", err)
 	}
 
-	got := decodeTaskValue(val)
+	got, err := decodeTaskValue(val)
+	if err != nil {
+		t.Fatalf("decodeTaskValue: %v", err)
+	}
+	if got.MinMembers != 2 {
+		t.Errorf("MinMembers: got %d, want 2", got.MinMembers)
+	}
 
 	if !reflect.DeepEqual(got.Uses, []string{"contexts:start/library/publishing"}) {
 		t.Errorf("Uses: got %v", got.Uses)

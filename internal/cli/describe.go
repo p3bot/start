@@ -592,7 +592,10 @@ func printMetadataBlock(w io.Writer, r DescribeResult) {
 		}
 		writeAgentMetadata(w, agent)
 	case "Role":
-		role := decodeRoleValue(r.Value)
+		role, err := decodeRoleValue(r.Value)
+		if err != nil {
+			fmt.Fprintf(w, "[error: %s]\n", err)
+		}
 		role.File, role.Command = "", ""
 		writeRoleMetadata(w, role)
 	case "Context":
@@ -600,7 +603,10 @@ func printMetadataBlock(w io.Writer, r DescribeResult) {
 		ctx.File, ctx.Command = "", ""
 		writeContextMetadata(w, ctx)
 	case "Task":
-		task := decodeTaskValue(r.Value)
+		task, err := decodeTaskValue(r.Value)
+		if err != nil {
+			fmt.Fprintf(w, "[error: %s]\n", err)
+		}
 		task.File, task.Command = "", ""
 		writeTaskMetadata(w, task)
 	}
